@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  postgis:
+    image: postgis/postgis:15-3.3
+    environment:
+      POSTGRES_DB: heirs_property
+      POSTGRES_USER: heirs_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgis_data:/var/lib/postgresql/data
+      - ./init-db:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U heirs_user -d heirs_property"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  jupyter:
+    build: 
+      context: .
+      dockerfile: Dockerfile.jupyter
+    volumes:
+      - .:/workspace
+      - ./data:/data
+    ports:
+      - "8888:8888"
+    environment:
+      - DATABASE_URL=postgresql://heirs_user:${POSTGRES_PASSWORD}@postgis:5432/heirs_property
+    depends_on:
+      postgis:
+        condition: service_healthy
+
+  processing:
+    build:
+      context: .
+      dockerfile: Dockerfile.processing
+    volumes:
+      - .:/workspace
+      - ./data:/data
+    environment:
+      - DATABASE_URL=postgresql://heirs_user:${POSTGRES_PASSWORD}@postgis:5432/heirs_property
+    depends_on:
+      postgis:
+        condition: service_healthy
+
+volumes:
+  postgis_data: 
