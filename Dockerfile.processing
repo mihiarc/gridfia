@@ -14,9 +14,17 @@ ENV CPLUS_INCLUDE_PATH=/usr/include/gdal
 ENV C_INCLUDE_PATH=/usr/include/gdal
 
 # Install Python dependencies
-COPY pyproject.toml .
-RUN pip install --no-cache-dir rye && \
-    rye sync
+RUN pip install --no-cache-dir \
+    psycopg2-binary \
+    pandas \
+    numpy \
+    geopandas \
+    rasterio \
+    shapely \
+    fiona \
+    pyproj \
+    tqdm \
+    requests
 
 # Set up working directory
 WORKDIR /workspace
