@@ -1,1 +1,3 @@
-"""Data processing modules for cleaning and transforming property data.""" 
+"""
+Processing package for Heirs Property Analysis.
+""" 

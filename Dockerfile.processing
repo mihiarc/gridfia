@@ -9,32 +9,39 @@ RUN apt-get update && apt-get install -y \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Set environment variables for GDAL
+# Set GDAL environment variables
 ENV CPLUS_INCLUDE_PATH=/usr/include/gdal
 ENV C_INCLUDE_PATH=/usr/include/gdal
 
-# Install Python dependencies
-RUN pip install --no-cache-dir \
-    psycopg2-binary \
-    pandas \
-    numpy \
-    geopandas \
-    rasterio \
-    shapely \
-    fiona \
-    pyproj \
-    tqdm \
-    requests
-
-# Set up working directory
+# Set working directory
 WORKDIR /workspace
 
-# Copy processing scripts
-COPY src/processing /workspace/src/processing
-COPY config /workspace/config
+# Copy requirements first for better caching
+COPY requirements.txt .
+
+# Install Python dependencies
+RUN pip install --no-cache-dir \
+    numpy \
+    pandas \
+    geopandas \
+    sqlalchemy \
+    psycopg2-binary \
+    rasterio \
+    dask \
+    distributed \
+    python-dotenv \
+    tqdm \
+    shapely \
+    pyproj \
+    fiona \
+    pytest \
+    pytest-cov
+
+# Copy the rest of the application
+COPY . .
 
 # Set Python path
 ENV PYTHONPATH=/workspace
 
 # Default command
-CMD ["python", "-m", "src.processing.large_data_processor"] 
+CMD ["python", "-m", "src.scripts.test_connection"] 

@@ -1,80 +1,196 @@
-"""Pytest configuration and shared fixtures."""
-
+"""Test configuration and fixtures."""
 import os
-import pytest
-import docker
-import psycopg2
+import tempfile
 from pathlib import Path
+import pytest
+import pandas as pd
+import geopandas as gpd
+from shapely.geometry import Polygon
+import numpy as np
+from sqlalchemy import create_engine, text
 
-# Environment setup
-os.environ.setdefault("POSTGRES_DB", "heirs_property")
-os.environ.setdefault("POSTGRES_USER", "heirs_user")
-os.environ.setdefault("POSTGRES_PASSWORD", "dev_password_123")
-os.environ.setdefault("DB_HOST", "localhost")
-os.environ.setdefault("DB_PORT", "5432")
+from processing.data_validator import DataValidator
+from processing.chunked_processor import ChunkedProcessor
+from processing.pipeline_monitor import PipelineMonitor
+from processing.transaction_manager import TransactionManager
 
-@pytest.fixture(scope="session")
-def docker_client():
-    """Create a Docker client for container management."""
-    return docker.from_env()
+@pytest.fixture
+def test_data_dir():
+    """Create a temporary directory for test data."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        yield Path(temp_dir)
 
-@pytest.fixture(scope="session")
-def db_params():
-    """Database connection parameters."""
-    return {
-        "dbname": os.getenv("POSTGRES_DB"),
-        "user": os.getenv("POSTGRES_USER"),
-        "password": os.getenv("POSTGRES_PASSWORD"),
-        "host": os.getenv("DB_HOST"),
-        "port": os.getenv("DB_PORT")
-    }
+@pytest.fixture
+def test_checkpoint_dir(test_data_dir):
+    """Create a temporary directory for checkpoints."""
+    checkpoint_dir = test_data_dir / "checkpoints"
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    return checkpoint_dir
 
-@pytest.fixture(scope="session")
-def db_connection(db_params):
-    """Create a database connection for testing."""
-    conn = psycopg2.connect(**db_params)
-    yield conn
-    conn.close()
+@pytest.fixture
+def test_metrics_dir(test_data_dir):
+    """Create a temporary directory for metrics."""
+    metrics_dir = test_data_dir / "metrics"
+    metrics_dir.mkdir(parents=True, exist_ok=True)
+    return metrics_dir
 
-@pytest.fixture(scope="session")
-def project_root():
-    """Return the project root directory."""
-    return Path(__file__).parent.parent
+@pytest.fixture
+def mock_database():
+    """Create an in-memory SQLite database."""
+    engine = create_engine("sqlite:///:memory:")
+    
+    # Create test tables
+    with engine.connect() as conn:
+        # Create test_table
+        conn.execute(text("""
+            CREATE TABLE test_table (
+                id INTEGER PRIMARY KEY,
+                value TEXT
+            )
+        """))
+        
+        # Create test_backup
+        conn.execute(text("""
+            CREATE TABLE test_backup (
+                id INTEGER PRIMARY KEY,
+                value TEXT
+            )
+        """))
+        
+        # Create test_checkpoint
+        conn.execute(text("""
+            CREATE TABLE test_checkpoint (
+                id INTEGER PRIMARY KEY,
+                value TEXT
+            )
+        """))
+        
+        # Create test_rollback
+        conn.execute(text("""
+            CREATE TABLE test_rollback (
+                id INTEGER PRIMARY KEY,
+                value TEXT
+            )
+        """))
+        
+        # Create test_status
+        conn.execute(text("""
+            CREATE TABLE test_status (
+                id INTEGER PRIMARY KEY,
+                value TEXT
+            )
+        """))
+        
+        # Create test_concurrent_1 and test_concurrent_2
+        conn.execute(text("""
+            CREATE TABLE test_concurrent_1 (
+                id INTEGER PRIMARY KEY,
+                value TEXT
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE test_concurrent_2 (
+                id INTEGER PRIMARY KEY,
+                value TEXT
+            )
+        """))
+        
+        # Create test_isolation
+        conn.execute(text("""
+            CREATE TABLE test_isolation (
+                id INTEGER PRIMARY KEY,
+                value TEXT
+            )
+        """))
+        
+        # Create test_cleanup
+        conn.execute(text("""
+            CREATE TABLE test_cleanup (
+                id INTEGER PRIMARY KEY,
+                value TEXT
+            )
+        """))
+        
+        # Create test_timing
+        conn.execute(text("""
+            CREATE TABLE test_timing (
+                id INTEGER PRIMARY KEY,
+                value TEXT
+            )
+        """))
+        
+        # Create test_error_format
+        conn.execute(text("""
+            CREATE TABLE test_error_format (
+                id INTEGER PRIMARY KEY,
+                value TEXT
+            )
+        """))
+        
+        conn.commit()
+    
+    return engine
 
-@pytest.fixture(scope="session")
-def data_dir(project_root):
-    """Return the data directory."""
-    return project_root / "data"
-
-@pytest.fixture(scope="session")
-def logs_dir(project_root):
-    """Return the logs directory."""
-    return project_root / "logs"
-
-def pytest_configure(config):
-    """Configure pytest with custom markers."""
-    config.addinivalue_line(
-        "markers",
-        "integration: mark test as integration test"
+@pytest.fixture
+def test_validator():
+    """Create a test validator."""
+    return DataValidator(
+        required_fields=["geometry", "area"],
+        geometry_type="Polygon",
+        srid=2264
     )
-    config.addinivalue_line(
-        "markers",
-        "slow: mark test as slow running"
+
+@pytest.fixture
+def test_processor():
+    """Create a test processor."""
+    return ChunkedProcessor(
+        chunk_size=100,
+        max_workers=2,
+        memory_limit_mb=500
     )
 
-def pytest_collection_modifyitems(config, items):
-    """Modify test collection to handle markers."""
-    if config.getoption("--skip-integration", default=False):
-        skip_integration = pytest.mark.skip(reason="Integration tests skipped")
-        for item in items:
-            if "integration" in item.keywords:
-                item.add_marker(skip_integration)
+@pytest.fixture
+def test_monitor(test_metrics_dir):
+    """Create a test monitor."""
+    return PipelineMonitor(
+        metrics_dir=test_metrics_dir,
+        resource_interval=1,
+        alert_cpu_threshold=80.0,
+        alert_memory_threshold=80.0,
+        alert_disk_threshold=80.0
+    )
 
-def pytest_addoption(parser):
-    """Add custom command line options."""
-    parser.addoption(
-        "--skip-integration",
-        action="store_true",
-        default=False,
-        help="Skip integration tests"
+@pytest.fixture
+def test_transaction_manager(mock_database, test_checkpoint_dir):
+    """Create a test transaction manager."""
+    return TransactionManager(
+        db_connection="sqlite:///:memory:",
+        checkpoint_dir=test_checkpoint_dir
+    )
+
+@pytest.fixture
+def large_geodataframe():
+    """Create a large test GeoDataFrame."""
+    n_rows = 1000
+    
+    # Create DataFrame first
+    df = pd.DataFrame({
+        "id": range(n_rows),
+        "parcel_id": [f"P{i:03d}" for i in range(n_rows)],
+        "area": [i * 100.0 for i in range(n_rows)],
+        "county": ["County1"] * n_rows,
+    })
+    
+    # Create geometry column separately
+    geometry = [
+        Polygon([
+            (0, 0), (0, 1), (1, 1), (1, 0), (0, 0)
+        ])
+    ] * n_rows
+    
+    # Create GeoDataFrame using public API
+    return gpd.GeoDataFrame(
+        df,
+        geometry=geometry,
+        crs="EPSG:2264"
     ) 

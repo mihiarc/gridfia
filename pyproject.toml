@@ -1,63 +1,24 @@
-[project]
-name = "heirs-property"
-version = "0.1.0"
-description = "Heirs Property Analysis System"
-authors = [
-    { name = "Your Name", email = "your.email@example.com" }
-]
-dependencies = [
-    "psycopg2-binary",
-    "pandas",
-    "geopandas",
-    "sqlalchemy",
-    "pytest",
-    "pytest-cov",
-    "docker",
-    "jupyter",
-    "jupyterlab",
-    "ipywidgets",
-    "matplotlib",
-    "numpy"
-]
-
-[project.optional-dependencies]
-dev = [
-    "ruff>=0.1.0",
-    "mypy>=1.0.0",
-    "black>=22.0.0",
-    "pre-commit>=3.0.0",
-    "pytest-xdist>=3.0.0",
-    "pytest-timeout>=2.0.0",
-]
-
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-[tool.ruff]
-line-length = 100
-target-version = "py39"
-select = ["E", "F", "B", "I"]
-ignore = []
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-python_files = ["test_*.py"]
-addopts = "-v"
-markers = [
-    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
-    "integration: marks tests as integration tests",
-    "infrastructure: marks tests as infrastructure tests",
+[project]
+name = "heirs-property"
+version = "0.1.0"
+description = "Heirs Property Analysis Tool"
+requires-python = ">=3.8"
+dependencies = [
+    "geopandas",
+    "pandas",
+    "numpy",
+    "psutil",
+    "sqlalchemy",
+    "pytest",
 ]
 
-[tool.mypy]
-python_version = "3.9"
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = true
-check_untyped_defs = true
+[tool.hatch.build.targets.wheel]
+packages = ["src/processing"] 
 
-[tool.black]
-line-length = 100
-target-version = ['py39']
-include = '\.pyi?$' 
+[tool.pytest.ini_options]
+asyncio_mode = "strict"
+asyncio_default_fixture_loop_scope = "function" 

@@ -1,54 +1,34 @@
 version: '3.8'
 
 services:
-  jupyter:
-    build:
-      context: .
-      dockerfile: Dockerfile.jupyter
-    ports:
-      - "8888:8888"
-    volumes:
-      - ./notebooks:/notebooks
-      - ./data:/data
-      - ./src:/src
-    environment:
-      - JUPYTER_ENABLE_LAB=yes
-    depends_on:
-      - postgis
-    networks:
-      - heirs_network
-
   postgis:
-    image: postgis/postgis:15-3.3
-    ports:
-      - "5432:5432"
+    image: postgis/postgis:13-3.1
     environment:
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - PGDATA=/var/lib/postgresql/data/pgdata
-      - POSTGRES_INITDB_ARGS=--data-checksums
-    command: ["postgres", "-c", "logging_collector=on", "-c", "log_directory=/var/log/postgresql", "-c", "log_filename=postgresql-%Y-%m-%d_%H%M%S.log", "-c", "log_statement=all"]
     volumes:
-      - postgis_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
       - ./init-db:/docker-entrypoint-initdb.d
-      - ./logs/postgis:/var/log/postgresql
+    ports:
+      - "5432:5432"
+    networks:
+      - heirs_network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
-    networks:
-      - heirs_network
 
   processing:
     build:
       context: .
       dockerfile: Dockerfile.processing
     volumes:
-      - ./src:/app/src
-      - ./data:/app/data
+      - .:/workspace
+      - ./data:/workspace/data
     environment:
+      - PYTHONPATH=/workspace
       - DB_HOST=postgis
       - DB_PORT=5432
       - DB_NAME=${POSTGRES_DB}
@@ -60,10 +40,32 @@ services:
     networks:
       - heirs_network
 
-volumes:
-  postgis_data:
-    driver: local
+  jupyter:
+    build:
+      context: .
+      dockerfile: Dockerfile.jupyter
+    ports:
+      - "8888:8888"
+    volumes:
+      - .:/workspace
+      - ./data:/workspace/data
+      - ./notebooks:/workspace/notebooks
+    environment:
+      - PYTHONPATH=/workspace
+      - DB_HOST=postgis
+      - DB_PORT=5432
+      - DB_NAME=${POSTGRES_DB}
+      - DB_USER=${POSTGRES_USER}
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+    depends_on:
+      postgis:
+        condition: service_healthy
+    networks:
+      - heirs_network
 
 networks:
   heirs_network:
-    driver: bridge 
+    driver: bridge
+
+volumes:
+  postgres_data: 
