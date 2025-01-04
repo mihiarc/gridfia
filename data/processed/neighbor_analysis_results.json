@@ -1,0 +1,157 @@
+{
+  "1.0km": {
+    "statistics": {
+      "total_relationships": 4822,
+      "unique_heirs_parcels": 104,
+      "unique_neighbor_parcels": 1429,
+      "distance_stats": {
+        "min": 0.0,
+        "max": 999.4657557515085,
+        "mean": 487.15502861686855,
+        "median": 507.032449659394,
+        "std": 312.9390030567257
+      },
+      "direction_distribution": {
+        "SW": 737,
+        "W": 696,
+        "E": 657,
+        "S": 656,
+        "NE": 627,
+        "SE": 601,
+        "N": 449,
+        "NW": 399
+      },
+      "neighbors_per_heir": {
+        "min": 7,
+        "max": 146,
+        "mean": 46.36538461538461,
+        "median": 32.0
+      }
+    },
+    "neighbors_file": "neighbors_1.0km.parquet"
+  },
+  "2.5km": {
+    "statistics": {
+      "total_relationships": 13434,
+      "unique_heirs_parcels": 104,
+      "unique_neighbor_parcels": 2087,
+      "distance_stats": {
+        "min": 0.0,
+        "max": 2497.9675731622174,
+        "mean": 1299.2855287413743,
+        "median": 1350.102487530668,
+        "std": 722.0385702556631
+      },
+      "direction_distribution": {
+        "SW": 2337,
+        "E": 1953,
+        "NE": 1869,
+        "S": 1810,
+        "W": 1719,
+        "SE": 1472,
+        "N": 1319,
+        "NW": 955
+      },
+      "neighbors_per_heir": {
+        "min": 27,
+        "max": 281,
+        "mean": 129.17307692307693,
+        "median": 94.5
+      }
+    },
+    "neighbors_file": "neighbors_2.5km.parquet"
+  },
+  "5.0km": {
+    "statistics": {
+      "total_relationships": 29646,
+      "unique_heirs_parcels": 104,
+      "unique_neighbor_parcels": 2819,
+      "distance_stats": {
+        "min": 0.0,
+        "max": 4999.401313384209,
+        "mean": 2667.9963528598423,
+        "median": 2742.6669567389736,
+        "std": 1439.4196273763544
+      },
+      "direction_distribution": {
+        "SW": 5418,
+        "NE": 4524,
+        "E": 4088,
+        "S": 4028,
+        "N": 3187,
+        "W": 3136,
+        "SE": 3035,
+        "NW": 2230
+      },
+      "neighbors_per_heir": {
+        "min": 53,
+        "max": 485,
+        "mean": 285.0576923076923,
+        "median": 238.5
+      }
+    },
+    "neighbors_file": "neighbors_5.0km.parquet"
+  },
+  "7.5km": {
+    "statistics": {
+      "total_relationships": 49827,
+      "unique_heirs_parcels": 104,
+      "unique_neighbor_parcels": 3227,
+      "distance_stats": {
+        "min": 0.0,
+        "max": 7499.490511083573,
+        "mean": 4140.538284668663,
+        "median": 4331.519362110515,
+        "std": 2151.7428135141786
+      },
+      "direction_distribution": {
+        "SW": 8061,
+        "NE": 7227,
+        "E": 7108,
+        "S": 6913,
+        "N": 5901,
+        "W": 5394,
+        "SE": 5119,
+        "NW": 4104
+      },
+      "neighbors_per_heir": {
+        "min": 96,
+        "max": 790,
+        "mean": 479.1057692307692,
+        "median": 479.0
+      }
+    },
+    "neighbors_file": "neighbors_7.5km.parquet"
+  },
+  "10.0km": {
+    "statistics": {
+      "total_relationships": 78046,
+      "unique_heirs_parcels": 104,
+      "unique_neighbor_parcels": 3442,
+      "distance_stats": {
+        "min": 0.0,
+        "max": 9999.085317068457,
+        "mean": 5825.951971558551,
+        "median": 6249.851853790908,
+        "std": 2856.0476626093673
+      },
+      "direction_distribution": {
+        "E": 10956,
+        "NE": 10887,
+        "SW": 10595,
+        "S": 10241,
+        "N": 9598,
+        "W": 9036,
+        "NW": 8780,
+        "SE": 7953
+      },
+      "neighbors_per_heir": {
+        "min": 177,
+        "max": 1122,
+        "mean": 750.4423076923077,
+        "median": 843.5
+      }
+    },
+    "neighbors_file": "neighbors_10.0km.parquet"
+  }
+}
