@@ -1,62 +1,109 @@
-# Heirs Property Analysis - North Carolina
+# Heirs Property Analysis System
 
-## Project Overview
-This project analyzes heirs property parcels in North Carolina, focusing on land management patterns and forest health indicators. Heirs' properties are lands that have been passed down informally from generation to generation, often resulting in fractioned ownership that can impact land management decisions.
+A spatial data analysis system for tracking and analyzing heirs property parcels in North Carolina.
 
-## Project Objectives
-- Identify and analyze heirs property parcels in North Carolina
-- Compare forest management practices between heirs and non-heirs properties
-- Assess forest health indicators across different property types
-- Analyze land use patterns and management decisions
+## Project Status
 
-## Project Structure
-```
-/heirs-property
-├── src/
-│   ├── data/
-│   │   ├── raw/           # Original, immutable data
-│   │   ├── processed/     # Cleaned, transformed data
-│   │   └── interim/       # Intermediate data
-│   ├── models/            # Data models and database schemas
-│   ├── processing/        # Data processing scripts
-│   ├── analysis/          # Analysis notebooks and scripts
-│   └── visualization/     # Visualization scripts
-├── tests/                 # Test files
-├── docs/                  # Documentation
-├── notebooks/            # Jupyter notebooks for exploration
-├── config/               # Configuration files
-└── results/              # Output files, figures, and reports
-```
+- Phase 1 (Infrastructure): ✅ Complete
+- Phase 2 (Data Pipeline): 🔄 In Progress
+- Phase 3 (Analysis Tools): 📅 Planned
 
-## Data Pipeline
-See [Data Pipeline Documentation](docs/data_pipeline.md) for detailed information about:
-- Data processing stages
-- Analysis workflows
-- Visualization pipelines
-- Validation procedures
+## Features
 
-## Setup and Installation
-1. Ensure you have Python 3.9+ installed
-2. Install Rye for dependency management:
-   ```bash
-   curl -sSf https://rye-up.com/get | bash
-   ```
-3. Clone the repository and install dependencies:
+- PostGIS spatial database with NC State Plane support
+- JupyterLab environment for data analysis
+- Automated data processing pipeline
+- Comprehensive testing framework
+- Docker-based deployment
+
+## Prerequisites
+
+- Docker & Docker Compose
+- Python 3.9+
+- Make (optional, for using Makefile commands)
+
+## Quick Start
+
+1. Clone the repository:
    ```bash
    git clone https://github.com/yourusername/heirs-property.git
    cd heirs-property
-   rye sync
    ```
 
-## Data Sources
-- North Carolina parcel data (NC.gdb)
-- Heirs property deliverables (HP_Deliverables.gdb)
-- Forest Inventory Analysis (FIA) plot data
-- NAIP imagery for NDVI analysis
-- Tree canopy cover data
+2. Create environment file:
+   ```bash
+   cp .env.example .env
+   # Edit .env with your settings
+   ```
+
+3. Start the services:
+   ```bash
+   docker-compose up -d
+   ```
+
+4. Access JupyterLab:
+   - Open http://localhost:8888 in your browser
+   - Token is printed in the jupyter container logs
+
+## Development Setup
+
+1. Install Python dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+2. Run tests:
+   ```bash
+   python -m pytest tests/
+   ```
+
+3. Start development environment:
+   ```bash
+   docker-compose -f docker-compose.dev.yml up -d
+   ```
+
+## Project Structure
+
+```
+heirs-property/
+├── data/               # Data directory
+│   ├── raw/           # Raw input data
+│   ├── processed/     # Processed data
+│   └── interim/       # Intermediate data
+├── docs/              # Documentation
+├── notebooks/         # Jupyter notebooks
+├── src/              # Source code
+│   ├── processing/   # Data processing scripts
+│   └── analysis/     # Analysis tools
+├── tests/            # Test suite
+└── docker/           # Docker configuration
+```
+
+## Testing
+
+- Integration tests: `pytest -m integration`
+- Unit tests: `pytest -m "not integration"`
+- All tests: `pytest`
+
+## Documentation
+
+- [Phase 1 Progress](docs/phase1_progress.md)
+- [Testing Plan](docs/testing_plan.md)
+- [Database Setup](docs/database_setup.md)
 
 ## Contributing
-[To be added: Contributing guidelines]
+
+1. Fork the repository
+2. Create your feature branch
+3. Run tests and ensure they pass
+4. Submit a pull request
 
 ## License
-[To be added: License information]
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Acknowledgments
+
+- PostGIS team for spatial database support
+- JupyterLab team for the analysis environment
+- Contributors and maintainers
