@@ -69,6 +69,41 @@ Begin check-in process and document analysis.
 ## **Project Overview**
 A spatial data analysis system for tracking and analyzing heirs property parcels in North Carolina.
 
+## **Documentation Structure**
+```
+docs/
+├── core/               # Core project documentation
+│   ├── status.md      # Project status and phases
+│   ├── next_steps.md  # Future implementation plans
+│   └── development.md # Development setup & guidelines
+├── technical/         # Technical documentation
+│   ├── analysis/     # Analysis documentation
+│   │   ├── ndvi/    # NDVI analysis docs
+│   │   └── neighbors/ # Neighbor analysis docs
+│   ├── data_pipeline/ # Pipeline documentation
+│   ├── database/     # Database configuration
+│   ├── testing/      # Testing documentation
+│   └── storage/      # Storage planning
+└── archive/          # Archived documentation
+```
+
+## **Project Goals**
+
+1. **Data Processing**
+   - Process NC parcel data efficiently
+   - Handle large GIS datasets
+   - Maintain data quality and integrity
+
+2. **Spatial Analysis**
+   - Identify heirs property patterns
+   - Analyze forest health indicators
+   - Generate spatial statistics
+
+3. **Visualization**
+   - Create interactive maps
+   - Generate analysis reports
+   - Provide data dashboards
+
 ### **Project Status**
 - Phase 1 (Infrastructure): ✅ Complete
   - Docker environment setup

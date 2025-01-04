@@ -12,9 +12,9 @@ class ProjectInventory:
     """Manages project file inventory and organization."""
     
     STANDARD_DIRS = {
-        'src/data/raw': 'Original, immutable data files',
-        'src/data/processed': 'Cleaned and processed data',
-        'src/data/interim': 'Intermediate data files',
+        'data/raw': 'Original, immutable data files',
+        'data/processed': 'Cleaned and processed data',
+        'data/interim': 'Intermediate data files',
         'src/models': 'Data models and analysis',
         'src/processing': 'Data processing scripts',
         'src/analysis': 'Analysis scripts',
@@ -53,9 +53,9 @@ class ProjectInventory:
         
         # Define file type mappings
         file_mappings = {
-            '.csv': 'src/data/raw',
-            '.xlsx': 'src/data/raw',
-            '.shp': 'src/data/raw',
+            '.csv': 'data/raw',
+            '.xlsx': 'data/raw',
+            '.shp': 'data/raw',
             '.py': 'src',
             '.ipynb': 'notebooks',
             '.md': 'docs',

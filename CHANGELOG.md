@@ -248,6 +248,15 @@ Begin check-in process and document analysis.
   - Improved index membership checks
   - Added data validation for property indices
   - Enhanced error reporting for map creation
+- Reorganized technical documentation structure
+  - Consolidated NDVI analysis documentation
+  - Grouped neighbor analysis files
+  - Structured analysis, pipeline, and database docs
+  - Updated documentation cross-references
+- Consolidated project status documentation
+  - Merged project_status.md into core/status.md
+  - Added Mermaid diagrams and technical details
+  - Archived redundant documentation
 
 ### Data Processing Status
 - Property Data Integration
