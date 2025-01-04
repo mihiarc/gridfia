@@ -8,7 +8,9 @@ services:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - type: bind
+        source: /data/heirs-property/postgres
+        target: /var/lib/postgresql/data
       - ./init-db:/docker-entrypoint-initdb.d
     ports:
       - "5432:5432"
@@ -26,7 +28,7 @@ services:
       dockerfile: Dockerfile.processing
     volumes:
       - .:/workspace
-      - ./data:/workspace/data
+      - /data/heirs-property:/workspace/data
     environment:
       - PYTHONPATH=/workspace
       - DB_HOST=postgis
@@ -48,7 +50,7 @@ services:
       - "8888:8888"
     volumes:
       - .:/workspace
-      - ./data:/workspace/data
+      - /data/heirs-property:/workspace/data
       - ./notebooks:/workspace/notebooks
     environment:
       - PYTHONPATH=/workspace
