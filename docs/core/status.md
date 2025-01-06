@@ -41,6 +41,8 @@
 
 - NDVI Processing:
   - Memory-efficient VRT mosaics for 2018, 2020, 2022
+  - Optimized property filtering using NDVI coverage bounds
+  - Processing only properties within NDVI coverage (102 properties)
   - Parallel processing with CPU-optimized workers
   - Batch-based property processing (100 properties/batch)
   - Comprehensive trend statistics and validation
@@ -49,9 +51,9 @@
 ### Next Steps
 1. NDVI Processing
    - Monitor parallel processing performance
-   - Optimize memory usage for large datasets
    - Fine-tune batch sizes for optimal performance
    - Implement checkpointing for long-running jobs
+   - Consider extending coverage to other counties
 
 2. Statistical Analysis
    - Compare NDVI trends between heirs vs neighbor properties
@@ -60,7 +62,6 @@
    - Create summary reports
 
 ### Known Issues
-- NDVI layers are not available for all properties
-- Some properties are not in the NDVI layers
+- NDVI coverage limited to subset of Vance County (102 properties)
 - Memory usage spikes during large batch processing
 - Long processing times for full dataset analysis

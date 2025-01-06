@@ -6,6 +6,8 @@ import geopandas as gpd
 import pandas as pd
 import logging
 from typing import Optional
+import rasterio
+from shapely.geometry import box
 
 from .mosaic_creator import MosaicCreator
 from .ndvi_trend import NDVITrendAnalyzer
@@ -38,29 +40,71 @@ def process_ndvi(
     os.makedirs(mosaic_dir, exist_ok=True)
     os.makedirs(trends_dir, exist_ok=True)
     
-    # Load property data
-    logger.info("Loading property data...")
-    heirs = pd.read_parquet(os.path.join(processed_dir, "heirs_processed.parquet"))
-    parcels = pd.read_parquet(os.path.join(processed_dir, "parcels_processed.parquet"))
-    logger.info(f"Loaded {len(heirs)} heirs properties and {len(parcels)} parcels")
+    # Get combined NDVI bounds from parts 1 and 2 (using 2018 as reference year)
+    logger.info("Getting NDVI coverage bounds from raster parts...")
+    ndvi_files = []
+    for part in ['p1', 'p2']:
+        pattern = f"ndvi_NAIP_Vance_County_2018-{part}.tif"
+        matches = list(Path(ndvi_dir).glob(pattern))
+        ndvi_files.extend(matches)
     
-    # Load matches
+    if not ndvi_files:
+        raise FileNotFoundError(f"No NDVI files found in {ndvi_dir}")
+    
+    logger.info(f"Found {len(ndvi_files)} NDVI raster parts")
+    
+    # Get combined bounds from both parts
+    bounds_list = []
+    ndvi_crs = None
+    for ndvi_file in ndvi_files:
+        with rasterio.open(ndvi_file) as src:
+            bounds_list.append(src.bounds)
+            if ndvi_crs is None:
+                ndvi_crs = src.crs
+            elif ndvi_crs != src.crs:
+                raise ValueError(f"Inconsistent CRS found: {ndvi_file} has {src.crs}, expected {ndvi_crs}")
+    
+    # Calculate combined bounds
+    combined_bounds = rasterio.coords.BoundingBox(
+        left=min(b.left for b in bounds_list),
+        bottom=min(b.bottom for b in bounds_list),
+        right=max(b.right for b in bounds_list),
+        top=max(b.top for b in bounds_list)
+    )
+    logger.info(f"Combined NDVI bounds: {combined_bounds}")
+    
+    # Load only Vance County heirs properties first
+    logger.info("Loading Vance County heirs properties...")
+    heirs = pd.read_parquet(os.path.join(processed_dir, "heirs_processed.parquet"))
+    heirs = heirs[heirs['county_nam'].str.contains('Vance', case=False, na=False)]
+    heirs_gdf = gpd.GeoDataFrame(heirs, geometry='geometry', crs="EPSG:2264")
+    heirs_gdf = heirs_gdf.to_crs(ndvi_crs)
+    
+    # Filter heirs properties by combined NDVI bounds
+    bounds_poly = box(combined_bounds.left, combined_bounds.bottom, 
+                     combined_bounds.right, combined_bounds.top)
+    heirs_in_bounds = heirs_gdf[heirs_gdf.intersects(bounds_poly)]
+    logger.info(f"Found {len(heirs_in_bounds)} heirs properties within NDVI coverage")
+    
+    # Load matches only for properties within bounds
     logger.info("Loading property matches...")
     matches = pd.read_csv(matches_file)
-    logger.info(f"Loaded {len(matches)} property matches")
+    matches = matches[matches['heir_id'].isin(heirs_in_bounds['property_id'])]
+    logger.info(f"Found {len(matches)} matches for properties within NDVI coverage")
     
-    # Get unique properties to process
-    property_ids = pd.concat([
-        matches['heirs_property_id'],
-        matches['matched_property_id']
-    ]).unique()
-    logger.info(f"Found {len(property_ids)} unique properties to process")
+    # Load only the necessary neighbor parcels
+    logger.info("Loading matched neighbor parcels...")
+    neighbor_ids = matches['neighbor_id'].unique()
+    parcels = pd.read_parquet(
+        os.path.join(processed_dir, "parcels_processed.parquet"),
+        filters=[('property_id', 'in', neighbor_ids.tolist())]
+    )
+    logger.info(f"Loaded {len(parcels)} neighbor parcels")
     
-    # Create property GeoDataFrame
-    all_properties = pd.concat([heirs, parcels])
-    properties_to_process = all_properties[all_properties.index.isin(property_ids)]
-    properties_gdf = gpd.GeoDataFrame(properties_to_process)
-    logger.info(f"Prepared {len(properties_gdf)} properties for processing")
+    # Create property GeoDataFrame for processing
+    properties_to_process = pd.concat([heirs_in_bounds, parcels])
+    properties_gdf = gpd.GeoDataFrame(properties_to_process, geometry='geometry', crs=ndvi_crs)
+    logger.info(f"Prepared {len(properties_gdf)} total properties for processing")
     
     # Step 1: Create mosaics
     logger.info("Creating NDVI mosaics...")
