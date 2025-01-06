@@ -2,96 +2,89 @@ import pytest
 import pandas as pd
 import numpy as np
 from pathlib import Path
+import tempfile
+import shutil
 from src.analysis.stats_analyzer import StatsAnalyzer
 
-def test_stats_analyzer_init(tmp_path):
-    """Test StatsAnalyzer initialization."""
-    analyzer = StatsAnalyzer(output_dir=str(tmp_path))
-    assert analyzer.years == ['2018', '2020', '2022']
-    assert analyzer.output_dir == Path(tmp_path)
-    assert analyzer.output_dir.exists()
-
-def test_calculate_statistics(sample_matches, sample_ndvi_data):
-    """Test statistics calculation."""
-    analyzer = StatsAnalyzer()
-    stats = analyzer.calculate_statistics(sample_matches, sample_ndvi_data)
+@pytest.fixture
+def test_data():
+    """Create test NDVI data."""
+    np.random.seed(42)
+    n_properties = 100
     
-    # Verify basic structure
-    assert 'sample_size' in stats
-    assert 'years_analyzed' in stats
-    assert 'comparisons' in stats
+    # Create test data with known trends
+    data = {
+        'property_id': range(n_properties),
+        'is_heir': [i < n_properties/2 for i in range(n_properties)],  # 50/50 split
+        'ndvi_2018': np.random.normal(0.3, 0.1, n_properties),
+        'ndvi_2020': np.random.normal(0.35, 0.1, n_properties),
+        'ndvi_2022': np.random.normal(0.4, 0.1, n_properties),
+    }
     
-    # Verify year-specific statistics
-    for year in analyzer.years:
-        if year in stats['comparisons']:
-            year_stats = stats['comparisons'][year]
-            assert 'sample_size' in year_stats
-            assert 'heirs_mean' in year_stats
-            assert 'heirs_std' in year_stats
-            assert 'neighbors_mean' in year_stats
-            assert 'neighbors_std' in year_stats
-            assert 'mean_difference' in year_stats
-            assert 'difference_std' in year_stats
-            assert 't_statistic' in year_stats
-            assert 'p_value' in year_stats
+    # Add slightly different trends for heirs vs non-heirs
+    df = pd.DataFrame(data)
+    df.loc[df['is_heir'], 'ndvi_trend_slope'] = np.random.normal(0.05, 0.01, int(n_properties/2))
+    df.loc[~df['is_heir'], 'ndvi_trend_slope'] = np.random.normal(0.03, 0.01, int(n_properties/2))
+    
+    return df
 
-def test_create_visualizations(tmp_path, sample_matches, sample_ndvi_data):
+@pytest.fixture
+def temp_dir():
+    """Create temporary directory for test outputs."""
+    temp_dir = tempfile.mkdtemp()
+    yield temp_dir
+    shutil.rmtree(temp_dir)
+
+def test_load_ndvi_data(test_data, temp_dir):
+    """Test loading NDVI data."""
+    # Save test data
+    test_file = Path(temp_dir) / 'test_ndvi.parquet'
+    test_data.to_parquet(test_file)
+    
+    # Test loading
+    analyzer = StatsAnalyzer(temp_dir)
+    loaded_data = analyzer.load_ndvi_data(test_file)
+    
+    assert len(loaded_data) == len(test_data)
+    assert all(loaded_data.columns == test_data.columns)
+
+def test_calculate_trend_statistics(test_data, temp_dir):
+    """Test trend statistics calculation."""
+    analyzer = StatsAnalyzer(temp_dir)
+    stats_df = analyzer.calculate_trend_statistics(test_data)
+    
+    # Check basic statistics presence
+    assert 'heirs' in stats_df.columns
+    assert 'non_heirs' in stats_df.columns
+    assert 't_statistic' in stats_df.index
+    assert 'p_value' in stats_df.index
+    
+    # Verify statistics are reasonable
+    assert stats_df.loc['mean', 'heirs'] > stats_df.loc['mean', 'non_heirs']  # Based on our test data
+    assert not pd.isna(stats_df.loc['t_statistic', 'heirs'])
+    assert not pd.isna(stats_df.loc['p_value', 'heirs'])
+
+def test_plot_trend_comparison(test_data, temp_dir):
     """Test visualization creation."""
-    analyzer = StatsAnalyzer(output_dir=str(tmp_path))
-    analyzer.create_visualizations(sample_matches, sample_ndvi_data)
+    analyzer = StatsAnalyzer(temp_dir)
+    plot_path = Path(temp_dir) / 'test_plot.png'
     
-    # Verify output files
-    assert (analyzer.output_dir / 'ndvi_time_series.png').exists()
-    assert (analyzer.output_dir / 'analysis_data.csv').exists()
-    assert (analyzer.output_dir / 'time_series_data.csv').exists()
-    assert (analyzer.output_dir / 'differences_data.csv').exists()
+    analyzer.plot_trend_comparison(test_data, str(plot_path))
+    assert plot_path.exists()
 
-def test_empty_data_handling():
-    """Test handling of empty data."""
-    analyzer = StatsAnalyzer()
-    empty_matches = pd.DataFrame(columns=['heir_id', 'neighbor_id'])
-    empty_ndvi = pd.DataFrame(columns=['property_id', 'property_type', 'ndvi_2018', 'ndvi_2020', 'ndvi_2022'])
+def test_run_analysis(test_data, temp_dir):
+    """Test complete analysis workflow."""
+    # Save test data
+    test_file = Path(temp_dir) / 'test_ndvi.parquet'
+    test_data.to_parquet(test_file)
     
-    # Should handle empty data gracefully
-    stats = analyzer.calculate_statistics(empty_matches, empty_ndvi)
-    assert stats['sample_size'] == 0
-    assert len(stats['comparisons']) == 0
-    assert stats['years_analyzed'] == analyzer.years
-
-def test_invalid_data_handling():
-    """Test handling of invalid data."""
-    analyzer = StatsAnalyzer()
+    # Run analysis
+    analyzer = StatsAnalyzer(temp_dir)
+    stats_df = analyzer.run_analysis(str(test_file))
     
-    # Create invalid data
-    invalid_matches = pd.DataFrame({
-        'heir_id': [1],
-        'neighbor_id': [2]
-    })
-    invalid_ndvi = pd.DataFrame({
-        'property_id': [1],
-        'property_type': ['heir'],
-        'ndvi_2020': ['invalid']
-    })
-    
-    # Should raise ValueError for invalid NDVI values
-    with pytest.raises(ValueError, match="Invalid NDVI values"):
-        analyzer.calculate_statistics(invalid_matches, invalid_ndvi)
-    
-    # Test missing columns
-    missing_columns_ndvi = pd.DataFrame({
-        'property_id': [1],
-        'ndvi_2020': [0.5]
-    })
-    
-    with pytest.raises(KeyError, match="Missing required columns"):
-        analyzer.calculate_statistics(invalid_matches, missing_columns_ndvi)
-    
-    # Test out of range NDVI values
-    out_of_range_ndvi = pd.DataFrame({
-        'property_id': [1],
-        'property_type': ['heir'],
-        'ndvi_2020': [2.0]  # NDVI should be between -1 and 1
-    })
-    
-    with pytest.raises(ValueError, match="NDVI values out of range"):
-        analyzer.calculate_statistics(invalid_matches, out_of_range_ndvi) 
+    # Check outputs
+    assert (Path(temp_dir) / 'ndvi_comparison_stats.csv').exists()
+    assert (Path(temp_dir) / 'ndvi_trend_comparison.png').exists()
+    assert isinstance(stats_df, pd.DataFrame)
+    assert 'heirs' in stats_df.columns
+    assert 'non_heirs' in stats_df.columns 
