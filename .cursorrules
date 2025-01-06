@@ -31,29 +31,3 @@ combination of commands can be sequenced:
 %plan && %proceed – user is looking for a more detailed plan of action to be performed on the codebase in response to user desired feature or request; after deliberating on the plan, go ahead and make the changes.
 %debug && %test – user is looking for aid in adding debug statements or test cases to solve issues
 %split && %explain - user is looking for the current task to be broken down into smaller tasks and for each task to be explained
-
-Documentation Structure and Guidelines:
-
-1. Context Management:
-   ```
-   root/
-   ├── prompt.md (main entry point)
-   ├── CHANGELOG.md
-   ├── PROJECT_SCOPE.md
-   ├── docs/
-   │   ├── archive/
-   │   ├── core/
-   │   ├── implementation/
-   │   ├── reference/
-   │   └── technical/
-   ```
-
-2. Document Changes:
-   ```markdown
-   ## Change Description
-   - What: Brief description
-   - Why: Justification
-   - Impact: Affected components
-   - Status: ✅ Complete | ⚠️ Partial | ❌ Failed | 🔄 In Progress
-   - Location: Path to affected file
-   ```

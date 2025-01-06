@@ -37,58 +37,110 @@ This document outlines the development plan for building a prototype of the full
 
 ## Implementation Strategy
 
-### Phase 1: Data Quality Assessment
-1. Spatial Analysis
-   - Map distribution of analyzed properties
-   - Check for clustering or spatial bias
-   - Document coverage limitations
+### Implemented Workflow
+The analysis pipeline has been implemented with four main components:
 
-2. NDVI Validation
-   - Analyze value distributions by year
-   - Identify anomalies or systematic errors
-   - Document data quality metrics
-
-3. Property Characterization
-   - Analyze size distribution of heirs vs. neighbors
-   - Document land use patterns
-   - Identify potential confounding factors
-
-### Phase 2: Analysis Framework
-1. Property Selection
+1. Data Preparation (`data_prep.py`)
    ```python
-   class PropertySelector:
-       """Select comparable properties for analysis."""
-       def select_control_properties(self, heirs_property):
-           # Match by:
-           # - Size (within 20% range)
-           # - Distance (within 1km)
-           # - Similar land use
-           pass
+   class DataPrep:
+       """Prepare and validate property data."""
+       def process_data(self):
+           # - Load heirs and parcels data
+           # - Convert to NC State Plane (EPSG:2264)
+           # - Validate geometries
+           # - Remove invalid/zero-area properties
+           # - Save to output/processed/
    ```
 
-2. NDVI Analysis
+2. Property Matching (`property_matcher.py`)
    ```python
-   class NDVIAnalyzer:
-       """Analyze NDVI patterns for properties."""
-       def calculate_statistics(self):
-           # Calculate:
-           # - Annual means and variations
-           # - Change metrics
-           # - Trend significance
-           pass
+   class PropertyMatcher:
+       """Match heirs properties with comparable neighbors."""
+       def find_matches(self):
+           # - Size-based filtering (60-140% of heir property)
+           # - Distance-based filtering (within 2000m)
+           # - Exclude self-matches
+           # - Save to output/matches/
    ```
 
-3. Statistical Framework
+3. NDVI Processing (`ndvi_processor.py`)
    ```python
-   class StatisticalAnalyzer:
-       """Perform statistical comparisons."""
-       def compare_groups(self):
-           # Implement:
-           # - Paired t-tests
-           # - Effect size calculations
-           # - Temporal trend analysis
-           pass
+   class NDVIProcessor:
+       """Process NDVI data for properties."""
+       def __init__(self, ndvi_dir: str = "data/raw/ndvi"):
+           # Initialize with NDVI files for 2018, 2020, 2022
+           
+       def process_properties(self, property_ids: List[int]):
+           # - Extract NDVI values using rasterio
+           # - Handle CRS conversion
+           # - Validate pixel data
+           # - Process in memory-efficient batches
+           # - Calculate temporal trends
+           # - Save to output/ndvi/
    ```
+
+4. Statistical Analysis (`stats_analyzer.py`)
+   ```python
+   class StatsAnalyzer:
+       """Analyze NDVI patterns and create visualizations."""
+       def calculate_statistics(self, matches_df: pd.DataFrame, ndvi_df: pd.DataFrame):
+           # - Merge property matches with NDVI data
+           # - Calculate summary statistics
+           # - Perform paired t-tests
+           # - Generate visualizations:
+           #   * Time series comparison
+           #   * Distribution plots
+           #   * Difference boxplots
+           # - Save to output/analysis/
+   ```
+
+### Execution Pipeline
+```bash
+# Complete analysis workflow
+1. python3 src/analysis/data_prep.py      # Data preparation
+2. python3 src/analysis/property_matcher.py # Find matches
+3. python3 src/analysis/ndvi_processor.py  # Process NDVI
+4. python3 src/analysis/stats_analyzer.py  # Analyze results
+```
+
+### Key Features Implemented
+1. Robust Error Handling
+   - Comprehensive validation at each step
+   - Graceful error recovery
+   - Detailed error logging
+
+2. Memory Management
+   - Batch processing for large datasets
+   - Memory-mapped raster reading
+   - Efficient data structures
+
+3. Progress Tracking
+   - Detailed logging at each stage
+   - Progress bars for long operations
+   - Status reporting
+
+4. Data Validation
+   - Geometry validation
+   - CRS consistency checks
+   - NDVI value range validation
+   - Coverage verification
+
+### Output Structure
+```
+output/
+├── processed/          # Processed property data
+│   ├── heirs_processed.parquet
+│   └── parcels_processed.parquet
+├── matches/           # Property match results
+│   └── sample_matches.csv
+├── ndvi/             # NDVI analysis results
+│   └── sample_ndvi.csv
+└── analysis/         # Final results
+    ├── statistics.txt
+    ├── ndvi_time_series.png
+    ├── ndvi_distributions.png
+    └── ndvi_differences.png
+```
 
 ### Phase 3: Visualization Framework
 1. Spatial Visualization
