@@ -70,8 +70,8 @@ def calculate_trends(
     
     # Load property data
     logger.info("Loading property data...")
-    heirs = pd.read_parquet(os.path.join(processed_dir, "heirs_processed.parquet"))
-    parcels = pd.read_parquet(os.path.join(processed_dir, "parcels_processed.parquet"))
+    heirs = gpd.read_parquet(os.path.join(processed_dir, "heirs_processed.parquet"))
+    parcels = gpd.read_parquet(os.path.join(processed_dir, "parcels_processed.parquet"))
     logger.info(f"Loaded {len(heirs)} heirs properties and {len(parcels)} parcels")
     
     # Load matches
@@ -114,11 +114,7 @@ def calculate_trends(
     
     # Create property GeoDataFrame
     properties_to_process = all_properties[all_properties['property_id'].isin(property_ids)]
-    properties_gdf = gpd.GeoDataFrame(
-        properties_to_process,
-        geometry=gpd.GeoSeries.from_wkt(properties_to_process['geometry_wkt']),
-        crs="EPSG:2264"  # NC State Plane
-    )
+    properties_gdf = gpd.GeoDataFrame(properties_to_process, crs="EPSG:2264")
     logger.info(f"Prepared {len(properties_gdf)} properties for processing")
     
     # Calculate trends

@@ -23,12 +23,13 @@ class PropertyMatcher:
             min_size_ratio: Minimum ratio of neighbor area to heir area (default: 0.6)
             max_size_ratio: Maximum ratio of neighbor area to heir area (default: 1.4)
             distance_threshold: Maximum distance in meters (default: 2000)
-            n_workers: Number of worker processes (default: None, uses CPU count - 1)
+            n_workers: Number of worker processes (default: None, uses min(8, CPU count - 1))
         """
         self.min_size_ratio = min_size_ratio
         self.max_size_ratio = max_size_ratio
         self.distance_threshold = distance_threshold
-        self.n_workers = n_workers if n_workers is not None else max(1, mp.cpu_count() - 1)
+        # Use at most 8 workers to avoid overwhelming the system
+        self.n_workers = n_workers if n_workers is not None else min(8, max(1, mp.cpu_count() - 1))
         
     def load_processed_data(self):
         """Load preprocessed property data.
@@ -40,15 +41,15 @@ class PropertyMatcher:
         heirs_path = processed_dir / "heirs_processed.parquet"
         parcels_path = processed_dir / "parcels_processed.parquet"
         
-        print("Loading processed property data...")
+        logger.info("Loading processed property data...")
         
         # Load parquet files as GeoDataFrames
         heirs_gdf = gpd.read_parquet(heirs_path)
         parcels_gdf = gpd.read_parquet(parcels_path)
         
-        print(f"\nLoaded properties:")
-        print(f"Heirs properties: {len(heirs_gdf)}")
-        print(f"All parcels: {len(parcels_gdf)}")
+        logger.info(f"\nLoaded properties:")
+        logger.info(f"Heirs properties: {len(heirs_gdf)}")
+        logger.info(f"All parcels: {len(parcels_gdf)}")
         
         return heirs_gdf, parcels_gdf
     
@@ -72,13 +73,13 @@ class PropertyMatcher:
         if 'area' not in all_properties.columns:
             all_properties['area'] = all_properties.geometry.area
         
-        print(f"\nFinding matches for heir property {heir_id}")
-        print(f"  Heir area: {heir_area:.1f} sq meters")
+        logger.info(f"\nFinding matches for heir property {heir_id}")
+        logger.info(f"  Heir area: {heir_area:.1f} sq meters")
         
         # Define size range
         min_size = heir_area * self.min_size_ratio
         max_size = heir_area * self.max_size_ratio
-        print(f"  Size range: {min_size:.1f} to {max_size:.1f} sq meters")
+        logger.info(f"  Size range: {min_size:.1f} to {max_size:.1f} sq meters")
         
         # Filter by size first
         size_matches = all_properties[
@@ -87,7 +88,7 @@ class PropertyMatcher:
             (all_properties['property_id'] != heir_id)  # Exclude the heir property itself
         ].copy()
         
-        print(f"  Found {len(size_matches)} properties within size range")
+        logger.info(f"  Found {len(size_matches)} properties within size range")
         
         if len(size_matches) == 0:
             return gpd.GeoDataFrame(geometry=[])
@@ -97,7 +98,7 @@ class PropertyMatcher:
         
         # Filter by distance
         distance_matches = size_matches[size_matches['distance'] <= self.distance_threshold]
-        print(f"  Found {len(distance_matches)} properties within {self.distance_threshold}m")
+        logger.info(f"  Found {len(distance_matches)} properties within {self.distance_threshold}m")
         
         if len(distance_matches) == 0:
             return gpd.GeoDataFrame(geometry=[])
@@ -128,9 +129,10 @@ class PropertyMatcher:
         batch_matches = []
         
         for idx, heir in heirs_batch.iterrows():
-            # Create single-property GeoDataFrame
+            # Create single-property GeoDataFrame using pandas native transpose
+            heir_df = pd.DataFrame(heir).transpose()
             heir_gdf = gpd.GeoDataFrame(
-                heir.to_frame().T,
+                heir_df,
                 geometry='geometry',
                 crs=heirs_batch.crs
             )
@@ -210,7 +212,7 @@ def main():
     """Run property matching as a standalone script."""
     try:
         # Initialize matcher with parallel processing
-        n_workers = max(1, mp.cpu_count() - 1)
+        n_workers = min(8, max(1, mp.cpu_count() - 1))  # Use at most 8 workers
         logger.info(f"\nInitializing matcher with {n_workers} workers")
         matcher = PropertyMatcher(n_workers=n_workers)
         

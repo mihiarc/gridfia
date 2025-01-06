@@ -45,17 +45,16 @@ class NDVITrendAnalyzer:
         
         with rasterio.open(mosaic_path) as src:
             try:
-                # Convert geometry to raster CRS
-                property_gdf = gpd.GeoDataFrame(
-                    {'geometry': [geometry],
-                     'property_id': [property_id]},
-                    crs="EPSG:2264"
-                )
-                property_gdf = property_gdf.to_crs(src.crs)
-                geometry = property_gdf.geometry.iloc[0].__geo_interface__
+                # Convert geometry to raster CRS if needed
+                if isinstance(geometry, dict):
+                    # If geometry is already a GeoJSON dict, use it directly
+                    geom = geometry
+                else:
+                    # If geometry is a shapely geometry, convert to GeoJSON
+                    geom = geometry.__geo_interface__
                 
                 # Mask the raster to the geometry
-                masked_data, masked_transform = mask(src, [geometry], crop=True)
+                masked_data, masked_transform = mask(src, [geom], crop=True)
                 
                 # Extract valid pixels
                 valid_pixels = masked_data[0][masked_data[0] != src.nodata]
@@ -164,7 +163,7 @@ class NDVITrendAnalyzer:
             
             # Prepare property data for parallel processing
             property_data = [
-                (str(row.name), row.geometry.__geo_interface__)
+                (str(row.property_id), row.geometry)
                 for _, row in batch.iterrows()
             ]
             
