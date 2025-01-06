@@ -177,8 +177,7 @@ def main():
     
     This function:
     1. Loads heirs property and parcel data
-    2. Converts geometries to WKT format
-    3. Saves processed data to parquet files in the output/processed directory
+    2. Saves processed data to parquet files in the output/processed directory
     
     The output files will be:
     - output/processed/heirs_processed.parquet
@@ -197,27 +196,15 @@ def main():
         output_dir.mkdir(parents=True, exist_ok=True)
         print(f"\nSaving to directory: {output_dir.absolute()}")
         
-        # Convert geometries to WKT strings
-        print("Converting geometries to WKT format...")
-        heirs_df = heirs_gdf.copy()
-        parcels_df = parcels_gdf.copy()
-        
-        heirs_df['geometry_wkt'] = heirs_df['geometry'].apply(lambda x: x.wkt if x else None)
-        parcels_df['geometry_wkt'] = parcels_df['geometry'].apply(lambda x: x.wkt if x else None)
-        
-        # Drop geometry column before saving
-        heirs_df = heirs_df.drop(columns=['geometry'])
-        parcels_df = parcels_df.drop(columns=['geometry'])
-        
         # Save as parquet with error handling
         print("Saving heirs properties...")
         heirs_output = output_dir / "heirs_processed.parquet"
-        heirs_df.to_parquet(heirs_output, index=False)
+        heirs_gdf.to_parquet(heirs_output, index=False)
         print(f"Saved heirs properties to: {heirs_output}")
         
         print("Saving all parcels...")
         parcels_output = output_dir / "parcels_processed.parquet"
-        parcels_df.to_parquet(parcels_output, index=False)
+        parcels_gdf.to_parquet(parcels_output, index=False)
         print(f"Saved parcels to: {parcels_output}")
         
         # Verify files exist

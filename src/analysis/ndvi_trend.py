@@ -47,8 +47,8 @@ class NDVITrendAnalyzer:
             try:
                 # Convert geometry to raster CRS
                 property_gdf = gpd.GeoDataFrame(
-                    {'geometry': [gpd.GeoSeries.from_wkt([geometry['wkt']])[0]],
-                     'property_id': [property_id]},  # Include property ID in GeoDataFrame
+                    {'geometry': [geometry],
+                     'property_id': [property_id]},
                     crs="EPSG:2264"
                 )
                 property_gdf = property_gdf.to_crs(src.crs)

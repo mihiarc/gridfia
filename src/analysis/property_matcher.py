@@ -33,22 +33,9 @@ class PropertyMatcher:
         
         print("Loading processed property data...")
         
-        # Load parquet files
-        heirs_df = pd.read_parquet(heirs_path)
-        parcels_df = pd.read_parquet(parcels_path)
-        
-        # Convert WKT geometry back to GeoDataFrame
-        heirs_gdf = gpd.GeoDataFrame(
-            heirs_df,
-            geometry=heirs_df['geometry_wkt'].apply(loads),
-            crs="EPSG:2264"
-        )
-        
-        parcels_gdf = gpd.GeoDataFrame(
-            parcels_df,
-            geometry=parcels_df['geometry_wkt'].apply(loads),
-            crs="EPSG:2264"
-        )
+        # Load parquet files as GeoDataFrames
+        heirs_gdf = gpd.read_parquet(heirs_path)
+        parcels_gdf = gpd.read_parquet(parcels_path)
         
         print(f"\nLoaded properties:")
         print(f"Heirs properties: {len(heirs_gdf)}")
