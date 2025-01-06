@@ -1,1 +1,0 @@
-"""Analysis modules for investigating heirs property characteristics.""" 

@@ -1,5 +1,9 @@
 """
-Vance County NDVI Processing Module
+Vance County NDVI Data Processing Module
+
+This module handles the processing of NDVI data for Vance County properties.
+It extracts NDVI values from raster data and prepares them for subsequent
+temporal and spatial analysis.
 """
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -10,6 +14,7 @@ from rasterio.mask import mask
 import pandas as pd
 from concurrent.futures import ThreadPoolExecutor
 import logging
+from shapely.geometry import shape
 
 from ..config.vance_config import (
     ANALYSIS_YEARS,
@@ -17,15 +22,17 @@ from ..config.vance_config import (
     MAX_WORKERS,
     MIN_VALID_PIXELS,
     MAX_INVALID_RATIO,
-    NDVI_DIR
+    NDVI_DIR,
+    STANDARD_CRS,
+    LOG_FORMAT
 )
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
 logger = logging.getLogger(__name__)
 
 class VanceNDVIProcessor:
-    """Handles NDVI processing for Vance County properties."""
+    """Handles NDVI data extraction and processing for Vance County properties."""
     
     def __init__(self, properties_file: Path):
         """Initialize the NDVI processor.
@@ -44,9 +51,23 @@ class VanceNDVIProcessor:
         """
         ndvi_files = {}
         for year in ANALYSIS_YEARS:
-            files = list(NDVI_DIR.glob(f"*{year}*.tif"))
+            files = list(NDVI_DIR.glob(f"ndvi_NAIP_Vance_County_{year}*.tif"))
             if not files:
                 raise FileNotFoundError(f"No NDVI files found for {year}")
+            logger.info(f"Found {len(files)} NDVI files for {year}: {[f.name for f in files]}")
+            
+            # Log NDVI file information
+            for file in files:
+                with rasterio.open(file) as src:
+                    logger.info(f"NDVI file {file.name}:")
+                    logger.info(f"  CRS: {src.crs}")
+                    if src.crs.to_string() != STANDARD_CRS:
+                        logger.warning(f"  WARNING: NDVI file CRS {src.crs} differs from standard {STANDARD_CRS}")
+                    logger.info(f"  Bounds in {src.crs.to_string()}: {src.bounds}")
+                    logger.info(f"  Resolution: {src.res}")
+                    logger.info(f"  Size: {src.width}x{src.height}")
+                    logger.info(f"  Transform: {src.transform}")
+            
             ndvi_files[year] = sorted(files)
         return ndvi_files
     
@@ -66,12 +87,37 @@ class VanceNDVIProcessor:
         """
         with rasterio.open(ndvi_file) as src:
             try:
+                # Ensure property geometry is in WGS84
+                property_gdf = gpd.GeoDataFrame(geometry=[geometry], crs=STANDARD_CRS)
+                logger.debug(f"Property bounds in {STANDARD_CRS}: {property_gdf.total_bounds.tolist()}")
+                
+                # Check if NDVI file is in WGS84, if not log warning
+                if src.crs.to_string() != STANDARD_CRS:
+                    logger.warning(f"NDVI file {ndvi_file.name} uses {src.crs}, differs from standard {STANDARD_CRS}")
+                
+                geom = property_gdf.geometry.iloc[0]
+                logger.debug(f"Processing property with bounds in {STANDARD_CRS}: {geom.bounds}")
+                logger.debug(f"NDVI file CRS: {src.crs}")
+                logger.debug(f"NDVI file bounds in {src.crs.to_string()}: {src.bounds}")
+                logger.debug(f"NDVI file transform: {src.transform}")
+                
+                # Check if property intersects NDVI bounds
+                raster_bounds = src.bounds
+                if not (geom.bounds[0] < raster_bounds.right and 
+                       geom.bounds[2] > raster_bounds.left and
+                       geom.bounds[1] < raster_bounds.top and
+                       geom.bounds[3] > raster_bounds.bottom):
+                    logger.debug(f"Property does not intersect NDVI bounds in {src.crs.to_string()}")
+                    return None
+                
                 # Mask NDVI data to property boundary
-                ndvi_data, _ = mask(src, [geometry], crop=True)
+                ndvi_data, transform = mask(src, [geom], crop=True)
+                logger.debug(f"Masked data shape: {ndvi_data.shape}")
                 
                 # Filter invalid pixels
                 valid_mask = (ndvi_data != src.nodata) & (ndvi_data >= -1) & (ndvi_data <= 1)
                 valid_pixels = ndvi_data[valid_mask]
+                logger.debug(f"Valid pixels: {len(valid_pixels)} of {ndvi_data.size}")
                 
                 if len(valid_pixels) < MIN_VALID_PIXELS:
                     logger.warning(f"Insufficient valid pixels: {len(valid_pixels)}")
@@ -92,7 +138,7 @@ class VanceNDVIProcessor:
                 }
                 
             except Exception as e:
-                logger.error(f"Error processing property: {e}")
+                logger.error(f"Error processing property: {e}", exc_info=True)
                 return None
     
     def process_property_batch(
