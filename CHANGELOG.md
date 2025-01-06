@@ -313,6 +313,31 @@ Begin check-in process and document analysis.
   - Enhanced progress tracking with tqdm
   - Improved memory management for large datasets
   - Added detailed processing statistics
+- Split NDVI processing into modular components:
+  - `MosaicCreator` class for efficient NDVI mosaicking
+  - `NDVITrendAnalyzer` class for temporal trend analysis
+  - Command-line interface for separate or combined execution
+- Enhanced NDVI processing capabilities:
+  - Virtual raster (VRT) support for memory-efficient mosaicking
+  - Parallel property processing with multiprocessing
+  - Automatic worker scaling based on CPU cores
+  - Progress tracking and detailed logging
+  - Comprehensive error handling
+- Improved data management:
+  - Temporary file handling with cleanup
+  - Optional GeoTIFF mosaic saving
+  - Efficient batch processing of properties
+  - Separate storage of trends and yearly statistics
+- Added detailed statistics tracking:
+  - NDVI trend calculations (slope, intercept)
+  - Coverage metrics and pixel counts
+  - Year-by-year NDVI statistics
+  - Data quality indicators
+- Enhanced NDVI property tracking:
+  - Improved property ID integration in NDVI extraction
+  - Added property ID to GeoDataFrame during processing
+  - Enhanced error logging with property identification
+  - Strengthened data lineage tracking
 
 ### Changed
 - Updated PROJECT_SCOPE.md with comprehensive project details
@@ -373,6 +398,17 @@ Begin check-in process and document analysis.
   - Added detailed progress reporting
   - Implemented robust error handling
   - Added file size verification
+- Removed deprecated WKT conversion code:
+  - Removed WKT conversion in data preparation
+  - Removed WKT handling in property matching
+  - Simplified geometry handling in NDVI processing
+  - Updated file I/O to use native GeoParquet format
+- Optimized NDVI processing pipeline:
+  - Added efficient property filtering using NDVI coverage bounds
+  - Reduced memory usage by loading only Vance County properties
+  - Improved parcel filtering using spatial bounds intersection
+  - Optimized neighbor parcel loading with parquet filters
+  - Simplified NDVI bounds calculation using consistent tile structure
 
 ### Data Processing Status
 - Property Data Integration
