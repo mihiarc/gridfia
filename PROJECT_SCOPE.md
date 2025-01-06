@@ -2,6 +2,13 @@
 
 ---
 
+## **Project Objectives**
+1. Quantify the forest health of heirs property parcels in North Carolina
+2. Quantify the forest health of non-heirs property parcels in North Carolina
+3. Create a dataset for comparing heirs property parcels to neighboring non-heirs property parcels
+
+---
+
 ## **IMPORTANT: PROJECT CONTINUITY**  
 To maintain project context across conversations, always start a new chat with the following instructions:  
 
@@ -105,41 +112,70 @@ docs/
    - Provide data dashboards
 
 ### **Project Status**
-- Phase 1 (Infrastructure): ✅ Complete
-  - Docker environment setup
-  - PostGIS database configuration
-  - Development environment setup
-  - Testing framework implementation
-  - Documentation structure established
 
-- Phase 2 (Data Pipeline): 🔄 In Progress
-  - Data ingestion framework
-  - Processing pipeline implementation
-  - Initial analysis tools
-  - Database optimization
-  - Testing coverage expansion
+### Current Phase: Phase 2 (Analysis Prototype)
 
-- Phase 3 (Analysis Tools): 📅 Planned
-  - Advanced spatial analysis
-  - Visualization tools
-  - Reporting framework
-  - Performance optimization
-  - Automated reporting
+### Recent Achievements
+1. Data Preparation
+   - Successfully processed all property data with GEOS 3.10.6
+   - Implemented robust geometry validation
+
+2. Property Matching
+   - Completed matching for Vance County properties
+   - Achieved 100% coverage with high-quality matches
+   - Implemented efficient spatial search with two-stage filtering
+   - Generated comprehensive match statistics
+
+3. NDVI Processing
+   - Split processing into modular components:
+     - MosaicCreator for efficient NDVI mosaicking
+     - NDVITrendAnalyzer for temporal analysis
+   - Implemented memory-efficient virtual rasters (VRT)
+   - Added parallel processing with automatic CPU scaling
+   - Enhanced progress tracking and error handling
+   - Improved data management and statistics collection
+   - Enhanced property ID tracking and validation
+   - Strengthened spatial data lineage
+
+### Processing Statistics
+- Data Processing:
+  - 24,349 heirs properties processed
+  - 5,556,642 parcels processed
+  - 1.63GB total processed data
+  - 99.95% processing success rate
+
+- Property Matching:
+  - 92,342 total matches found
+  - 92.3 average matches per property
+  - 1,137.6m average distance
+  - 0.97 average area ratio
+  - 100% coverage for Vance County
+
+- NDVI Processing:
+  - Memory-efficient VRT mosaics for 2018, 2020, 2022
+  - Optimized property filtering using NDVI coverage bounds
+  - Processing only properties within NDVI coverage (102 properties)
+  - Parallel processing with CPU-optimized workers
+  - Batch-based property processing (100 properties/batch)
+  - Comprehensive trend statistics and validation
+  - Separate storage for trends and yearly data
+
+### Next Steps
+1. NDVI Processing
+   - Rerun the full data pipeline for Vance County subset
+
+2. Statistical Analysis
+   - Compare NDVI trends between heirs vs neighbor properties
+   - Analyze temporal patterns
+   - Generate visualization outputs
+   - Create summary reports
+
+### Known Issues
+- NDVI coverage limited to subset of Vance County (102 properties)
+- Memory usage spikes during large batch processing
+- Long processing times for full dataset analysis
 
 ### **Implementation Timeline**
-
-#### Phase 1: Infrastructure
-1. Docker Setup and Configuration
-   - Base environment with GDAL
-   - Multi-container orchestration
-   - Volume and network configuration
-   - Development environment setup
-
-2. PostGIS Configuration
-   - Database initialization
-   - Spatial extensions setup
-   - Performance optimization
-   - Security configuration
 
 #### Phase 2: Data Pipeline
 1. Vector Data Processing
@@ -161,37 +197,19 @@ docs/
    - Validation procedures
 
 4. Raster Processing
-   - NAIP imagery optimization
    - NDVI calculation pipeline
    - Integration with vector data
-   - Performance tuning
-
-#### Phase 3: Analysis Tools
-1. Advanced Analytics
-   - Spatial statistics
-   - Forest health metrics
-   - Property relationship analysis
-   - Automated reporting
-
-2. Visualization
-   - Interactive mapping
-   - Statistical dashboards
-   - Report generation
-   - Data exploration tools
 
 ### **Current Focus**
 1. Processing NDVI data for matched properties
 2. Implementing statistical analysis framework
-3. Developing visualization components
-4. Documenting analysis procedures
+3. Documenting analysis procedures
 
 ### **Implementation Progress**
 - Data Pipeline: 80% Complete
   - ✅ Data Preparation
     - Successfully processed 24,349 heirs properties
     - Successfully processed 5,556,642 parcels
-    - Implemented WKT geometry serialization
-    - Added comprehensive validation
   
   - ✅ Property Matching
     - Completed Vance County property matching
@@ -207,156 +225,32 @@ docs/
     - Processing only properties within NDVI coverage (102 properties)
     - Multi-year analysis framework in place
     - Validation system implemented
-    
-  - 📅 Statistical Analysis
-    - Framework designed
-    - Ready for implementation
-    - Visualization components planned
-
-### **Next Steps**
-1. Short Term
-   - Process NDVI data for matched properties
-   - Implement statistical analysis framework
-   - Generate initial visualizations
-
-2. Medium Term
-   - Complete analysis for all matched properties
-   - Generate comprehensive reports
-   - Validate analysis results
-
-3. Long Term
-   - Scale system for additional counties
-   - Implement advanced analytics
-   - Add automated reporting
-
----
-
-## **Core Objectives**
-1. Quantify the forest health of heirs property parcels in North Carolina
-2. Quantify the forest health of non-heirs property parcels in North Carolina
-3. Create a dataset for comparing heirs property parcels to neighboring non-heirs property parcels
-
-### **Analysis Requirements**
-1. NDVI Analysis
-   - Compare temporal NDVI trends between heirs and non-heirs properties
-   - Focus on properties with complete NDVI coverage (2018-2022)
-   - Use NC State Plane projection for accurate spatial analysis
-   - Consider property size and location in analysis
-
-2. Neighbor Analysis
-   - Identify non-heirs properties within specified buffer distances
-   - Match properties based on size and land use characteristics
-   - Calculate comparative NDVI statistics
-   - Document spatial relationships
-
-3. Statistical Analysis
-   - Temporal trend comparison between property types
-   - Size-based stratification of results
-   - Spatial autocorrelation assessment
-   - Significance testing of differences
-
-4. Visualization Requirements
-   - Clear distinction between heirs and non-heirs properties
-   - Temporal trend visualization
-   - Spatial distribution mapping
-   - Property characteristic comparisons
 
 ---
 
 ## **Technical Architecture**
 
-### **Infrastructure Components**
-1. PostGIS spatial database with NC State Plane support
-2. JupyterLab environment for data analysis
-3. Automated data processing pipeline
-4. Docker-based deployment system
-5. Parallel processing framework for NDVI analysis
-
 ### **NDVI Processing Architecture**
 
 #### Core Components
-1. Mosaic Creation System
-   - Virtual raster (VRT) support for memory efficiency
-   - Automatic file grouping by year
-   - Optional GeoTIFF export
-   - Temporary file management
-   - Progress tracking and validation
-
-2. Trend Analysis System
-   - Parallel property processing
-   - Automatic CPU core scaling
-   - Batch-based processing
-   - Memory-efficient pixel extraction
-   - Comprehensive statistics calculation
-   - Robust property ID tracking
-   - Enhanced spatial data lineage
-   - Improved error tracing
-
-3. Data Management
+1. Data Management
    - Separate storage for trends and yearly stats
    - Parquet-based results storage
    - Automatic cleanup of temporary files
    - Progress tracking and logging
-   - Error handling and recovery
-   - Property-level validation
 
-#### Processing Pipeline
-1. Mosaic Creation
-   - Group NDVI files by year
-   - Create virtual mosaics (VRT)
-   - Optional GeoTIFF export
-   - Validate mosaic coverage
+2. Mosaic Creation System
+   - Virtual raster (VRT) support for memory efficiency
+   - Automatic file grouping by year
+   - Temporary file management
+   - Progress tracking and validation
 
-2. Property Processing
+3. Property Processing
    - Load matched properties
    - Extract NDVI values
    - Calculate temporal trends
    - Generate statistics
    - Save results
-
-3. Quality Control
-   - Pixel count validation
-   - Coverage ratio calculation
-   - Data completeness checks
-   - Error logging and reporting
-   - Progress monitoring
-
-### **System Requirements**
-- Docker & Docker Compose
-- Python 3.9+
-- Make (optional, for using Makefile commands)
-
-### **Integrations**
-1. PostGIS Database
-   - Spatial data storage
-   - Geospatial query support
-   - NC State Plane coordinate system
-
-2. JupyterLab
-   - Interactive analysis environment
-   - Visualization tools
-   - Notebook-based workflows
-
-3. Data Processing Pipeline
-   - Automated data ingestion
-   - Spatial analysis tools
-   - Batch processing capabilities
-
-### **Core Functions**
-1. Data Management
-   - Raw data ingestion
-   - Spatial data processing
-   - Data validation and cleaning
-
-2. Spatial Analysis
-   - Property parcel analysis
-   - Neighbor relationship computation
-   - Forest health assessment
-
-3. Visualization
-   - Interactive mapping
-   - Statistical analysis
-   - Report generation
 
 ### **Project Structure**
 ```
@@ -387,184 +281,30 @@ heirs-property/
 1. Property Data
    - `nc-parcels.parquet` (874MB): North Carolina parcel database
    - `nc-hp_v2.parquet` (11MB): Heirs property dataset
-   - `parcels_within_1_mile.parquet` (494MB): Neighboring parcels analysis
-   - `HP_Deliverables.gdb`: Base heirs property geodatabase
-
-2. Forest Inventory Data
-   - `nc-fia-plots.csv` (2.2MB): FIA plot locations
-   - `nc-plots.csv` (3.5MB): Plot measurements
-   - `nc-plots-tpa.csv` (19MB): Trees per acre calculations
-   - `tcc30percent.tif` (18MB): Tree canopy coverage
-
-3. Spatial Analysis Data
-   - `NC.gdb`: North Carolina base geodatabase. This contains all the parcels in North Carolina.
    
-4. NDVI Analysis:
-     - Base NDVI calculations
-     - County-specific analysis (e.g., Vance County)
-     - Temporal vegetation changes
-
-### **Data Processing Pipeline**
-1. Data Ingestion
-   - Raw data validation
-   - Coordinate system alignment
-   - Quality checks
-
-2. Analysis Pipeline
-   - Spatial processing
-   - Health metric computation
-   - Comparative analysis
-
-3. Output Generation
-   - Report formatting
-   - Visualization creation
-   - Data export
-
-### **Pipeline Components**
-1. Data Validation Layer
-   - Field validation
-   - Geometry validation
-   - CRS validation
-   - Validation reporting
-
-2. Performance Optimization
-   - Chunked processing (10,000 records)
-   - Parallel processing (4 workers)
-   - Memory monitoring (1000MB limit)
-   - Progress tracking
-
-3. Error Recovery
-   - Transaction management
-   - Table backups
-   - Checkpointing
-   - Rollback capability
-
-4. Pipeline Monitoring
-   - Resource monitoring (30s interval)
-   - Performance metrics
-   - Alert system
-   - Reporting system
+2. NDVI Data:
+   - `ndvi_NAIP_Vanve_County_2018-p1.tif` (1.2GB): NDVI data for 2018
+   - `ndvi_NAIP_Vanve_County_2018-p2.tif` (1.2GB): NDVI data for 2018
+   - `ndvi_NAIP_Vanve_County_2020-p1.tif` (1.2GB): NDVI data for 2020
+   - `ndvi_NAIP_Vanve_County_2020-p2.tif` (1.2GB): NDVI data for 2020
+   - `ndvi_NAIP_Vanve_County_2022-p1.tif` (1.2GB): NDVI data for 2022
+   - `ndvi_NAIP_Vanve_County_2022-p2.tif` (1.2GB): NDVI data for 2022
 
 ### **Pipeline Directory Structure**
 ```
-src/processing/
-├── data_validator.py
-├── chunked_processor.py
-├── transaction_manager.py
-└── pipeline_monitor.py
+src/analysis/
+├── data_integrator.py
+├── data_prep.py
+|--- property_matcher.py
+├── run_ndvi_analysis.py
+     ├── mosaic_creator.py
+     ├── ndvi_processor.py.py
+├── stats_analyzer.py
 
-data/
-├── validation/
-├── stats/
-├── checkpoints/
-├── metrics/
-└── reports/
 ```
-
-### **Core Dependencies**
-```toml
-[dependencies]
-geopandas = "^0.14.0"
-pandas = "^2.1.0"
-sqlalchemy = "^2.0.0"
-psutil = "^5.9.0"
-tqdm = "^4.66.0"
-```
-
 ---
 
-## **Development Guidelines**
-1. All code changes must include tests
-2. Documentation updates are mandatory
-3. Follow Python code style guidelines
-4. Use type hints and docstrings
-5. Maintain comprehensive error handling
-
-### **Technical Details**
-
-#### Database Configuration
-```yaml
-Database:
-  Host: localhost
-  Port: 5432
-  Database: heirs_property
-  Extensions: 
-    - postgis
-    - postgis_raster
-
-Performance:
-  shared_buffers: 2GB
-  work_mem: 64MB
-  maintenance_work_mem: 256MB
-  effective_cache_size: 6GB
-  random_page_cost: 1.1
-
-Spatial Reference:
-  - NC State Plane (NAD83, SRID: 2264)
-  - WGS 84 (SRID: 4326)
-```
-
-#### Data Pipeline Flow
-```mermaid
-graph TD
-    A[Raw GIS Data] --> B[Convert to Parquet]
-    B --> C[Process Heirs Properties]
-    D[FIA Plot Data] --> E[Analyze FIA Plots]
-    C --> F[Neighbor Analysis]
-    G[NDVI Data] --> H[Process NDVI]
-    C --> I[Final Analysis]
-    E --> I
-    F --> I
-    H --> I
-```
-
-#### Pipeline Stages
-1. GDB to Parquet Conversion
-   - Load GDB files using GeoPandas
-   - Clean and standardize fields
-   - Convert to Parquet format
-
-2. Heirs Property Processing
-   - Clean heirs property data
-   - Add derived features
-   - Validate property information
-
-3. FIA Plot Analysis
-   - Load and clean FIA plot data
-   - Perform spatial join with properties
-   - Calculate forest health metrics
-
-4. Neighbor Analysis
-   - Identify neighboring properties
-   - Calculate distances
-   - Create property buffers
-   - Analyze management patterns
-
-5. NDVI Processing
-   - Process NAIP imagery
-   - Calculate NDVI values
-   - Extract temporal patterns
-   - Generate property-level statistics
-
-#### Output Products
-1. Processed Datasets
-   - Cleaned heirs property data
-   - Property neighbor relationships
-   - Forest health indicators
-
-2. Analysis Results
-   - Forest management patterns
-   - Temporal NDVI changes
-   - Property characteristic comparisons
-
-3. Visualizations
-   - NDVI change maps
-   - Forest health distribution
-   - Property relationship networks
-
----
-
-## **Phase 2: Data Pipeline Implementation 🔄**
+## **Phase 2: Prototype Status 🔄**
 
 ### **Current Status**
 - Completed initial data assessment
@@ -574,45 +314,3 @@ graph TD
 - Implemented property filtering and validation
 - Developed NDVI extraction pipeline
 - Created neighbor relationship analysis
-
-### **Known Limitations**
-- Limited NDVI coverage (10.2% of Vance County heirs properties)
- -explore why this is happening
-- Two-year temporal intervals
-- Need for robust control group selection
-
-### **Next Steps**
-1. Spatial distribution analysis
-2. Control group selection methodology
-3. Statistical framework development
-4. Visualization system implementation
-
-### **Documentation Structure**
-```
-heirs-property/
-├── docs/
-│   ├── debug/                    # Debugging documentation
-│   │   └── map_visualization.md  # Map visualization debugging plan
-│   ├── core/                     # Core documentation
-│   ├── technical/               # Technical documentation
-│   └── reference/              # Reference documentation
-```
-
-### **Debugging Approach**
-1. Documentation First
-   - Create detailed debugging plans
-   - Document investigation steps
-   - Track progress and findings
-   - Update documentation immediately
-
-2. Systematic Investigation
-   - Data structure analysis
-   - Error pattern identification
-   - Implementation planning
-   - Success criteria definition
-
-3. Error Handling
-   - Enhanced logging
-   - Data validation
-   - Graceful fallbacks
-   - Clear error messages
