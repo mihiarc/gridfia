@@ -1,172 +1,176 @@
 #!/usr/bin/env python3
 
-import pandas as pd
-import geopandas as gpd
-import rasterio
-from rasterio.mask import mask
-import numpy as np
+import os
+import argparse
 import logging
 from pathlib import Path
-from concurrent.futures import ProcessPoolExecutor, as_completed
-from tqdm import tqdm
-import sys
-from stats_analyzer import StatsAnalyzer
+import geopandas as gpd
+import pandas as pd
+from typing import Dict, Optional
 
-# Set up logging
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout)
-    ]
-)
+from mosaic_creator import MosaicCreator
+from ndvi_trend import NDVITrendAnalyzer
+from data_integrator import DataIntegrator
+
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def extract_ndvi_values(args):
-    """Extract NDVI values for a geometry from raster files."""
-    geometry, year, ndvi_dir = args
-    try:
-        values = []
-        for part in [1, 2]:
-            raster_path = ndvi_dir / f"ndvi_NAIP_Vance_County_{year}-p{part}.tif"
-            logger.debug(f"Processing raster: {raster_path}")
-            with rasterio.open(raster_path) as src:
-                # Mask the raster with the geometry
-                out_image, _ = mask(src, [geometry], crop=True, all_touched=True)
-                
-                # Get valid values (exclude nodata)
-                valid_values = out_image[0][out_image[0] != src.nodata]
-                if len(valid_values) > 0:
-                    values.append(np.nanmean(valid_values))
-                    logger.debug(f"Extracted mean NDVI value: {values[-1]}")
+def create_mosaics(
+    ndvi_dir: str = "data/raw/ndvi",
+    output_dir: str = "output/ndvi/mosaics",
+    save_final: bool = True
+) -> dict:
+    """
+    Create NDVI mosaics for all years.
+    
+    Args:
+        ndvi_dir: Directory containing NDVI files
+        output_dir: Directory to save mosaics
+        save_final: Whether to save final GeoTIFF mosaics
         
-        result = np.mean(values) if values else np.nan
-        logger.debug(f"Final NDVI value for year {year}: {result}")
-        return result
-            
-    except Exception as e:
-        logger.warning(f"Error extracting NDVI values for year {year}: {e}")
-        return np.nan
+    Returns:
+        Dictionary mapping years to mosaic paths
+    """
+    logger.info("Starting NDVI mosaic creation...")
+    
+    # Create mosaic directory
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Create mosaics
+    with MosaicCreator(ndvi_dir, output_dir) as mosaic_creator:
+        mosaic_paths = mosaic_creator.create_all_mosaics(save_final=save_final)
+        
+    logger.info(f"Created mosaics for years: {', '.join(sorted(mosaic_paths.keys()))}")
+    return mosaic_paths
 
-def process_property(args):
-    """Process NDVI values for a single property."""
-    idx, geometry, years, ndvi_dir = args
-    try:
-        logger.debug(f"Processing property {idx}")
-        values = {}
-        for year in years:
-            value = extract_ndvi_values((geometry, year, ndvi_dir))
-            values[f'ndvi_{year}'] = value
-            
-        # Calculate trend slope
-        ndvi_values = [values[f'ndvi_{year}'] for year in years]
-        if all(pd.notna(v) for v in ndvi_values):
-            values['ndvi_trend_slope'] = (ndvi_values[-1] - ndvi_values[0]) / (years[-1] - years[0])
-            logger.debug(f"Calculated trend slope for property {idx}: {values['ndvi_trend_slope']}")
-        else:
-            values['ndvi_trend_slope'] = np.nan
-            logger.debug(f"Could not calculate trend slope for property {idx} due to missing values")
-            
-        return idx, values
-        
-    except Exception as e:
-        logger.warning(f"Error processing property {idx}: {e}")
-        return idx, {f'ndvi_{year}': np.nan for year in years} | {'ndvi_trend_slope': np.nan}
-
-def load_and_prepare_data():
-    """Load and prepare NDVI data for analysis."""
-    try:
-        logger.info("Starting data preparation...")
-        
-        # Load processed data
-        logger.debug("Loading property data...")
-        heirs_data = gpd.read_parquet("output/processed/heirs_processed.parquet")
-        parcels_data = gpd.read_parquet("output/processed/parcels_processed.parquet")
-        
-        logger.info(f"Loaded {len(heirs_data)} heirs properties and {len(parcels_data)} parcels")
-        
-        # Filter to Vance County
-        logger.debug("Filtering to Vance County...")
-        vance_heirs = heirs_data[heirs_data['county_nam'] == 'Vance']
-        vance_parcels = parcels_data[parcels_data['FIPS'] == '37181']  # Vance County FIPS
-        
-        logger.info(f"Filtered to {len(vance_heirs)} Vance County heirs properties and {len(vance_parcels)} parcels")
-        
-        # Prepare combined dataset
-        logger.debug("Preparing combined dataset...")
-        vance_heirs['is_heir'] = True
-        vance_parcels['is_heir'] = False
-        
-        # Combine datasets
-        combined_data = pd.concat([vance_heirs, vance_parcels], ignore_index=True)
-        logger.debug(f"Combined dataset has {len(combined_data)} properties")
-        
-        # Process NDVI values in parallel
-        years = [2018, 2020, 2022]
-        ndvi_dir = Path("data/raw/ndvi")
-        
-        # Prepare arguments for parallel processing
-        process_args = [
-            (idx, row.geometry, years, ndvi_dir)
-            for idx, row in combined_data.iterrows()
-        ]
-        
-        # Process properties in parallel with progress bar
-        logger.info("Processing NDVI data in parallel...")
-        with ProcessPoolExecutor() as executor:
-            futures = [executor.submit(process_property, args) for args in process_args]
-            
-            results = {}
-            for future in tqdm(as_completed(futures), total=len(futures), desc="Processing properties"):
-                idx, values = future.result()
-                results[idx] = values
-                logger.debug(f"Completed processing property {idx}")
-        
-        # Update combined data with results
-        logger.debug("Updating dataset with NDVI results...")
-        for idx, values in results.items():
-            for key, value in values.items():
-                combined_data.loc[idx, key] = value
-        
-        # Save prepared data
-        output_file = "output/analysis/ndvi_analysis_data.parquet"
-        Path(output_file).parent.mkdir(parents=True, exist_ok=True)
-        combined_data.to_parquet(output_file)
-        logger.info(f"Saved prepared data to {output_file}")
-        
-        return output_file
-        
-    except Exception as e:
-        logger.error(f"Error preparing data: {e}")
-        raise
+def calculate_trends(
+    mosaic_paths: dict,
+    output_dir: str = "output/ndvi/trends",
+    matches_file: str = "output/matches/vance_matches.csv",
+    processed_dir: str = "output/processed",
+    n_workers: int = None
+) -> None:
+    """
+    Calculate NDVI trends for matched properties.
+    
+    Args:
+        mosaic_paths: Dictionary mapping years to mosaic paths
+        output_dir: Directory to save trend results
+        matches_file: Path to property matches file
+        processed_dir: Directory containing processed property data
+        n_workers: Number of worker processes
+    """
+    logger.info("Starting NDVI trend calculation...")
+    
+    # Create output directory
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Initialize data integrator for validation
+    integrator = DataIntegrator()
+    
+    # Load property data
+    logger.info("Loading property data...")
+    heirs = gpd.read_parquet(os.path.join(processed_dir, "heirs_processed.parquet"))
+    parcels = gpd.read_parquet(os.path.join(processed_dir, "parcels_processed.parquet"))
+    logger.info(f"Loaded {len(heirs)} heirs properties and {len(parcels)} parcels")
+    
+    # Load matches
+    logger.info("Loading property matches...")
+    matches = pd.read_csv(matches_file)
+    logger.info(f"Loaded {len(matches)} property matches")
+    
+    # Validate data schemas
+    logger.info("Validating data schemas...")
+    all_properties = pd.concat([heirs, parcels])
+    is_valid, results = integrator.validate_schema(all_properties, 'property')
+    if not is_valid:
+        logger.warning("Property data validation issues:")
+        for k, v in results.items():
+            if v:
+                logger.warning(f"- {k}: {v}")
+    
+    is_valid, results = integrator.validate_schema(matches, 'match')
+    if not is_valid:
+        logger.warning("Match data validation issues:")
+        for k, v in results.items():
+            if v:
+                logger.warning(f"- {k}: {v}")
+    
+    # Validate relationships
+    logger.info("Validating data relationships...")
+    rel_results = integrator.validate_relationships(all_properties, matches)
+    if rel_results['invalid_references'] or rel_results['duplicate_keys']:
+        logger.warning("Relationship validation issues:")
+        for k, v in rel_results.items():
+            if v:
+                logger.warning(f"- {k}: {v}")
+    
+    # Get unique properties to process
+    property_ids = pd.concat([
+        matches['heir_id'],
+        matches['neighbor_id']
+    ]).unique()
+    logger.info(f"Found {len(property_ids)} unique properties to process")
+    
+    # Create property GeoDataFrame
+    properties_to_process = all_properties[all_properties['property_id'].isin(property_ids)]
+    properties_gdf = gpd.GeoDataFrame(properties_to_process, crs="EPSG:2264")
+    logger.info(f"Prepared {len(properties_gdf)} properties for processing")
+    
+    # Calculate trends
+    trend_analyzer = NDVITrendAnalyzer(mosaic_paths, output_dir, n_workers)
+    results_df = trend_analyzer.process_properties(properties_gdf)
+    
+    # Log summary statistics
+    valid_trends = results_df[results_df['slope'].notna()]
+    logger.info(f"Generated valid trends for {len(valid_trends)} properties")
+    logger.info(f"Average years covered: {valid_trends['years_covered'].mean():.1f}")
+    logger.info(f"Average total change: {valid_trends['total_change'].mean():.3f}")
 
 def main():
-    """Run NDVI trend analysis."""
+    """Run NDVI analysis steps."""
+    parser = argparse.ArgumentParser(description="Run NDVI analysis steps")
+    parser.add_argument("--step", choices=["mosaic", "trends", "all"],
+                      default="all", help="Analysis step to run")
+    parser.add_argument("--ndvi-dir", default="data/raw/ndvi",
+                      help="Directory containing NDVI files")
+    parser.add_argument("--output-dir", default="output/ndvi",
+                      help="Base output directory")
+    parser.add_argument("--save-mosaics", action="store_true",
+                      help="Save final GeoTIFF mosaics")
+    parser.add_argument("--workers", type=int, default=None,
+                      help="Number of worker processes")
+    
+    args = parser.parse_args()
+    
+    # Create output directories
+    mosaic_dir = os.path.join(args.output_dir, "mosaics")
+    trends_dir = os.path.join(args.output_dir, "trends")
+    
     try:
-        logger.info("Starting NDVI trend analysis...")
+        if args.step in ["mosaic", "all"]:
+            mosaic_paths = create_mosaics(
+                args.ndvi_dir,
+                mosaic_dir,
+                args.save_mosaics
+            )
+        else:
+            # If only running trends, load existing mosaic paths
+            mosaic_paths = {}
+            for file in os.listdir(mosaic_dir):
+                if file.endswith((".vrt", ".tif")):
+                    year = file.split("_")[1]
+                    mosaic_paths[year] = os.path.join(mosaic_dir, file)
         
-        # Prepare data
-        data_file = load_and_prepare_data()
-        
-        # Initialize analyzer
-        logger.debug("Initializing StatsAnalyzer...")
-        analyzer = StatsAnalyzer(output_dir="output/analysis")
-        
-        # Run analysis
-        logger.info("Running statistical analysis...")
-        stats_df = analyzer.run_analysis(data_file)
-        
-        # Print summary
-        print("\nNDVI Trend Analysis Results")
-        print("==========================")
-        print("\nTrend Statistics:")
-        print(stats_df)
-        
-        print("\nAnalysis outputs saved to output/analysis/")
-        logger.info("Analysis completed successfully")
-        
+        if args.step in ["trends", "all"]:
+            calculate_trends(
+                mosaic_paths,
+                trends_dir,
+                n_workers=args.workers
+            )
+            
     except Exception as e:
-        logger.error(f"Error in analysis: {e}")
+        logger.error(f"Error during NDVI analysis: {str(e)}")
         raise
 
 if __name__ == "__main__":

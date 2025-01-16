@@ -1,1 +1,0 @@
-"""Data models and schemas for the heirs property analysis.""" 

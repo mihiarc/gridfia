@@ -21,33 +21,51 @@ def sample_geometry():
 
 @pytest.fixture
 def sample_heirs_gdf():
-    """Create a sample heirs property GeoDataFrame."""
-    geometries = [
+    """Create a sample GeoDataFrame of heir properties.
+    Using NC State Plane (meters) EPSG:32119 for accurate area calculations.
+    """
+    # Create two simple polygons - coordinates in meters
+    polygons = [
         Polygon([(0, 0), (0, 100), (100, 100), (100, 0)]),
-        Polygon([(200, 200), (200, 300), (300, 300), (300, 200)])
+        Polygon([(2000, 2000), (2000, 2100), (2100, 2100), (2100, 2000)])
     ]
+    
+    # Create GeoDataFrame with pre-calculated areas
     data = {
-        'geometry': geometries,
-        'area': [10000, 10000],
+        'property_id': [1, 2],
         'county_nam': ['VANCE', 'VANCE'],
-        'property_id': [1, 2]
+        'geometry': polygons
     }
-    return gpd.GeoDataFrame(data, crs="EPSG:2264")
+    
+    gdf = gpd.GeoDataFrame(data, crs='EPSG:32119')
+    # Calculate areas after setting CRS
+    gdf['area'] = gdf.geometry.area
+    
+    return gdf
 
 @pytest.fixture
 def sample_parcels_gdf():
-    """Create a sample parcels GeoDataFrame."""
-    geometries = [
-        Polygon([(50, 50), (50, 150), (150, 150), (150, 50)]),
-        Polygon([(250, 250), (250, 350), (350, 350), (350, 250)])
+    """Create a sample GeoDataFrame of all parcels.
+    Using NC State Plane (meters) EPSG:32119 for accurate area calculations.
+    """
+    # Create two simple polygons - coordinates in meters
+    polygons = [
+        Polygon([(500, 500), (500, 600), (600, 600), (600, 500)]),
+        Polygon([(2500, 2500), (2500, 2600), (2600, 2600), (2600, 2500)])
     ]
+    
+    # Create GeoDataFrame with pre-calculated areas
     data = {
-        'geometry': geometries,
-        'area': [10000, 10000],
+        'property_id': [3, 4],
         'county_nam': ['VANCE', 'VANCE'],
-        'property_id': [3, 4]
+        'geometry': polygons
     }
-    return gpd.GeoDataFrame(data, crs="EPSG:2264")
+    
+    gdf = gpd.GeoDataFrame(data, crs='EPSG:32119')
+    # Calculate areas after setting CRS
+    gdf['area'] = gdf.geometry.area
+    
+    return gdf
 
 @pytest.fixture
 def sample_ndvi_data():
