@@ -1,0 +1,161 @@
+# Configuration for TIFF mosaic processing
+
+# Base input directory containing county folders
+input_dir: "heirs_data/raw"
+
+# County-specific mosaic configurations
+counties:
+  - name: "Alexander"
+    input_files:
+      - "NAIP_ndvi_1m_Alexander/ndvi_NAIP_1m_2022-0000000000-0000000000.tif"
+      - "NAIP_ndvi_1m_Alexander/ndvi_NAIP_1m_2022-0000000000-0000032768.tif"
+    output_file: "NAIP_ndvi_1m_Alexander/mosaic_alexander.tif"
+    
+  - name: "Alleghany"
+    input_files:
+      - "NAIP_ndvi_1m_Alleghany/ndvi_NAIP_1m_2022-0000000000-0000000000.tif"
+      - "NAIP_ndvi_1m_Alleghany/ndvi_NAIP_1m_2022-0000000000-0000032768.tif"
+    output_file: "NAIP_ndvi_1m_Alleghany/mosaic_alleghany.tif"
+    
+  - name: "Ashe"
+    input_files:
+      - "NAIP_ndvi_1m_Ashe/ndvi_NAIP_1m_2022-0000000000-0000000000.tif"
+      - "NAIP_ndvi_1m_Ashe/ndvi_NAIP_1m_2022-0000000000-0000032768.tif"
+      - "NAIP_ndvi_1m_Ashe/ndvi_NAIP_1m_2022-0000032768-0000000000.tif"
+      - "NAIP_ndvi_1m_Ashe/ndvi_NAIP_1m_2022-0000032768-0000032768.tif"
+    output_file: "NAIP_ndvi_1m_Ashe/mosaic_ashe.tif"
+    
+  - name: "Avery"
+    input_files:
+      - "NAIP_ndvi_1m_Avery/ndvi_NAIP_1m_2022-0000000000-0000000000.tif"
+      - "NAIP_ndvi_1m_Avery/ndvi_NAIP_1m_2022-0000000000-0000032768.tif"
+      - "NAIP_ndvi_1m_Avery/ndvi_NAIP_1m_2022-0000032768-0000000000.tif"
+      - "NAIP_ndvi_1m_Avery/ndvi_NAIP_1m_2022-0000032768-0000032768.tif"
+    output_file: "NAIP_ndvi_1m_Avery/mosaic_avery.tif"
+    
+  - name: "Bertie"
+    input_files:
+      - "NAIP_ndvi_1m_Bertie/ndvi_NAIP_1m_2022-0000000000-0000000000.tif"
+      - "NAIP_ndvi_1m_Bertie/ndvi_NAIP_1m_2022-0000000000-0000032768.tif"
+      - "NAIP_ndvi_1m_Bertie/ndvi_NAIP_1m_2022-0000000000-0000065536.tif"
+      - "NAIP_ndvi_1m_Bertie/ndvi_NAIP_1m_2022-0000032768-0000000000.tif"
+      - "NAIP_ndvi_1m_Bertie/ndvi_NAIP_1m_2022-0000032768-0000032768.tif"
+      - "NAIP_ndvi_1m_Bertie/ndvi_NAIP_1m_2022-0000032768-0000065536.tif"
+    output_file: "NAIP_ndvi_1m_Bertie/mosaic_bertie.tif"
+
+  - name: "Buncombe"
+    input_files:
+      - "NAIP_ndvi_1m_Buncombe/ndvi_NAIP_1m_2022-0000000000-0000000000.tif"
+      - "NAIP_ndvi_1m_Buncombe/ndvi_NAIP_1m_2022-0000000000-0000032768.tif"
+      - "NAIP_ndvi_1m_Buncombe/ndvi_NAIP_1m_2022-0000032768-0000000000.tif"
+      - "NAIP_ndvi_1m_Buncombe/ndvi_NAIP_1m_2022-0000032768-0000032768.tif"
+      - "NAIP_ndvi_1m_Buncombe/ndvi_NAIP_1m_2022-0000032768-0000065536.tif"
+      - "NAIP_ndvi_1m_Buncombe/ndvi_NAIP_1m_2022-0000000000-0000065536.tif"
+    output_file: "NAIP_ndvi_1m_Buncombe/mosaic_buncombe.tif"
+
+  - name: "Burke"
+    input_files:
+      - "NAIP_ndvi_1m_Burke/ndvi_NAIP_1m_2022-0000000000-0000000000.tif"
+      - "NAIP_ndvi_1m_Burke/ndvi_NAIP_1m_2022-0000000000-0000032768.tif"
+      - "NAIP_ndvi_1m_Burke/ndvi_NAIP_1m_2022-0000000000-0000065536.tif"
+      - "NAIP_ndvi_1m_Burke/ndvi_NAIP_1m_2022-0000032768-0000000000.tif"
+      - "NAIP_ndvi_1m_Burke/ndvi_NAIP_1m_2022-0000032768-0000032768.tif"
+      - "NAIP_ndvi_1m_Burke/ndvi_NAIP_1m_2022-0000032768-0000065536.tif"
+    output_file: "NAIP_ndvi_1m_Burke/mosaic_burke.tif"
+    
+  - name: "Caldwell"
+    input_files:
+      - "NAIP_ndvi_1m_Caldwell/ndvi_NAIP_1m_2022-0000000000-0000000000.tif"
+      - "NAIP_ndvi_1m_Caldwell/ndvi_NAIP_1m_2022-0000000000-0000032768.tif"
+      - "NAIP_ndvi_1m_Caldwell/ndvi_NAIP_1m_2022-0000032768-0000000000.tif"
+      - "NAIP_ndvi_1m_Caldwell/ndvi_NAIP_1m_2022-0000032768-0000032768.tif"
+    output_file: "NAIP_ndvi_1m_Caldwell/mosaic_caldwell.tif"
+
+  - name: "Catawba"
+    input_files:
+      - "NAIP_ndvi_1m_Catawba/ndvi_NAIP_1m_2022-0000000000-0000000000.tif"
+      - "NAIP_ndvi_1m_Catawba/ndvi_NAIP_1m_2022-0000000000-0000032768.tif"
+      - "NAIP_ndvi_1m_Catawba/ndvi_NAIP_1m_2022-0000000000-0000065536.tif"
+    output_file: "NAIP_ndvi_1m_Catawba/mosaic_catawba.tif"
+
+  - name: "Cherokee"
+    input_files:
+      - "NAIP_ndvi_1m_Cherokee/ndvi_NAIP_1m_2022-0000000000-0000000000.tif"
+      - "NAIP_ndvi_1m_Cherokee/ndvi_NAIP_1m_2022-0000000000-0000032768.tif"
+      - "NAIP_ndvi_1m_Cherokee/ndvi_NAIP_1m_2022-0000032768-0000000000.tif"
+      - "NAIP_ndvi_1m_Cherokee/ndvi_NAIP_1m_2022-0000032768-0000032768.tif"
+      - "NAIP_ndvi_1m_Cherokee/ndvi_NAIP_1m_2022-0000032768-0000065536.tif"
+      - "NAIP_ndvi_1m_Cherokee/ndvi_NAIP_1m_2022-0000000000-0000065536.tif"
+    output_file: "NAIP_ndvi_1m_Cherokee/mosaic_cherokee.tif"
+
+  - name: "Chowan"
+    input_files:
+      - "NAIP_ndvi_1m_Chowan/ndvi_NAIP_1m_2022-0000000000-0000000000.tif"
+      - "NAIP_ndvi_1m_Chowan/ndvi_NAIP_1m_2022-0000000000-0000032768.tif"
+      - "NAIP_ndvi_1m_Chowan/ndvi_NAIP_1m_2022-0000032768-0000000000.tif"
+      - "NAIP_ndvi_1m_Chowan/ndvi_NAIP_1m_2022-0000032768-0000032768.tif"
+    output_file: "NAIP_ndvi_1m_Chowan/mosaic_chowan.tif"
+
+  - name: "Clay"
+    input_files:
+      - "NAIP_ndvi_1m_Clay/ndvi_NAIP_1m_2022-0000000000-0000000000.tif"
+      - "NAIP_ndvi_1m_Clay/ndvi_NAIP_1m_2022-0000000000-0000032768.tif"
+    output_file: "NAIP_ndvi_1m_Clay/mosaic_clay.tif"
+    
+  - name: "Washington"
+    input_files:
+      - "NAIP_ndvi_1m_Washington/ndvi_NAIP_1m_2022-0000000000-0000000000.tif"
+      - "NAIP_ndvi_1m_Washington/ndvi_NAIP_1m_2022-0000000000-0000032768.tif"
+      - "NAIP_ndvi_1m_Washington/ndvi_NAIP_1m_2022-0000032768-0000000000.tif"
+      - "NAIP_ndvi_1m_Washington/ndvi_NAIP_1m_2022-0000032768-0000032768.tif"
+    output_file: "NAIP_ndvi_1m_Washington/mosaic_washington.tif"
+    
+  - name: "Warren"
+    input_files:
+      - "NAIP_ndvi_1m_Warren/ndvi_NAIP_1m_2022-0000000000-0000000000.tif"
+      - "NAIP_ndvi_1m_Warren/ndvi_NAIP_1m_2022-0000000000-0000032768.tif"
+      - "NAIP_ndvi_1m_Warren/ndvi_NAIP_1m_2022-0000032768-0000000000.tif"
+      - "NAIP_ndvi_1m_Warren/ndvi_NAIP_1m_2022-0000032768-0000032768.tif"
+    output_file: "NAIP_ndvi_1m_Warren/mosaic_warren.tif"
+    
+  - name: "Northampton"
+    input_files:
+      - "NAIP_ndvi_1m_North_Hampton/ndvi_NAIP_1m_2022-0000000000-0000000000.tif"
+      - "NAIP_ndvi_1m_North_Hampton/ndvi_NAIP_1m_2022-0000000000-0000032768.tif"
+      - "NAIP_ndvi_1m_North_Hampton/ndvi_NAIP_1m_2022-0000000000-0000065536.tif"
+      - "NAIP_ndvi_1m_North_Hampton/ndvi_NAIP_1m_2022-0000032768-0000000000.tif"
+      - "NAIP_ndvi_1m_North_Hampton/ndvi_NAIP_1m_2022-0000032768-0000032768.tif"
+      - "NAIP_ndvi_1m_North_Hampton/ndvi_NAIP_1m_2022-0000032768-0000065536.tif"
+    output_file: "NAIP_ndvi_1m_North_Hampton/mosaic_northampton.tif"
+    
+  - name: "Hertford"
+    input_files:
+      - "NAIP_ndvi_1m_Hertford/ndvi_NAIP_1m_2022-0000000000-0000000000.tif"
+      - "NAIP_ndvi_1m_Hertford/ndvi_NAIP_1m_2022-0000000000-0000032768.tif"
+      - "NAIP_ndvi_1m_Hertford/ndvi_NAIP_1m_2022-0000032768-0000000000.tif"
+      - "NAIP_ndvi_1m_Hertford/ndvi_NAIP_1m_2022-0000032768-0000032768.tif"
+    output_file: "NAIP_ndvi_1m_Hertford/mosaic_hertford.tif"
+    
+  - name: "Halifax"
+    input_files:
+      - "NAIP_ndvi_1m_Halifax/ndvi_NAIP_1m_2022-0000000000-0000000000.tif"
+      - "NAIP_ndvi_1m_Halifax/ndvi_NAIP_1m_2022-0000000000-0000032768.tif"
+      - "NAIP_ndvi_1m_Halifax/ndvi_NAIP_1m_2022-0000000000-0000065536.tif"
+      - "NAIP_ndvi_1m_Halifax/ndvi_NAIP_1m_2022-0000032768-0000000000.tif"
+      - "NAIP_ndvi_1m_Halifax/ndvi_NAIP_1m_2022-0000032768-0000032768.tif"
+      - "NAIP_ndvi_1m_Halifax/ndvi_NAIP_1m_2022-0000032768-0000065536.tif"
+    output_file: "NAIP_ndvi_1m_Halifax/mosaic_halifax.tif"
+    
+  - name: "Edgecombe"
+    input_files:
+      - "NAIP_ndvi_1m_Edgecombe/ndvi_NAIP_1m_2022-0000000000-0000000000.tif"
+      - "NAIP_ndvi_1m_Edgecombe/ndvi_NAIP_1m_2022-0000000000-0000032768.tif"
+      - "NAIP_ndvi_1m_Edgecombe/ndvi_NAIP_1m_2022-0000032768-0000000000.tif"
+      - "NAIP_ndvi_1m_Edgecombe/ndvi_NAIP_1m_2022-0000032768-0000032768.tif"
+    output_file: "NAIP_ndvi_1m_Edgecombe/mosaic_edgecombe.tif"
+    
+  - name: "Vance"
+    input_files:
+      - "NAIP_ndvi_1m_Vance_County/ndvi_NAIP_1m_2022-01.tif"
+      - "NAIP_ndvi_1m_Vance_County/ndvi_NAIP_1m_2022-02.tif"
+    output_file: "NAIP_ndvi_1m_Vance_County/mosaic_vance.tif" 

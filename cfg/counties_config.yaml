@@ -1,0 +1,22 @@
+counties:
+  eastern:
+    - bertie
+    - chowan
+    - edgecombe
+    - halifax
+    - hertford
+    - northampton
+    - vance
+    - warren
+    - washington
+  western:
+    - alexander
+    - alleghany
+    - ashe
+    - avery
+    - buncombe
+    - burke
+    - caldwell
+    - catawba
+    - cherokee
+    - clay 

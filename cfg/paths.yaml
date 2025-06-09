@@ -1,0 +1,44 @@
+# Data directory paths
+data:
+  # Input data paths
+  input:
+    base_dir: "data/input"
+    heirs_properties: "data/input/nc-hp_v2.parquet"
+    parcels: "data/input/nc-parcels.parquet"
+    ndvi:
+      sentinel2_dir: "data/input/NDVI_Sentinel-2"
+      vance_county_dir: "data/input/ndvi_Heirs-Vance_County"
+      
+  # Processed data paths
+  processed:
+    base_dir: "data/processed"
+    properties_dir: "data/processed/properties"
+    ndvi_dir: "data/processed/ndvi"
+    prototype_dir: "data/processed/prototype_analysis"
+    
+  # Output paths for analysis results
+  output:
+    base_dir: "data/output"
+    plots_dir: "data/output/plots"
+    reports_dir: "data/output/reports"
+    
+  # Temporary data directory
+  temp_dir: "data/temp"
+  
+# File patterns
+patterns:
+  ndvi_files: "*.tif"
+  property_matches: "property_matches.parquet"
+  validation_report: "match_validation_report.json"
+  ndvi_stats: "ndvi_stats_{date}.parquet"
+  
+# Required fields for property data
+required_fields:
+  properties:
+    - "id"
+    - "geometry"
+    - "area"
+  ndvi:
+    - "property_id"
+    - "mean_ndvi"
+    - "date" 
