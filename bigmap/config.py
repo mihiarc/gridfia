@@ -6,45 +6,13 @@ for the BigMap package, demonstrating best practices with Pydantic.
 """
 
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict, Any
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 from pydantic_settings import BaseSettings
 
 
-class RasterConfig(BaseModel):
-    """Configuration for raster processing parameters."""
-    
-    chunk_size: Tuple[int, int, int] = Field(
-        default=(1, 1000, 1000),
-        description="Chunk size for zarr arrays (species, height, width)"
-    )
-    pixel_size: float = Field(
-        default=30.0,
-        gt=0,
-        description="Pixel size in meters"
-    )
-    compression: str = Field(
-        default="lz4",
-        description="Compression algorithm for zarr storage"
-    )
-    compression_level: int = Field(
-        default=5,
-        ge=1,
-        le=9,
-        description="Compression level (1-9)"
-    )
-    
-    @validator('chunk_size')
-    def validate_chunk_size(cls, v):
-        """Ensure chunk size is reasonable."""
-        if len(v) != 3:
-            raise ValueError("Chunk size must have 3 dimensions")
-        if any(x <= 0 for x in v):
-            raise ValueError("All chunk dimensions must be positive")
-        if v[1] * v[2] > 10_000_000:  # 10M pixels max per spatial chunk
-            raise ValueError("Spatial chunk size too large (memory concern)")
-        return v
+# Removed RasterConfig - not needed for REST API approach
 
 
 class VisualizationConfig(BaseModel):
@@ -93,7 +61,8 @@ class ProcessingConfig(BaseModel):
         description="Temporary directory for processing"
     )
     
-    @validator('temp_dir')
+    @field_validator('temp_dir')
+    @classmethod
     def validate_temp_dir(cls, v):
         """Ensure temp directory exists or can be created."""
         if v is not None:
@@ -104,6 +73,27 @@ class ProcessingConfig(BaseModel):
                 except OSError as e:
                     raise ValueError(f"Cannot create temp directory {v}: {e}")
         return v
+
+
+class CalculationConfig(BaseModel):
+    """Configuration for forest metric calculations."""
+    
+    name: str = Field(description="Name of the calculation")
+    enabled: bool = Field(default=True, description="Whether this calculation is enabled")
+    parameters: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Calculation-specific parameters"
+    )
+    output_format: str = Field(
+        default="geotiff",
+        description="Output format: 'geotiff', 'zarr', 'netcdf'"
+    )
+    output_name: Optional[str] = Field(
+        default=None,
+        description="Custom output filename (if None, uses calculation name)"
+    )
+
+
 
 
 class BigMapSettings(BaseSettings):
@@ -128,10 +118,28 @@ class BigMapSettings(BaseSettings):
         description="Directory for caching intermediate results"
     )
     
-    # Processing configurations
-    raster: RasterConfig = Field(default_factory=RasterConfig)
+    # Processing configurations  
     visualization: VisualizationConfig = Field(default_factory=VisualizationConfig)
     processing: ProcessingConfig = Field(default_factory=ProcessingConfig)
+    
+    # Calculation configurations
+    calculations: List[CalculationConfig] = Field(
+        default_factory=lambda: [
+            CalculationConfig(
+                name="species_richness",
+                parameters={"biomass_threshold": 0.0}
+            ),
+            CalculationConfig(
+                name="total_biomass",
+                enabled=False
+            ),
+            CalculationConfig(
+                name="shannon_diversity",
+                enabled=False
+            )
+        ],
+        description="List of calculations to perform"
+    )
     
     # Data validation
     species_codes: List[str] = Field(
@@ -139,22 +147,20 @@ class BigMapSettings(BaseSettings):
         description="List of valid species codes"
     )
     
-    class Config:
-        """Pydantic configuration."""
-        env_prefix = "BIGMAP_"  # Environment variables start with BIGMAP_
-        env_file = ".env"       # Load from .env file if present
-        case_sensitive = False   # Case-insensitive environment variables
+    model_config = ConfigDict(
+        env_prefix="BIGMAP_",      # Environment variables start with BIGMAP_
+        env_file=".env",           # Load from .env file if present
+        case_sensitive=False,      # Case-insensitive environment variables
+        extra="ignore"             # Ignore extra fields in config files
+    )
     
-    @validator('data_dir', 'output_dir', 'cache_dir')
+    @field_validator('data_dir', 'output_dir', 'cache_dir')
+    @classmethod
     def ensure_directories_exist(cls, v):
         """Ensure directories exist."""
         v = Path(v)
         v.mkdir(parents=True, exist_ok=True)
         return v
-    
-    def get_zarr_chunk_size(self) -> Tuple[int, int, int]:
-        """Get the configured zarr chunk size."""
-        return self.raster.chunk_size
     
     def get_output_path(self, filename: str) -> Path:
         """Get full output path for a filename."""
@@ -183,8 +189,15 @@ def load_settings(config_file: Optional[Path] = None) -> BigMapSettings:
     if config_file and config_file.exists():
         # Load from JSON/YAML file
         import json
+        import yaml
+        
+        config_file = Path(config_file)
+        
         with open(config_file) as f:
-            config_data = json.load(f)
+            if config_file.suffix.lower() in ['.yaml', '.yml']:
+                config_data = yaml.safe_load(f)
+            else:
+                config_data = json.load(f)
         return BigMapSettings(**config_data)
     else:
         # Load from environment/defaults
@@ -205,7 +218,7 @@ def save_settings(settings_obj: BigMapSettings, config_file: Path) -> None:
     
     with open(config_file, 'w') as f:
         json.dump(
-            settings_obj.dict(),
+            settings_obj.model_dump(),
             f,
             indent=2,
             default=str  # Handle Path objects

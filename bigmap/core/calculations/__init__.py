@@ -1,61 +1,73 @@
 """
-Core functionality for BigMap forest analysis.
+Forest calculations submodule.
 
-This module is organized into submodules:
-- calculations: Flexible calculation framework for forest metrics
-- processors: High-level data processors and pipelines
-- analysis: Analysis and reporting functions
+This module provides a flexible framework for calculating various forest
+metrics from multi-species biomass data.
 """
 
-# Import from submodules for backward compatibility
-from .calculations import (
-    ForestCalculation,
-    # Diversity calculations
+# Import base class
+from .base import ForestCalculation
+
+# Import all calculation types
+from .diversity import (
     SpeciesRichness,
     ShannonDiversity,
     SimpsonDiversity,
-    Evenness,
-    # Biomass calculations
+    Evenness
+)
+
+from .biomass import (
     TotalBiomass,
     TotalBiomassComparison,
     SpeciesProportion,
     SpeciesPercentage,
     SpeciesGroupProportion,
-    BiomassThreshold,
-    # Species calculations
+    BiomassThreshold
+)
+
+from .species import (
     DominantSpecies,
     SpeciesPresence,
     SpeciesDominance,
     RareSpecies,
-    CommonSpecies,
-    # Registry
+    CommonSpecies
+)
+
+# Import registry and convenience functions
+from .registry import (
     CalculationRegistry,
     registry,
     register_calculation,
     get_calculation,
-    list_calculations,
+    list_calculations
 )
 
-
-
 __all__ = [
-    # Calculations
+    # Base class
     'ForestCalculation',
+    
+    # Diversity calculations
     'SpeciesRichness',
     'ShannonDiversity',
     'SimpsonDiversity',
     'Evenness',
+    
+    # Biomass calculations
     'TotalBiomass',
     'TotalBiomassComparison',
     'SpeciesProportion',
     'SpeciesPercentage',
     'SpeciesGroupProportion',
     'BiomassThreshold',
+    
+    # Species calculations
     'DominantSpecies',
     'SpeciesPresence',
     'SpeciesDominance',
     'RareSpecies',
     'CommonSpecies',
+    
+    # Registry
     'CalculationRegistry',
     'registry',
     'register_calculation',

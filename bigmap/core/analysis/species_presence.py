@@ -6,16 +6,62 @@ This script examines each species layer in the zarr array and reports:
 - Which species have non-zero biomass pixels
 - Coverage statistics for each species
 - Summary of species presence in NC
+
+.. note::
+   This module is a standalone analysis tool that can be run directly
+   or imported for custom species presence analysis. It's primarily
+   used for data exploration and validation.
+
+.. todo::
+   Integration improvements:
+   
+   - [ ] Convert to proper CLI command in main BigMap CLI
+   - [ ] Add configuration file support instead of hardcoded paths
+   - [ ] Integrate with REST API for dynamic species list
+   - [ ] Add export options (CSV, JSON, GeoPackage)
+   - [ ] Create unit tests for analysis functions
+   - [ ] Add spatial filtering options (by county, bbox)
+   - [ ] Support multiple zarr files for comparison
+   
+   Target Version: v0.3.0
+   Priority: Low
+   Dependencies: None (standalone utility)
+
+Example Usage::
+
+    # Direct execution
+    python -m bigmap.core.analysis.species_presence
+    
+    # Programmatic usage
+    from bigmap.core.analysis import analyze_species_presence
+    
+    results = analyze_species_presence(
+        zarr_path="data/nc_biomass.zarr",
+        output_dir="analysis_output"
+    )
 """
 
 import zarr
 import numpy as np
 from pathlib import Path
 
-def analyze_species_presence():
-    """Analyze species presence in North Carolina zarr data."""
+def analyze_species_presence(
+    zarr_path: str = "output/nc_biomass_expandable.zarr",
+    output_dir: str = "output",
+    biomass_threshold: float = 0.0
+):
+    """
+    Analyze species presence in North Carolina zarr data.
     
-    zarr_path = "nc_biomass_expandable.zarr"
+    Parameters:
+    -----------
+    zarr_path : str
+        Path to the zarr array file
+    output_dir : str
+        Directory to save analysis results
+    biomass_threshold : float
+        Minimum biomass value to consider as present (default: 0.0)
+    """
     
     print("=== Analyzing Species Presence in North Carolina ===\n")
     
@@ -47,7 +93,7 @@ def analyze_species_presence():
         data = zarr_array[i]
         
         # Calculate statistics
-        nonzero_pixels = np.count_nonzero(data)
+        nonzero_pixels = np.count_nonzero(data > biomass_threshold)
         total_pixels = data.size
         coverage_pct = (nonzero_pixels / total_pixels) * 100
         
@@ -112,6 +158,34 @@ def analyze_species_presence():
             print(f"{i:2d}. {species['code']}: {species['name']}")
     
     print()
+    
+    # Save results to output directory
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+    
+    # Save species with data to CSV
+    if species_with_data:
+        import csv
+        csv_path = output_path / "species_presence_analysis.csv"
+        
+        with open(csv_path, 'w', newline='') as csvfile:
+            fieldnames = ['rank', 'species_code', 'species_name', 'coverage_pct', 
+                         'pixels_with_biomass', 'mean_biomass', 'max_biomass']
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            
+            writer.writeheader()
+            for i, species in enumerate(species_with_data, 1):
+                writer.writerow({
+                    'rank': i,
+                    'species_code': species['code'],
+                    'species_name': species['name'],
+                    'coverage_pct': species['coverage_pct'],
+                    'pixels_with_biomass': species['pixels'],
+                    'mean_biomass': species['mean_biomass'],
+                    'max_biomass': species['max_biomass']
+                })
+        
+        print(f"💾 Results saved to: {csv_path}")
     
     # Top species by coverage
     if len(species_with_data) > 0:
