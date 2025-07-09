@@ -1,0 +1,50 @@
+{
+  "app_name": "BigMap",
+  "debug": false,
+  "verbose": false,
+  "data_dir": "data",
+  "output_dir": "output/diversity_analysis",
+  "cache_dir": ".cache",
+  "visualization": {
+    "default_dpi": 300,
+    "default_figure_size": [
+      16,
+      12
+    ],
+    "color_maps": {
+      "biomass": "viridis",
+      "diversity": "plasma",
+      "richness": "Spectral_r"
+    },
+    "font_size": 12
+  },
+  "processing": {
+    "max_workers": null,
+    "memory_limit_gb": 8.0,
+    "temp_dir": null
+  },
+  "calculations": [
+    {
+      "name": "species_richness",
+      "enabled": true,
+      "parameters": {},
+      "output_format": "geotiff",
+      "output_name": null
+    },
+    {
+      "name": "shannon_diversity",
+      "enabled": true,
+      "parameters": {},
+      "output_format": "geotiff",
+      "output_name": null
+    },
+    {
+      "name": "total_biomass",
+      "enabled": true,
+      "parameters": {},
+      "output_format": "geotiff",
+      "output_name": null
+    }
+  ],
+  "species_codes": []
+}

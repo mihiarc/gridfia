@@ -3,11 +3,9 @@ data:
   # Input data paths
   input:
     base_dir: "data/input"
-    heirs_properties: "data/input/nc-hp_v2.parquet"
     parcels: "data/input/nc-parcels.parquet"
     ndvi:
       sentinel2_dir: "data/input/NDVI_Sentinel-2"
-      vance_county_dir: "data/input/ndvi_Heirs-Vance_County"
       
   # Processed data paths
   processed:

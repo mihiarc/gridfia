@@ -1,0 +1,82 @@
+# BigMap Configuration for Comprehensive Diversity Analysis
+# This configuration calculates multiple diversity metrics for research
+
+# Application settings
+app_name: "BigMap"
+debug: false
+verbose: true
+
+# File paths
+data_dir: "data"
+output_dir: "output/diversity_analysis"
+cache_dir: ".cache"
+
+# Raster processing settings
+raster:
+  chunk_size: [1, 2000, 2000]  # Larger chunks for diversity calculations
+  pixel_size: 30.0
+  compression: "zstd"  # Better compression for diverse data
+  compression_level: 3
+
+# Processing settings
+processing:
+  max_workers: null
+  memory_limit_gb: 16.0  # More memory for complex calculations
+  temp_dir: null
+
+# Visualization settings
+visualization:
+  default_dpi: 300
+  default_figure_size: [20, 16]
+  color_maps:
+    richness: "viridis"
+    shannon_diversity: "plasma"
+    total_biomass: "inferno"
+    dominant_species: "tab10"
+  font_size: 14
+
+# Calculation configurations
+calculations:
+  # Species richness with different thresholds
+  - name: "species_richness"
+    enabled: true
+    parameters:
+      biomass_threshold: 0.1  # Very low threshold
+    output_format: "zarr"
+    output_name: "species_richness_all"
+  
+  - name: "species_richness"
+    enabled: true
+    parameters:
+      biomass_threshold: 1.0  # Standard threshold
+    output_format: "geotiff"
+    output_name: "species_richness_standard"
+  
+  - name: "species_richness"
+    enabled: true
+    parameters:
+      biomass_threshold: 5.0  # High threshold for mature trees
+    output_format: "geotiff"
+    output_name: "species_richness_mature"
+  
+  # Diversity indices
+  - name: "shannon_diversity"
+    enabled: true
+    parameters: {}
+    output_format: "zarr"
+    output_name: "shannon_diversity"
+  
+  # Total biomass
+  - name: "total_biomass"
+    enabled: true
+    parameters: {}
+    output_format: "zarr"
+    output_name: "total_biomass"
+  
+  # Dominant species mapping
+  - name: "dominant_species"
+    enabled: true
+    parameters: {}
+    output_format: "geotiff"
+    output_name: "dominant_species"
+

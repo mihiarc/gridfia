@@ -1,0 +1,166 @@
+# Simplified BigMap Configuration for Southern Yellow Pine Analysis
+# Focus on the species that actually have data in North Carolina
+
+# Application settings
+app_name: "BigMap"
+debug: false
+verbose: true
+
+# File paths
+data_dir: "data"
+output_dir: "output/southern_yellow_pine_analysis"
+cache_dir: ".cache"
+
+# Raster processing settings
+raster:
+  chunk_size: [1, 1000, 1000]
+  pixel_size: 30.0
+  compression: "lz4"
+  compression_level: 5
+
+# Processing settings
+processing:
+  max_workers: null
+  memory_limit_gb: 8.0
+  temp_dir: null
+
+# Visualization settings
+visualization:
+  default_dpi: 300
+  default_figure_size: [16, 12]
+  color_maps:
+    proportion: "YlOrRd"
+    percentage: "Oranges"
+    species_group: "YlGn"
+    individual_species: "viridis"
+  font_size: 12
+
+# Calculation configurations
+calculations:
+  # Basic reference calculations
+  - name: "total_biomass"
+    enabled: true
+    parameters:
+      exclude_total_layer: true
+    output_format: "geotiff"
+    output_name: "nc_total_biomass"
+  
+  - name: "species_richness"
+    enabled: true
+    parameters:
+      biomass_threshold: 1.0
+      exclude_total_layer: true
+    output_format: "geotiff"
+    output_name: "nc_species_richness"
+  
+  # Shannon diversity (forest composition)
+  - name: "shannon_diversity"
+    enabled: true
+    parameters:
+      exclude_total_layer: true
+    output_format: "geotiff"
+    output_name: "nc_shannon_diversity"
+
+# Southern Yellow Pine species reference
+# Based on geographic analysis that confirmed presence:
+# - Found in 7 regions across NC
+# - Best region: Center (coords 5809-6809, 13082-14082)
+# - Total SYP biomass in best region: 10,067,219
+# - Dominant species: Loblolly Pine (up to 65.69 Mg/ha)
+
+southern_yellow_pine_species:
+  SPCD0110:
+    index: 39
+    common_name: "Shortleaf Pine"
+    scientific_name: "Pinus echinata"
+    presence_confirmed: true
+    max_biomass_found: 12.01
+    characteristics: "Drought tolerant, historically common, fire adapted"
+  
+  SPCD0111:
+    index: 40
+    common_name: "Slash Pine"
+    scientific_name: "Pinus elliottii"
+    presence_confirmed: true
+    max_biomass_found: 24.53
+    characteristics: "Fast growing, coastal plain species, pulpwood important"
+  
+  SPCD0121:
+    index: 44
+    common_name: "Longleaf Pine"
+    scientific_name: "Pinus palustris"
+    presence_confirmed: true
+    max_biomass_found: 25.20
+    characteristics: "Fire dependent, high conservation value, long-lived"
+  
+  SPCD0131:
+    index: 50
+    common_name: "Loblolly Pine"
+    scientific_name: "Pinus taeda"
+    presence_confirmed: true
+    max_biomass_found: 72.03
+    characteristics: "Most common pine in NC, fast growing, plantation species"
+
+# Geographic distribution confirmed in regions:
+geographic_presence:
+  confirmed_regions:
+    - name: "North-central-east"
+      bounds: [0, 1000, 19623, 20623]
+      syp_biomass: 1208654
+    - name: "Central" 
+      bounds: [2904, 3904, 13082, 14082]
+      syp_biomass: 3057939
+    - name: "East-central-north"
+      bounds: [2904, 3904, 25164, 26164]
+      syp_biomass: 65335
+    - name: "Center"  # BEST REGION
+      bounds: [5809, 6809, 13082, 14082]
+      syp_biomass: 10067219
+    - name: "Southwest-central"
+      bounds: [8714, 9714, 13082, 14082]
+      syp_biomass: 1904087
+    - name: "South-central"
+      bounds: [8714, 9714, 19623, 20623]
+      syp_biomass: 89852
+    - name: "South-central-east"
+      bounds: [8714, 9714, 25164, 26164]
+      syp_biomass: 184661
+  
+  best_region:
+    name: "Center"
+    bounds: [5809, 6809, 13082, 14082]
+    total_syp_biomass: 10067219
+    dominant_species: "Loblolly Pine"
+    max_biomass: 65.69
+
+# Analysis notes
+notes: |
+  Southern Yellow Pine Species Group Analysis - CONFIRMED DATA PRESENCE
+  
+  BREAKTHROUGH: Geographic testing revealed SYP species ARE present with substantial biomass!
+  
+  SPECIES CONFIRMED WITH DATA:
+  - Shortleaf Pine (SPCD0110, Index 39): Up to 12.01 Mg/ha
+  - Slash Pine (SPCD0111, Index 40): Up to 24.53 Mg/ha  
+  - Longleaf Pine (SPCD0121, Index 44): Up to 25.20 Mg/ha
+  - Loblolly Pine (SPCD0131, Index 50): Up to 72.03 Mg/ha (DOMINANT)
+  
+  GEOGRAPHIC DISTRIBUTION:
+  - Present in 7 regions across North Carolina
+  - Concentrated in central and eastern regions
+  - Best region: "Center" with 10+ million total SYP biomass
+  - Previous zero-coverage was due to geographic sampling in wrong areas
+  
+  LESSON LEARNED:
+  - Species referencing was correct from the beginning
+  - Issue was geographic sampling methodology
+  - Always test multiple regions when investigating "missing" data
+  
+  USAGE:
+  bigmap calculate data.zarr --config cfg/southern_yellow_pine_simple_config.yaml
+  
+  NEXT STEPS FOR CUSTOM ANALYSIS:
+  1. Use the basic outputs (total_biomass, species_richness, shannon_diversity)
+  2. Create custom Python scripts for SYP-specific analysis
+  3. Focus on the confirmed regions with substantial SYP presence
+  4. Consider regional subsets for detailed pine ecology studies 

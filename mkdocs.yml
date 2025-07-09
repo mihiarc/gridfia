@@ -8,34 +8,27 @@ repo_url: https://github.com/yourusername/bigmap
 edit_uri: edit/main/docs/
 
 nav:
-  - BigMap: index.md
-  - Architecture:
-    - Overview: architecture/overview.md
-    - System Design: architecture/system-design.md
-    - Data Pipeline: architecture/data-pipeline.md
-    - API Reference: architecture/api-reference.md
+  - Home: index.md
   - Getting Started:
+    - Quick Start: user-guide/getting-started.md
     - Installation: getting-started/installation.md
-    - Quick Start: getting-started/quickstart.md
-    - Configuration: getting-started/configuration.md
+    - Local Deployment: LOCAL_DEPLOYMENT.md
   - User Guide:
-    - CLI Usage: user-guide/cli.md
-    - Python API: user-guide/python-api.md
-    - Data Processing: user-guide/data-processing.md
-    - Analysis Workflows: user-guide/analysis.md
-    - Visualization: user-guide/visualization.md
+    - CLI Reference: cli-reference.md
+    - Configuration: api/config.md
+  - API Reference:
+    - Overview: api/index.md
+    - Processors: api/processors.md
+    - Calculations: api/calculations.md
+    - Configuration: api/config.md
   - Tutorials:
-    - BIGMAP Analysis: tutorials/bigmap-analysis.md
-    - Heirs Property Study: tutorials/heirs-property.md
-    - NDVI Temporal Analysis: tutorials/ndvi-analysis.md
-  - Reference:
-    - Command Reference: reference/cli-reference.md
-    - API Documentation: reference/api.md
-    - Configuration Options: reference/configuration.md
+    - Species Diversity Analysis: tutorials/species-diversity-analysis.md
+  - Architecture:
+    - System Design: architecture/system-design.md
+    - Data Pipeline: data-pipeline/rest-api-download.md
   - Development:
-    - Contributing: development/contributing.md
-    - Development Setup: development/setup.md
-    - Testing: development/testing.md
+    - Project Status: CURRENT_STATUS.md
+    - Contributing: RESTRUCTURING_GUIDE.md
 
 theme:
   name: material

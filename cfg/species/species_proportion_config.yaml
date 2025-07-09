@@ -1,0 +1,146 @@
+# BigMap Configuration for Species Proportion Analysis
+# This configuration calculates proportions and percentages for specific species and species groups
+
+# Application settings
+app_name: "BigMap"
+debug: false
+verbose: true
+
+# File paths
+data_dir: "data"
+output_dir: "output/species_proportions"
+cache_dir: ".cache"
+
+# Raster processing settings
+raster:
+  chunk_size: [1, 1000, 1000]  # (species, height, width)
+  pixel_size: 30.0
+  compression: "lz4"
+  compression_level: 5
+
+# Processing settings
+processing:
+  max_workers: null  # Auto-detect
+  memory_limit_gb: 8.0
+  temp_dir: null
+
+# Visualization settings
+visualization:
+  default_dpi: 300
+  default_figure_size: [16, 12]
+  color_maps:
+    proportion: "viridis"
+    percentage: "plasma"
+    species_group: "Spectral_r"
+  font_size: 12
+
+# Calculation configurations
+calculations:
+  # Basic reference calculations
+  - name: "total_biomass"
+    enabled: true
+    parameters: {}
+    output_format: "geotiff"
+    output_name: "nc_total_biomass"
+  
+  - name: "species_richness"
+    enabled: true
+    parameters:
+      biomass_threshold: 1.0
+    output_format: "geotiff"
+    output_name: "nc_species_richness"
+  
+  # Individual species proportions (0-1 scale)
+  # NOTE: Update species_index values to match your zarr data
+  - name: "species_proportion_0"
+    enabled: true
+    parameters:
+      species_index: 1  # Index of first species (skip TOTAL at index 0)
+      species_code: "SPCD0012"  # White Oak example
+    output_format: "geotiff"
+    output_name: "white_oak_proportion"
+  
+  - name: "species_proportion_1"
+    enabled: false  # Disabled by default - enable as needed
+    parameters:
+      species_index: 2
+      species_code: "SPCD0131"  # Loblolly Pine example
+    output_format: "geotiff"
+    output_name: "loblolly_pine_proportion"
+  
+  # Individual species percentages (0-100 scale)
+  - name: "species_percentage_0"
+    enabled: true
+    parameters:
+      species_index: 1
+      species_code: "SPCD0012"  # White Oak example
+    output_format: "geotiff"
+    output_name: "white_oak_percentage"
+  
+  # Species group proportions
+  - name: "species_group_proportion_pines"
+    enabled: true
+    parameters:
+      species_indices: [2, 5, 8, 12]  # Example pine species indices
+      group_name: "pines"
+    output_format: "geotiff"
+    output_name: "pine_group_proportion"
+  
+  - name: "species_group_proportion_oaks"
+    enabled: true
+    parameters:
+      species_indices: [1, 4, 7, 11]  # Example oak species indices
+      group_name: "oaks"
+    output_format: "geotiff"
+    output_name: "oak_group_proportion"
+  
+  - name: "species_group_proportion_hardwoods"
+    enabled: false  # Disabled by default
+    parameters:
+      species_indices: [1, 3, 4, 6, 7, 9, 11, 13]  # Example hardwood indices
+      group_name: "hardwoods"
+    output_format: "geotiff"
+    output_name: "hardwood_group_proportion"
+  
+  - name: "species_group_proportion_softwoods"
+    enabled: false  # Disabled by default
+    parameters:
+      species_indices: [2, 5, 8, 10, 12, 14]  # Example softwood indices
+      group_name: "softwoods"
+    output_format: "geotiff"
+    output_name: "softwood_group_proportion"
+
+# Species mapping (for reference - update with your actual species)
+# Use 'bigmap list-species' or 'bigmap analyze' to see your species list
+species_reference:
+  # Example species mapping - update with your actual data
+  0: "TOTAL - All Species Combined"
+  1: "SPCD0012 - White Oak"
+  2: "SPCD0131 - Loblolly Pine"
+  3: "SPCD0043 - Bald Cypress"
+  4: "SPCD0318 - Southern Red Oak"
+  5: "SPCD0611 - Sweetgum"
+  # Add more species as needed...
+
+# Analysis notes
+notes: |
+  Species Proportion Analysis Configuration
+  
+  IMPORTANT SETUP STEPS:
+  1. Run 'bigmap analyze' first to identify species in your zarr file
+  2. Update species_index values in calculations to match your data
+  3. Update species_codes to match your actual species
+  4. Customize species groups (pines, oaks, hardwoods, softwoods) as needed
+  
+  USAGE:
+  bigmap calculate data.zarr --config cfg/species_proportion_config.yaml
+  
+  OUTPUT:
+  - Proportion files: Values 0-1 (0% to 100%)
+  - Percentage files: Values 0-100 (direct percentage)
+  - Group files: Combined proportion for species groups
+  
+  INTERPRETATION:
+  - Values close to 1.0 (or 100%) indicate species dominance
+  - Values close to 0.0 indicate rare species
+  - Group proportions show functional group dominance patterns 

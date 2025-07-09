@@ -1,0 +1,143 @@
+# BigMap Configuration for Species Proportion Analysis (Corrected for Total Layer)
+# This configuration properly handles the pre-calculated TOTAL layer at index 0
+# and calculates metrics using only individual species layers (index 1+)
+
+# Application settings
+app_name: "BigMap"
+debug: false
+verbose: true
+
+# File paths
+data_dir: "data"
+output_dir: "output/species_proportions_corrected"
+cache_dir: ".cache"
+
+# Raster processing settings
+raster:
+  chunk_size: [1, 1000, 1000]  # (species, height, width)
+  pixel_size: 30.0
+  compression: "lz4"
+  compression_level: 5
+
+# Processing settings
+processing:
+  max_workers: null  # Auto-detect
+  memory_limit_gb: 8.0
+  temp_dir: null
+
+# Visualization settings
+visualization:
+  default_dpi: 300
+  default_figure_size: [16, 12]
+  color_maps:
+    proportion: "viridis"
+    percentage: "plasma"
+    species_group: "Spectral_r"
+    comparison: "RdBu_r"
+  font_size: 12
+
+# Calculation configurations
+calculations:
+  # Basic reference calculations (corrected to exclude total layer)
+  - name: "total_biomass"
+    enabled: true
+    parameters:
+      exclude_total_layer: true  # Calculate our own total from individual species
+    output_format: "geotiff"
+    output_name: "nc_calculated_total_biomass"
+  
+  - name: "species_richness"
+    enabled: true
+    parameters:
+      biomass_threshold: 1.0
+      exclude_total_layer: true  # Count individual species only
+    output_format: "geotiff"
+    output_name: "nc_species_richness_corrected"
+  
+  # Shannon diversity (using individual species only)
+  - name: "shannon_diversity"
+    enabled: true
+    parameters:
+      exclude_total_layer: true
+    output_format: "geotiff"
+    output_name: "nc_shannon_diversity_corrected"
+  
+  # Individual species proportions (relative to sum of individual species)
+  # NOTE: species_index must be >= 1 (individual species, not total)
+  - name: "species_proportion_1"
+    enabled: true
+    parameters:
+      species_index: 1  # First individual species (SPCD0010)
+      exclude_total_layer: true
+    output_format: "geotiff"
+    output_name: "first_individual_species_proportion"
+  
+  - name: "species_proportion_2"
+    enabled: true
+    parameters:
+      species_index: 2  # Second individual species
+      exclude_total_layer: true
+    output_format: "geotiff"
+    output_name: "second_individual_species_proportion"
+  
+  # Species group proportions (using individual species indices only)
+  - name: "species_group_proportion_first_5_species"
+    enabled: true
+    parameters:
+      species_indices: [1, 2, 3, 4, 5]  # First 5 individual species
+      group_name: "first_5_species"
+      exclude_total_layer: true
+    output_format: "geotiff"
+    output_name: "first_5_species_group_proportion"
+  
+  # Comparison between pre-calculated total and our calculated total
+  - name: "total_biomass_comparison_difference"
+    enabled: true
+    parameters:
+      comparison_type: "difference"
+    output_format: "geotiff"
+    output_name: "total_biomass_difference"
+  
+  - name: "total_biomass_comparison_ratio"
+    enabled: true
+    parameters:
+      comparison_type: "ratio"
+    output_format: "geotiff"
+    output_name: "total_biomass_ratio"
+  
+  - name: "total_biomass_comparison_percent_difference"
+    enabled: true
+    parameters:
+      comparison_type: "percent_difference"
+    output_format: "geotiff"
+    output_name: "total_biomass_percent_difference"
+
+# Analysis notes
+notes: |
+  Species Proportion Analysis - Corrected for Total Layer
+  
+  IMPORTANT NOTES:
+  - Index 0 contains pre-calculated TOTAL biomass (sum of all species)
+  - Individual species start at index 1 (SPCD0010, SPCD0011, etc.)
+  - All calculations now exclude the total layer by default
+  - Species proportions are calculated relative to sum of individual species
+  
+  LAYER STRUCTURE:
+  0: TOTAL - All Species Combined (pre-calculated)
+  1: SPCD0010 - Fir Spp 
+  2: SPCD0011 - Pacific Silver Fir
+  3: SPCD0012 - Balsam Fir
+  ... (and so on)
+  
+  USAGE:
+  bigmap calculate data.zarr --config cfg/species_proportion_corrected_config.yaml
+  
+  OUTPUT FILES WILL INCLUDE:
+  - Calculated total biomass (from individual species sum)
+  - Comparison files showing difference between pre-calculated and calculated totals
+  - Species proportions relative to calculated total (not pre-calculated total)
+  
+  INTERPRETATION:
+  - total_biomass_difference: Should be close to 0 if data is consistent
+  - total_biomass_ratio: Should be close to 1.0 if data is consistent
+  - Large differences may indicate missing species or data inconsistencies 

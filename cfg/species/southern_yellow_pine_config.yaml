@@ -1,0 +1,199 @@
+# BigMap Configuration for Southern Yellow Pine Analysis
+# Analysis of the Southern Yellow Pine species group in North Carolina
+# Includes: Loblolly Pine, Shortleaf Pine, Longleaf Pine, and Slash Pine
+# 
+# NOTE: SYP species are concentrated in central/eastern NC regions
+# Geographic testing confirmed presence in 7 regions with substantial biomass
+
+# Application settings
+app_name: "BigMap"
+debug: false
+verbose: true
+
+# File paths
+data_dir: "data"
+output_dir: "output/southern_yellow_pine_analysis"
+cache_dir: ".cache"
+
+# Raster processing settings
+raster:
+  chunk_size: [1, 1000, 1000]  # (species, height, width)
+  pixel_size: 30.0
+  compression: "lz4"
+  compression_level: 5
+
+# Processing settings
+processing:
+  max_workers: null  # Auto-detect
+  memory_limit_gb: 8.0
+  temp_dir: null
+
+# Visualization settings
+visualization:
+  default_dpi: 300
+  default_figure_size: [16, 12]
+  color_maps:
+    proportion: "YlOrRd"  # Yellow-Orange-Red for pine analysis
+    percentage: "Oranges"
+    species_group: "YlGn"  # Yellow-Green for forest groups
+    individual_species: "viridis"
+  font_size: 12
+
+# Calculation configurations
+calculations:
+  # Basic reference calculations
+  - name: "total_biomass"
+    enabled: true
+    parameters:
+      exclude_total_layer: true
+    output_format: "geotiff"
+    output_name: "nc_total_biomass"
+  
+  - name: "species_richness"
+    enabled: true
+    parameters:
+      biomass_threshold: 1.0
+      exclude_total_layer: true
+    output_format: "geotiff"
+    output_name: "nc_species_richness"
+  
+  # Southern Yellow Pine Group Analysis
+  - name: "species_group_proportion_southern_yellow_pine"
+    enabled: true
+    parameters:
+      species_indices: [39, 40, 44, 50]  # Shortleaf, Slash, Longleaf, Loblolly
+      group_name: "southern_yellow_pine"
+      exclude_total_layer: true
+    output_format: "geotiff"
+    output_name: "southern_yellow_pine_proportion"
+  
+  # Individual Southern Yellow Pine Species Proportions
+  - name: "species_proportion_SPCD0110"  # Shortleaf Pine
+    enabled: true
+    parameters:
+      species_index: 39
+      species_code: "SPCD0110"
+      exclude_total_layer: true
+    output_format: "geotiff"
+    output_name: "shortleaf_pine_proportion"
+  
+  - name: "species_proportion_SPCD0111"  # Slash Pine
+    enabled: true
+    parameters:
+      species_index: 40
+      species_code: "SPCD0111"
+      exclude_total_layer: true
+    output_format: "geotiff"
+    output_name: "slash_pine_proportion"
+  
+  - name: "species_proportion_SPCD0121"  # Longleaf Pine
+    enabled: true
+    parameters:
+      species_index: 44
+      species_code: "SPCD0121"
+      exclude_total_layer: true
+    output_format: "geotiff"
+    output_name: "longleaf_pine_proportion"
+  
+  - name: "species_proportion_SPCD0131"  # Loblolly Pine
+    enabled: true
+    parameters:
+      species_index: 50
+      species_code: "SPCD0131"
+      exclude_total_layer: true
+    output_format: "geotiff"
+    output_name: "loblolly_pine_proportion"
+  
+  # Individual Species Percentages (0-100 scale)
+  - name: "species_percentage_SPCD0110"  # Shortleaf Pine
+    enabled: true
+    parameters:
+      species_index: 39
+      species_code: "SPCD0110"
+      exclude_total_layer: true
+    output_format: "geotiff"
+    output_name: "shortleaf_pine_percentage"
+  
+  - name: "species_percentage_SPCD0131"  # Loblolly Pine (most common)
+    enabled: true
+    parameters:
+      species_index: 50
+      species_code: "SPCD0131"
+      exclude_total_layer: true
+    output_format: "geotiff"
+    output_name: "loblolly_pine_percentage"
+
+# Southern Yellow Pine Species Reference
+southern_yellow_pine_species:
+  SPCD0110:
+    index: 39
+    common_name: "Shortleaf Pine"
+    scientific_name: "Pinus echinata"
+    characteristics: "Drought tolerant, historically common, fire adapted"
+  
+  SPCD0111:
+    index: 40
+    common_name: "Slash Pine"
+    scientific_name: "Pinus elliottii"
+    characteristics: "Fast growing, coastal plain species, pulpwood important"
+  
+  SPCD0121:
+    index: 44
+    common_name: "Longleaf Pine"
+    scientific_name: "Pinus palustris"
+    characteristics: "Fire dependent, high conservation value, long-lived"
+  
+  SPCD0131:
+    index: 50
+    common_name: "Loblolly Pine"
+    scientific_name: "Pinus taeda"
+    characteristics: "Most common pine in NC, fast growing, plantation species"
+
+# Geographic distribution confirmed in regions:
+geographic_presence:
+  confirmed_regions:
+    - "North-central-east (coords: 0-1000, 19623-20623)"
+    - "Central (coords: 2904-3904, 13082-14082)" 
+    - "East-central-north (coords: 2904-3904, 25164-26164)"
+    - "Center (coords: 5809-6809, 13082-14082)" # BEST REGION
+    - "Southwest-central (coords: 8714-9714, 13082-14082)"
+    - "South-central (coords: 8714-9714, 19623-20623)"
+    - "South-central-east (coords: 8714-9714, 25164-26164)"
+  
+  best_region:
+    name: "Center"
+    bounds: [5809, 6809, 13082, 14082]
+    total_syp_biomass: 10067219
+    dominant_species: "Loblolly Pine"
+    max_biomass: 65.69
+
+# Analysis notes
+notes: |
+  Southern Yellow Pine Species Group Analysis
+  
+  SPECIES INCLUDED:
+  - Shortleaf Pine (SPCD0110, Index 39): Historical importance, drought tolerant
+  - Slash Pine (SPCD0111, Index 40): Coastal plain species, fast growing
+  - Longleaf Pine (SPCD0121, Index 44): High conservation value, fire adapted
+  - Loblolly Pine (SPCD0131, Index 50): Most common, plantation forestry
+  
+  USAGE:
+  bigmap calculate data.zarr --config cfg/southern_yellow_pine_config.yaml
+  
+  OUTPUT FILES:
+  - southern_yellow_pine_proportion.tif: Combined proportion of all 4 species
+  - Individual species proportion maps (0-1 scale)
+  - Individual species percentage maps (0-100 scale)
+  
+  RESEARCH APPLICATIONS:
+  - Pine dominance mapping across North Carolina
+  - Species composition analysis for forest management
+  - Historical vs current pine distribution studies
+  - Plantation vs natural forest identification
+  - Fire ecology and management planning
+  
+  ECOLOGICAL CONTEXT:
+  - Southern Yellow Pines are economically important timber species
+  - Each species has different ecological requirements and management needs
+  - Longleaf Pine is of particular conservation interest
+  - Loblolly Pine dominates modern plantation forestry 

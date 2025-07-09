@@ -101,7 +101,7 @@ graph TD
     end
     
     subgraph "Analysis Workflows"
-        J["Heirs Property Analysis<br/>Buffer & spatial analysis"]
+        J["Species Diversity Analysis<br/>Richness & diversity metrics"]
         K["NDVI Temporal Analysis<br/>Vegetation trends"]
         L["County-level Statistics<br/>Species distribution"]
     end

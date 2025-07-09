@@ -1,0 +1,80 @@
+# Comprehensive North Carolina Shannon Diversity Analysis
+# All species, state-wide coverage, GeoTIFF output with visualization
+
+# Application settings
+app_name: "BigMap NC Comprehensive Shannon Diversity"
+debug: false
+verbose: true
+
+# File paths
+data_dir: "data"
+output_dir: "output/nc_comprehensive_shannon"
+cache_dir: ".cache"
+
+# Raster processing settings
+raster:
+  chunk_size: [1, 2000, 2000]  # Larger chunks for comprehensive analysis
+  pixel_size: 30.0
+  compression: "lz4"
+  compression_level: 5
+
+# Processing settings
+processing:
+  max_workers: null  # Auto-detect based on system
+  memory_limit_gb: 16.0  # Increased for large dataset
+  temp_dir: null
+
+# Visualization settings
+visualization:
+  default_dpi: 300
+  default_figure_size: [20, 16]
+  color_maps:
+    shannon_diversity: "plasma"
+    species_richness: "viridis"
+    total_biomass: "inferno"
+  font_size: 14
+
+# Calculation configurations
+calculations:
+  # Shannon diversity index - the main analysis
+  - name: "shannon_diversity"
+    enabled: true
+    parameters:
+      exclude_total_layer: true  # Use individual species only
+      base: "e"  # Natural logarithm (standard for ecology)
+    output_format: "geotiff"
+    output_name: "nc_shannon_diversity_comprehensive"
+  
+  # Species richness for context
+  - name: "species_richness"
+    enabled: true
+    parameters:
+      biomass_threshold: 0.5  # Minimum Mg/ha to count as present
+      exclude_total_layer: true
+    output_format: "geotiff"
+    output_name: "nc_species_richness_comprehensive"
+  
+  # Total biomass for context
+  - name: "total_biomass"
+    enabled: true
+    parameters:
+      exclude_total_layer: true
+    output_format: "geotiff"
+    output_name: "nc_total_biomass_comprehensive"
+  
+  # Simpson diversity for comparison
+  - name: "simpson_diversity"
+    enabled: true
+    parameters:
+      exclude_total_layer: true
+      inverse: true  # 1/D (inverse Simpson)
+    output_format: "geotiff"
+    output_name: "nc_simpson_diversity_comprehensive"
+  
+  # Evenness index
+  - name: "evenness"
+    enabled: true
+    parameters:
+      exclude_total_layer: true
+    output_format: "geotiff"
+    output_name: "nc_evenness_comprehensive" 
