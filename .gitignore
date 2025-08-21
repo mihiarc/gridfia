@@ -322,4 +322,5 @@ site/
 # Documentation server scripts
 start_docs.sh
 serve_docs.sh
-build_docs.sh
+build_docs.shoutput/data/montana_species_state_plane/montana_0010_state_plane.tif output/data/montana_species_state_plane/montana_0017_state_plane.tif output/data/montana_species_state_plane/montana_0073_state_plane.tif output/data/montana_species_state_plane/montana_0093_state_plane.tif output/data/montana_species_state_plane/montana_0108_state_plane.tif output/data/montana_species_state_plane/montana_0116_state_plane.tif output/data/montana_species_state_plane/montana_0122_state_plane.tif output/data/montana_species_state_plane/montana_0202_state_plane.tif
+tl_2024_us_county/tl_2024_us_county.shp

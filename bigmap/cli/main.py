@@ -21,6 +21,10 @@ from bigmap.config import BigMapSettings, load_settings, save_settings, Calculat
 from bigmap.core.processors.forest_metrics import ForestMetricsProcessor, run_forest_analysis
 from bigmap.core.calculations import registry
 from bigmap.api import BigMapRestClient
+from bigmap.utils.zarr_utils import create_zarr_from_geotiffs, validate_zarr_store
+from bigmap.visualization.mapper import ZarrMapper
+from bigmap.visualization.plots import set_plot_style, save_figure
+import matplotlib.pyplot as plt
 
 # Initialize console and app
 console = Console()
@@ -261,6 +265,278 @@ def download_cmd(
             
     except Exception as e:
         print_error(f"Download failed: {e}")
+        logger.exception("Detailed error:")
+        raise typer.Exit(1)
+
+
+@app.command("build-zarr")
+def build_zarr_cmd(
+    data_dir: Annotated[Path, typer.Option("--data-dir", "-d", help="Directory containing GeoTIFF files")] = Path("downloads"),
+    output: Annotated[Path, typer.Option("--output", "-o", help="Output path for Zarr store")] = Path("data/forest.zarr"),
+    species_codes: Annotated[Optional[List[str]], typer.Option("--species", "-s", help="Species codes to include")] = None,
+    chunk_size: Annotated[str, typer.Option("--chunk-size", help="Chunk dimensions 'species,height,width'")] = "1,1000,1000",
+    compression: Annotated[str, typer.Option("--compression", help="Compression algorithm")] = "lz4",
+    compression_level: Annotated[int, typer.Option("--compression-level", help="Compression level (1-9)")] = 5,
+    include_total: Annotated[bool, typer.Option("--include-total/--calculate-total", help="Include or calculate total biomass")] = True,
+):
+    """
+    🏗️ Build a Zarr store from downloaded GeoTIFF files.
+    
+    Examples:
+        bigmap build-zarr --data-dir data/montana_species --output data/montana.zarr
+        bigmap build-zarr --species 0202 --species 0122 --species 0116
+        bigmap build-zarr --chunk-size "1,2000,2000" --compression zstd
+    """
+    try:
+        if not data_dir.exists():
+            print_error(f"Data directory does not exist: {data_dir}")
+            raise typer.Exit(1)
+        
+        # Parse chunk size
+        try:
+            chunks = tuple(int(x.strip()) for x in chunk_size.split(','))
+            if len(chunks) != 3:
+                raise ValueError("Chunk size must have 3 dimensions")
+        except ValueError as e:
+            print_error(f"Invalid chunk size format: {e}")
+            raise typer.Exit(1)
+        
+        # Find GeoTIFF files
+        tiff_files = list(data_dir.glob("*.tif")) + list(data_dir.glob("*.tiff"))
+        
+        if not tiff_files:
+            print_error(f"No GeoTIFF files found in {data_dir}")
+            raise typer.Exit(1)
+        
+        print_info(f"Found {len(tiff_files)} GeoTIFF files")
+        
+        # Filter by species codes if provided
+        if species_codes:
+            filtered_files = []
+            for f in tiff_files:
+                for code in species_codes:
+                    if code in f.name:
+                        filtered_files.append(f)
+                        break
+            tiff_files = filtered_files
+            
+            if not tiff_files:
+                print_error(f"No files found for species codes: {species_codes}")
+                raise typer.Exit(1)
+        
+        # Sort files for consistent ordering
+        tiff_files.sort()
+        
+        # Extract species information from filenames
+        file_species_codes = []
+        file_species_names = []
+        
+        for f in tiff_files:
+            # Try to extract species code from filename
+            # Expected formats: montana_0202_Douglas-fir.tif, 0202_douglas_fir.tif, etc.
+            filename = f.stem
+            code = None
+            name = filename
+            
+            # Look for 4-digit species code
+            import re
+            match = re.search(r'(\d{4})', filename)
+            if match:
+                code = match.group(1)
+                # Try to extract name after code
+                parts = filename.split(code)
+                if len(parts) > 1:
+                    name = parts[1].strip('_- ').replace('_', ' ')
+            
+            file_species_codes.append(code or filename[:4])
+            file_species_names.append(name.title())
+        
+        # Display files to process
+        table = Table(title="Files to Process")
+        table.add_column("File", style="yellow")
+        table.add_column("Code", style="cyan")
+        table.add_column("Species", style="green")
+        
+        for f, code, name in zip(tiff_files, file_species_codes, file_species_names):
+            table.add_row(f.name, code, name)
+        
+        console.print(table)
+        
+        print_info(f"Building Zarr store at: {output}")
+        print_info(f"Chunk size: {chunks}")
+        print_info(f"Compression: {compression} (level {compression_level})")
+        
+        # Create the Zarr store
+        create_zarr_from_geotiffs(
+            output_zarr_path=output,
+            geotiff_paths=tiff_files,
+            species_codes=file_species_codes,
+            species_names=file_species_names,
+            chunk_size=chunks,
+            compression=compression,
+            compression_level=compression_level,
+            include_total=include_total
+        )
+        
+        # Validate the created store
+        info = validate_zarr_store(output)
+        
+        print_success(f"✅ Created Zarr store: {output}")
+        print_info(f"Shape: {info['shape']}")
+        print_info(f"Species: {info['num_species']}")
+        
+    except Exception as e:
+        print_error(f"Failed to build Zarr store: {e}")
+        logger.exception("Detailed error:")
+        raise typer.Exit(1)
+
+
+@app.command("map")
+def map_cmd(
+    zarr_path: Annotated[Path, typer.Argument(help="Path to Zarr store")],
+    map_type: Annotated[str, typer.Option("--type", "-t", help="Map type: species, diversity, richness, comparison")] = "species",
+    species: Annotated[Optional[List[str]], typer.Option("--species", "-s", help="Species codes for species/comparison maps")] = None,
+    output_dir: Annotated[Path, typer.Option("--output", "-o", help="Output directory")] = Path("maps"),
+    format: Annotated[str, typer.Option("--format", "-f", help="Output format")] = "png",
+    dpi: Annotated[int, typer.Option("--dpi", help="Output resolution")] = 300,
+    cmap: Annotated[Optional[str], typer.Option("--cmap", help="Colormap name")] = None,
+    style: Annotated[str, typer.Option("--style", help="Plot style")] = "publication",
+    show_all: Annotated[bool, typer.Option("--all", help="Create maps for all species")] = False,
+    state: Annotated[Optional[str], typer.Option("--state", help="State boundary to overlay (name or abbreviation)")] = None,
+    basemap: Annotated[Optional[str], typer.Option("--basemap", help="Basemap provider (OpenStreetMap, CartoDB, ESRI)")] = None,
+):
+    """
+    🗺️ Create maps from Zarr stores.
+    
+    Examples:
+        bigmap map data/forest.zarr --type species --species 0202
+        bigmap map data/forest.zarr --type diversity --output diversity_maps/
+        bigmap map data/forest.zarr --type comparison --species 0202 --species 0122
+        bigmap map data/forest.zarr --all --output all_species_maps/
+        bigmap map data/montana.zarr --type species --species 0202 --state MT --basemap CartoDB
+    """
+    try:
+        if not zarr_path.exists():
+            print_error(f"Zarr store not found: {zarr_path}")
+            raise typer.Exit(1)
+        
+        # Create output directory
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Set plot style
+        set_plot_style(style)
+        
+        # Initialize mapper
+        print_info(f"Loading Zarr store: {zarr_path}")
+        mapper = ZarrMapper(zarr_path)
+        
+        # Get default colormap if not specified
+        if cmap is None:
+            cmap_defaults = {
+                'species': 'viridis',
+                'diversity': 'plasma',
+                'richness': 'Spectral_r',
+                'comparison': 'viridis'
+            }
+            cmap = cmap_defaults.get(map_type, 'viridis')
+        
+        if map_type == "species":
+            # Create species maps
+            if show_all:
+                # Create maps for all species
+                species_info = mapper.get_species_info()
+                print_info(f"Creating maps for {len(species_info)} species...")
+                
+                for sp in track(species_info, description="Creating species maps"):
+                    if sp['code'] != '0000':  # Skip total biomass
+                        fig, ax = mapper.create_species_map(
+                            species=sp['index'],
+                            cmap=cmap,
+                            state_boundary=state,
+                            basemap=basemap
+                        )
+                        
+                        output_path = output_dir / f"species_{sp['code']}_{sp['name'].replace(' ', '_')}.{format}"
+                        save_figure(fig, str(output_path), dpi=dpi)
+                        plt.close(fig)
+                
+                print_success(f"Created {len(species_info)} species maps")
+            
+            elif species:
+                # Create maps for specified species
+                for sp_code in species:
+                    print_info(f"Creating map for species {sp_code}")
+                    fig, ax = mapper.create_species_map(
+                        species=sp_code,
+                        cmap=cmap,
+                        state_boundary=state,
+                        basemap=basemap
+                    )
+                    
+                    output_path = output_dir / f"species_{sp_code}.{format}"
+                    save_figure(fig, str(output_path), dpi=dpi)
+                    print_success(f"Saved: {output_path}")
+                    plt.close(fig)
+            else:
+                print_error("Please specify species codes with --species or use --all")
+                raise typer.Exit(1)
+        
+        elif map_type == "diversity":
+            # Create diversity maps
+            for div_type in ['shannon', 'simpson']:
+                print_info(f"Creating {div_type} diversity map")
+                fig, ax = mapper.create_diversity_map(
+                    diversity_type=div_type,
+                    cmap=cmap,
+                    state_boundary=state,
+                    basemap=basemap
+                )
+                
+                output_path = output_dir / f"{div_type}_diversity.{format}"
+                save_figure(fig, str(output_path), dpi=dpi)
+                print_success(f"Saved: {output_path}")
+                plt.close(fig)
+        
+        elif map_type == "richness":
+            # Create richness map
+            print_info("Creating species richness map")
+            fig, ax = mapper.create_richness_map(
+                cmap=cmap,
+                state_boundary=state,
+                basemap=basemap
+            )
+            
+            output_path = output_dir / f"species_richness.{format}"
+            save_figure(fig, str(output_path), dpi=dpi)
+            print_success(f"Saved: {output_path}")
+            plt.close(fig)
+        
+        elif map_type == "comparison":
+            # Create comparison map
+            if not species or len(species) < 2:
+                print_error("Comparison maps require at least 2 species (use --species multiple times)")
+                raise typer.Exit(1)
+            
+            print_info(f"Creating comparison map for {len(species)} species")
+            fig = mapper.create_comparison_map(
+                species_list=species,
+                cmap=cmap
+            )
+            
+            output_path = output_dir / f"species_comparison.{format}"
+            save_figure(fig, str(output_path), dpi=dpi)
+            print_success(f"Saved: {output_path}")
+            plt.close(fig)
+        
+        else:
+            print_error(f"Unknown map type: {map_type}")
+            print_info("Valid types: species, diversity, richness, comparison")
+            raise typer.Exit(1)
+        
+        print_success(f"✅ Maps created in {output_dir}")
+        
+    except Exception as e:
+        print_error(f"Failed to create maps: {e}")
         logger.exception("Detailed error:")
         raise typer.Exit(1)
 

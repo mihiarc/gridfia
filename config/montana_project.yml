@@ -1,0 +1,212 @@
+# Configuration for Montana Forest Analysis Project
+# This file contains all project-specific settings and parameters
+
+project:
+  name: "Montana Forest Biomass Analysis"
+  description: "Comprehensive forest biomass analysis for Montana state"
+  version: "1.0.0"
+  author: "BigMap Zarr Project"
+
+# Coordinate Reference Systems
+crs:
+  source: "EPSG:4326"  # WGS84 (lat/lon)
+  target: "EPSG:2256"  # NAD83 / Montana State Plane (ft)
+  web_mercator: "EPSG:3857"  # For web mapping compatibility
+
+# Bounding boxes for Montana
+bounding_boxes:
+  # Original WGS84 coordinates (longitude, latitude)
+  wgs84:
+    xmin: -116.05114089810897
+    ymin: 44.35832834237342
+    xmax: -104.04136319773197
+    ymax: 49.00154597004969
+  
+  # Montana State Plane coordinates (feet)
+  state_plane:
+    xmin: 256256.53
+    ymin: 89263.85
+    xmax: 3395716.44
+    ymax: 1798142.54
+  
+  # Web Mercator coordinates (meters) - for reference
+  web_mercator:
+    xmin: -12918753.91
+    ymin: 5521062.81
+    xmax: -11581831.57
+    ymax: 6275123.72
+
+# Species configuration
+species:
+  - code: "0202"
+    name: "Douglas-fir"
+    scientific_name: "Pseudotsuga menziesii"
+  - code: "0122"
+    name: "Ponderosa pine"
+    scientific_name: "Pinus ponderosa"
+  - code: "0073"
+    name: "Western larch"
+    scientific_name: "Larix occidentalis"
+  - code: "0108"
+    name: "lodgepole pine"
+    scientific_name: "Pinus contorta"
+  - code: "0093"
+    name: "Engelmann spruce"
+    scientific_name: "Picea engelmannii"
+  - code: "0010"
+    name: "subalpine fir"
+    scientific_name: "Abies lasiocarpa"
+  - code: "0017"
+    name: "grand fir"
+    scientific_name: "Abies grandis"
+    
+# Zarr store configuration
+zarr:
+  # Output path for the zarr store
+  output_path: "output/data/montana_forest_state_plane.zarr"
+  
+  # Zarr store layers (order matters)
+  # NOTE: Current zarr store has 6 species (grand fir was not processed)
+  layers:
+    - index: 0
+      name: "Douglas-fir"
+      description: "Douglas-fir aboveground biomass"
+      code: "0202"
+      type: "species"
+    - index: 1
+      name: "Ponderosa pine"
+      description: "Ponderosa pine aboveground biomass"
+      code: "0122"
+      type: "species"
+    - index: 2
+      name: "Western larch"
+      description: "Western larch aboveground biomass"
+      code: "0073"
+      type: "species"
+    - index: 3
+      name: "lodgepole pine"
+      description: "Lodgepole pine aboveground biomass"
+      code: "0108"
+      type: "species"
+    - index: 4
+      name: "Engelmann spruce"
+      description: "Engelmann spruce aboveground biomass"
+      code: "0093"
+      type: "species"
+    - index: 5
+      name: "subalpine fir"
+      description: "Subalpine fir aboveground biomass"
+      code: "0010"
+      type: "species"
+    - index: 6
+      name: "Dominant Species"
+      description: "Species with highest biomass at each pixel"
+      code: "DOMN"
+      type: "classification"
+    - index: 7
+      name: "Timber"
+      description: "Sum of all species"
+      code: "TMBR"
+      type: "aggregate"
+  
+  # Layer indices for easy reference
+  layer_indices:
+    species_start: 0
+    species_end: 5  # inclusive (6 species total)
+    timber: 7
+    dominant_species: 6
+  
+  # Chunking configuration
+  chunk_size: [1, 1000, 1000]  # [layers, height, width]
+  
+  # Compression settings
+  compression: "lz4"
+  compression_level: 5
+
+# Data download settings
+download:
+  # Resolution in feet (State Plane units)
+  resolution_ft: 98.425197  # ~30 meters
+  
+  # Output directory for downloaded files
+  output_dir: "output/data/montana_species_state_plane"
+  
+  # BigMap API settings
+  max_retries: 3
+  timeout: 60
+  rate_limit_delay: 0.5
+
+# County boundaries configuration
+counties:
+  # Source shapefile
+  shapefile: "tl_2024_us_county/tl_2024_us_county.shp"
+  
+  # Montana state FIPS code
+  state_fips: "30"
+  
+  # Output raster for county boundaries
+  output_raster: "output/data/montana_counties_state_plane.tif"
+
+# Visualization settings
+visualization:
+  # Default colormap for biomass
+  biomass_cmap: "YlGn"
+  
+  # Default colormap for diversity indices
+  diversity_cmap: "plasma"
+  
+  # Default colormap for species richness
+  richness_cmap: "Spectral_r"
+  
+  # County boundaries color
+  county_color: "black"
+  county_linewidth: 0.5
+  
+  # Default figure size (inches)
+  figure_size: [12, 10]
+  
+  # Default DPI for saved figures
+  dpi: 150
+
+# Analysis settings
+analysis:
+  # Minimum biomass threshold for species presence (Mg/ha)
+  presence_threshold: 1.0
+  
+  # Percentiles for data normalization
+  normalization_percentiles: [2, 98]
+  
+  # NoData value
+  nodata_value: -9999
+
+# File paths
+paths:
+  # Base data directory
+  data_dir: "output/data"
+  
+  # Output directory for maps
+  maps_dir: "output/maps"
+  
+  # Scripts directory
+  scripts_dir: "scripts"
+  
+  # Examples directory
+  examples_dir: "examples"
+
+# Montana-specific information
+montana:
+  # State name variations
+  name: "Montana"
+  abbreviation: "MT"
+  fips_code: "30"
+  
+  # Geographic center (for reference)
+  center_lon: -109.64
+  center_lat: 47.03
+  
+  # Area statistics
+  area_sq_miles: 147040
+  area_sq_km: 380831
+  
+  # Number of counties
+  num_counties: 56

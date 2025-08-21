@@ -162,17 +162,21 @@ class BigMapRestClient:
         bbox: Tuple[float, float, float, float],
         output_path: Optional[Path] = None,
         pixel_size: float = 30.0,
-        format: str = "tiff"
+        format: str = "tiff",
+        bbox_srs: Union[str, int] = "102100",
+        output_srs: Union[str, int] = "102100"
     ) -> Union[Path, np.ndarray]:
         """
         Export species biomass raster for a given bounding box.
         
         Args:
             species_code: FIA species code (e.g., "0131" for Loblolly Pine)
-            bbox: Bounding box as (xmin, ymin, xmax, ymax) in Web Mercator
+            bbox: Bounding box as (xmin, ymin, xmax, ymax)
             output_path: Path to save the raster file (optional)
-            pixel_size: Pixel size in meters (default: 30.0)
+            pixel_size: Pixel size in the units of output_srs
             format: Output format ("tiff", "png", "jpg")
+            bbox_srs: Spatial reference of the bbox (WKID or "102100" for Web Mercator)
+            output_srs: Output spatial reference (WKID or "102100" for Web Mercator, "2256" for Montana State Plane)
             
         Returns:
             Path to saved file or numpy array if no output_path
@@ -187,8 +191,8 @@ class BigMapRestClient:
         params = {
             'f': 'json',
             'bbox': f"{bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]}",
-            'bboxSR': '102100',  # Web Mercator
-            'imageSR': '102100',
+            'bboxSR': str(bbox_srs),  # Input bbox spatial reference
+            'imageSR': str(output_srs),  # Output spatial reference
             'format': format,
             'pixelType': 'F32',
             'renderingRule': json.dumps({
@@ -298,6 +302,73 @@ class BigMapRestClient:
             
         except requests.RequestException as e:
             print_error(f"Failed to identify pixel: {e}")
+            return None
+    
+    def export_total_biomass_raster(
+        self,
+        bbox: Tuple[float, float, float, float],
+        output_path: Optional[Path] = None,
+        pixel_size: float = 30.0,
+        format: str = "tiff",
+        bbox_srs: Union[str, int] = "102100",
+        output_srs: Union[str, int] = "102100"
+    ) -> Union[Path, np.ndarray]:
+        """
+        Export total biomass raster for a given bounding box.
+        
+        Args:
+            bbox: Bounding box as (xmin, ymin, xmax, ymax)
+            output_path: Path to save the raster file (optional)
+            pixel_size: Pixel size in the units of output_srs
+            format: Output format ("tiff", "png", "jpg")
+            bbox_srs: Spatial reference of the bbox
+            output_srs: Output spatial reference
+            
+        Returns:
+            Path to saved file or numpy array if no output_path
+        """
+        # For total biomass, use no rendering rule
+        params = {
+            'f': 'json',
+            'bbox': f"{bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]}",
+            'bboxSR': str(bbox_srs),
+            'imageSR': str(output_srs),
+            'format': format,
+            'pixelType': 'F32',
+            'size': self._calculate_image_size(bbox, pixel_size)
+        }
+        
+        try:
+            print_info(f"Exporting total biomass for bbox {bbox}")
+            
+            # Make export request
+            response = self._rate_limited_request("GET", f"{self.base_url}/exportImage", params=params)
+            response.raise_for_status()
+            
+            result = response.json()
+            
+            if 'href' in result:
+                # Download the actual raster data
+                raster_response = self._rate_limited_request("GET", result['href'])
+                raster_response.raise_for_status()
+                
+                if output_path:
+                    output_path.parent.mkdir(parents=True, exist_ok=True)
+                    with open(output_path, 'wb') as f:
+                        f.write(raster_response.content)
+                    print_success(f"Exported total biomass to {output_path}")
+                    return output_path
+                else:
+                    # Return as numpy array
+                    with MemoryFile(raster_response.content) as memfile:
+                        with memfile.open() as dataset:
+                            return dataset.read(1)
+            else:
+                print_error(f"Export failed: {result}")
+                return None
+                
+        except requests.RequestException as e:
+            print_error(f"Failed to export total biomass: {e}")
             return None
     
     def batch_export_nc_species(

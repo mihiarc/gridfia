@@ -50,6 +50,12 @@ dependencies = [
     "tqdm>=4.67.1",
     "scikit-learn>=1.6.1",
     "pyyaml>=6.0.2",
+    "psutil>=5.9.0",
+    # Visualization dependencies
+    "matplotlib-scalebar>=0.8.0",
+    "contextily>=1.4.0",
+    "shapely>=2.0.0",
+    "certifi>=2023.0.0",
 ]
 requires-python = ">=3.9"
 
