@@ -371,19 +371,25 @@ class BigMapRestClient:
             print_error(f"Failed to export total biomass: {e}")
             return None
     
-    def batch_export_nc_species(
+    def batch_export_location_species(
         self, 
-        nc_bbox: Tuple[float, float, float, float],
+        bbox: Tuple[float, float, float, float],
         output_dir: Path,
-        species_codes: Optional[List[str]] = None
+        species_codes: Optional[List[str]] = None,
+        location_name: str = "location",
+        bbox_srs: Union[str, int] = "102100",
+        output_srs: Union[str, int] = "102100"
     ) -> List[Path]:
         """
-        Batch export multiple species for North Carolina.
+        Batch export multiple species for any geographic location.
         
         Args:
-            nc_bbox: North Carolina bounding box in Web Mercator
+            bbox: Bounding box in the specified CRS
             output_dir: Directory to save raster files
             species_codes: List of species codes to export (optional)
+            location_name: Name prefix for output files
+            bbox_srs: Spatial reference of the bbox
+            output_srs: Output spatial reference
             
         Returns:
             List of paths to exported files
@@ -400,13 +406,15 @@ class BigMapRestClient:
             task = progress.add_task("Exporting species...", total=len(species_codes))
             
             for species_code in species_codes:
-                output_file = output_dir / f"bigmap_species_{species_code}.tif"
+                output_file = output_dir / f"{location_name}_species_{species_code}.tif"
                 
                 try:
                     result = self.export_species_raster(
                         species_code=species_code,
-                        bbox=nc_bbox,
-                        output_path=output_file
+                        bbox=bbox,
+                        output_path=output_file,
+                        bbox_srs=bbox_srs,
+                        output_srs=output_srs
                     )
                     
                     if result:
