@@ -30,7 +30,7 @@ import matplotlib.pyplot as plt
 console = Console()
 app = typer.Typer(
     name="bigmap",
-    help="🌲 BigMap: North Carolina Forest Biomass and Species Diversity Analysis Tools",
+    help="🌲 BigMap: Forest Biomass and Species Diversity Analysis Tools",
     add_completion=False,
     rich_markup_mode="rich",
     no_args_is_help=True
@@ -55,10 +55,10 @@ def main(
     debug: Annotated[bool, typer.Option("--debug", help="Enable debug mode")] = False,
 ):
     """
-    🌲 BigMap: Modern forest analysis tools for North Carolina.
+    🌲 BigMap: Modern forest analysis tools for any US location.
     
     Analyze forest biomass, species diversity, and create publication-ready visualizations
-    from BIGMAP 2018 data.
+    from BIGMAP 2018 data for any state, county, or custom region.
     """
     if verbose:
         logging.getLogger().setLevel(logging.INFO)
@@ -175,6 +175,107 @@ def config_cmd(
         raise typer.Exit(1)
 
 
+@app.command("location")
+def location_cmd(
+    action: Annotated[str, typer.Argument(help="Action: create, show, list")],
+    state: Annotated[Optional[str], typer.Option("--state", "-s", help="State name or abbreviation")] = None,
+    county: Annotated[Optional[str], typer.Option("--county", "-c", help="County name (requires --state)")] = None,
+    output: Annotated[Optional[Path], typer.Option("--output", "-o", help="Output configuration file")] = None,
+    bbox: Annotated[Optional[str], typer.Option("--bbox", "-b", help="Custom bbox: 'xmin,ymin,xmax,ymax'")] = None,
+    crs: Annotated[str, typer.Option("--crs", help="CRS for custom bbox")] = "EPSG:4326",
+):
+    """
+    📍 Manage location configurations for any US state or county.
+    
+    Actions:
+        create - Create configuration for a location
+        show   - Show configuration details
+        list   - List available states
+        
+    Examples:
+        bigmap location create --state NC --output north_carolina.yaml
+        bigmap location create --state TX --county Harris --output houston.yaml
+        bigmap location create --bbox "-104,44,-104.5,44.5" --output custom.yaml
+        bigmap location show --state Montana
+        bigmap location list
+    """
+    try:
+        from bigmap.utils.location_config import LocationConfig
+        from bigmap.visualization.boundaries import STATE_ABBR
+        
+        if action == "list":
+            # List all available states
+            table = Table(title="📍 Available US States")
+            table.add_column("State", style="cyan")
+            table.add_column("Abbreviation", style="green")
+            
+            for state_name, abbr in sorted(STATE_ABBR.items()):
+                table.add_row(state_name.title(), abbr)
+            
+            console.print(table)
+            
+        elif action == "create":
+            if county and not state:
+                print_error("County requires --state to be specified")
+                raise typer.Exit(1)
+                
+            if bbox:
+                # Create from custom bbox
+                try:
+                    coords = [float(x.strip()) for x in bbox.split(',')]
+                    if len(coords) != 4:
+                        raise ValueError("Bbox must have 4 coordinates")
+                    bbox_tuple = tuple(coords)
+                    
+                    config = LocationConfig.from_bbox(
+                        bbox_tuple, 
+                        name="Custom Region",
+                        crs=crs,
+                        output_path=output
+                    )
+                    print_success(f"✅ Created custom location configuration")
+                    
+                except ValueError as e:
+                    print_error(f"Invalid bbox format: {e}")
+                    raise typer.Exit(1)
+                    
+            elif county:
+                config = LocationConfig.from_county(county, state, output_path=output)
+                print_success(f"✅ Created configuration for {county} County, {state}")
+                
+            elif state:
+                config = LocationConfig.from_state(state, output_path=output)
+                print_success(f"✅ Created configuration for {state}")
+                
+            else:
+                print_error("Please specify --state, --county, or --bbox")
+                raise typer.Exit(1)
+                
+            config.print_summary()
+            
+        elif action == "show":
+            if not state and not output:
+                print_error("Please specify --state or provide a config file with --output")
+                raise typer.Exit(1)
+                
+            if output and output.exists():
+                config = LocationConfig(output)
+            elif state:
+                config = LocationConfig.from_state(state)
+            
+            config.print_summary()
+            
+        else:
+            print_error(f"Unknown action: {action}")
+            print_info("Available actions: create, show, list")
+            raise typer.Exit(1)
+            
+    except Exception as e:
+        print_error(f"Location command failed: {e}")
+        logger.exception("Detailed error:")
+        raise typer.Exit(1)
+
+
 # API Commands (keeping the powerful ones from the original)
 @app.command("list-species")
 def list_species_cmd():
@@ -217,44 +318,76 @@ def download_cmd(
     species_codes: Annotated[Optional[List[str]], typer.Option("--species", "-s", help="Species codes to download")] = None,
     output_dir: Annotated[Path, typer.Option("--output", "-o", help="Output directory")] = Path("downloads"),
     bbox: Annotated[Optional[str], typer.Option("--bbox", "-b", help="Bounding box: 'xmin,ymin,xmax,ymax'")] = None,
+    state: Annotated[Optional[str], typer.Option("--state", help="State name or abbreviation")] = None,
+    county: Annotated[Optional[str], typer.Option("--county", help="County name (requires --state)")] = None,
+    crs: Annotated[str, typer.Option("--crs", help="CRS for bbox (default: Web Mercator)")] = "102100",
+    location_config: Annotated[Optional[Path], typer.Option("--location-config", "-l", help="Location configuration file")] = None,
 ):
     """
-    ⬇️ Download species data via REST API.
+    ⬇️ Download species data via REST API for any location.
     
     Examples:
-        bigmap download --species 0131 --species 0068 --output data/
+        bigmap download --state NC --species 0131 --species 0068
+        bigmap download --state Montana --county Missoula
         bigmap download --bbox "-9200000,4000000,-8400000,4400000"
+        bigmap download --location-config texas_config.yaml
     """
     try:
-        # Default NC species if none specified
-        if not species_codes:
-            species_codes = ['0131', '0068', '0132', '0110', '0316']
-            print_info(f"Using default NC species: {species_codes}")
+        from bigmap.utils.location_config import LocationConfig
         
-        # Parse bounding box
-        if bbox:
+        # Determine location and bbox
+        location_name = "location"
+        location_bbox = None
+        bbox_crs = crs
+        
+        if location_config and location_config.exists():
+            # Load from config file
+            config = LocationConfig(location_config)
+            location_name = config.location_name.lower().replace(' ', '_')
+            location_bbox = config.web_mercator_bbox
+            print_info(f"Using location config: {config.location_name}")
+            
+        elif state:
+            # Create config for state/county
+            if county:
+                config = LocationConfig.from_county(county, state)
+                location_name = f"{county}_{state}".lower().replace(' ', '_')
+            else:
+                config = LocationConfig.from_state(state)
+                location_name = state.lower().replace(' ', '_')
+            
+            location_bbox = config.web_mercator_bbox
+            print_info(f"Using {config.location_name} boundaries")
+            
+        elif bbox:
+            # Parse manual bbox
             try:
                 coords = [float(x.strip()) for x in bbox.split(',')]
                 if len(coords) != 4:
                     raise ValueError("Bbox must have 4 coordinates")
-                nc_bbox = tuple(coords)
+                location_bbox = tuple(coords)
             except ValueError as e:
                 print_error(f"Invalid bbox format: {e}")
                 raise typer.Exit(1)
         else:
-            # Default NC bbox in Web Mercator
-            nc_bbox = (-9200000, 4000000, -8400000, 4400000)
-            print_info("Using default North Carolina bounding box")
+            print_error("Please specify --state, --bbox, or --location-config")
+            raise typer.Exit(1)
+        
+        if not location_bbox:
+            print_error("Could not determine bounding box for location")
+            raise typer.Exit(1)
         
         output_dir.mkdir(parents=True, exist_ok=True)
         
         client = BigMapRestClient()
-        print_info(f"📥 Downloading {len(species_codes)} species to {output_dir}")
+        print_info(f"📥 Downloading species for {location_name} to {output_dir}")
         
-        exported_files = client.batch_export_nc_species(
-            nc_bbox=nc_bbox,
+        exported_files = client.batch_export_location_species(
+            bbox=location_bbox,
             output_dir=output_dir,
-            species_codes=species_codes
+            species_codes=species_codes,
+            location_name=location_name,
+            bbox_srs=bbox_crs
         )
         
         if exported_files:
