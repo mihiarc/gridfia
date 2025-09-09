@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "bigmap"
-version = "0.1.0"
-description = "North Carolina forest biomass and species diversity analysis tools"
+version = "0.2.0"
+description = "Forest biomass and species diversity analysis API"
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
@@ -43,8 +43,6 @@ dependencies = [
     # Data validation and configuration
     "pydantic>=2.0.0",
     "pydantic-settings>=2.0.0",
-    # Command line interface
-    "typer>=0.12.0",
     # HTTP requests for REST API
     "requests>=2.28.0",
     "tqdm>=4.67.1",
@@ -59,9 +57,6 @@ dependencies = [
 ]
 requires-python = ">=3.9"
 
-[project.scripts]
-# Main CLI entry point using Typer
-bigmap = "bigmap.cli.main:app"
 
 [project.optional-dependencies]
 dev = [
@@ -148,7 +143,6 @@ addopts = [
 source = ["bigmap"]
 omit = [
     "tests/*",
-    "bigmap/__main__.py",
 ]
 
 [tool.coverage.report]

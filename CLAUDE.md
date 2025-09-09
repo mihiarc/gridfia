@@ -4,14 +4,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Overview
 
-BigMap is a forest biomass and species diversity analysis toolkit that processes BIGMAP 2018 forest data at 30m resolution for any US state, county, or custom region. It provides tools for analyzing forest metrics, calculating species diversity indices, and downloading data from the FIA BIGMAP ImageServer REST API.
+BigMap is a Python API for forest biomass and species diversity analysis that processes BIGMAP 2018 forest data at 30m resolution for any US state, county, or custom region. It provides a clean programmatic interface for analyzing forest metrics, calculating species diversity indices, and downloading data from the FIA BIGMAP ImageServer.
 
 ## Architecture
 
+### API-First Design
+
+BigMap uses a pure API architecture with no CLI, providing a single clean interface through the `BigMapAPI` class.
+
 ### Core Components
 
-- **api/**: REST client for FIA BIGMAP ImageServer integration
-- **cli/**: Typer-based command-line interface
+- **api.py**: Main API interface - single entry point for all functionality
+- **external/**: External service clients (FIA BIGMAP REST client)
 - **core/**: Main processing logic
   - **analysis/**: Species presence and statistical analysis modules
   - **calculations/**: Plugin-based calculation framework with registry pattern
@@ -36,24 +40,30 @@ uv venv
 uv pip install -e ".[dev,test,docs]"
 ```
 
-### Running the Application
-```bash
-# Main CLI commands
-uv run bigmap --help                                    # Show all commands
-uv run bigmap calculate data.zarr --config config.yaml  # Run calculations
-uv run bigmap list-species                              # List available species
+### Using the API
+```python
+from bigmap import BigMapAPI
 
-# Location-based commands
-uv run bigmap location create --state NC                # Create North Carolina config
-uv run bigmap location create --state TX --county Harris # Create Harris County, TX config
-uv run bigmap location list                             # List all US states
+# Initialize API
+api = BigMapAPI()
 
-# Download data for any location
-uv run bigmap download --state California --species 0202 # Download Douglas-fir for CA
-uv run bigmap download --location-config texas.yaml     # Download using config file
-uv run bigmap download --bbox "-104,44,-104.5,44.5"    # Download custom bbox
+# List available species
+species = api.list_species()
 
-uv run bigmap config --show                             # Show configuration
+# Download species data
+files = api.download_species(state="California", species_codes=["0202"])
+
+# Create Zarr store
+zarr_path = api.create_zarr("downloads/", "data/california.zarr")
+
+# Calculate metrics
+results = api.calculate_metrics(zarr_path, calculations=["species_richness"])
+
+# Create visualizations
+maps = api.create_maps(zarr_path, map_type="diversity")
+
+# Get location configuration
+config = api.get_location_config(state="Texas", county="Harris")
 ```
 
 ### Testing
@@ -97,7 +107,7 @@ uv run mkdocs build
 
 ### Dependencies
 - **Core**: numpy, pandas, xarray, zarr, rasterio, geopandas
-- **CLI**: typer with rich for beautiful terminal output
+- **Visualization**: matplotlib, rich for progress bars
 - **Validation**: pydantic v2 for configuration and data models
 - **Testing**: pytest with 80% minimum coverage requirement
 
@@ -113,8 +123,8 @@ The `LocationConfig` in `utils/location_config.py` handles any geographic locati
 - Support for custom bounding boxes
 - Template configurations in `config/templates/`
 
-### REST API Integration
-The `BigMapRestClient` in `api/` downloads species data from:
+### External Service Integration
+The `BigMapRestClient` in `external/fia_client.py` downloads species data from:
 - Base URL: https://apps.fs.usda.gov/arcx/rest/services/RDW_Biomass
 - Supports any geographic location (state, county, custom bbox)
 - Progress tracking and chunked downloads
@@ -126,13 +136,6 @@ The `BigMapRestClient` in `api/` downloads species data from:
 - Real API calls (no mocking) as per global instructions
 - Coverage requirements: 80% minimum
 
-## Cursor Rules Integration
-
-This project includes Cursor rules that affect code style:
-- **Logic explanation**: Responses start with "Here is my logic:"
-- **Root cause analysis**: Focus on root causes with "The root cause is:"
-- **Teaching mode**: Educational responses begin with "Teacher mode:"
-
 ## Common Tasks
 
 ### Adding a New Calculation
@@ -142,12 +145,44 @@ This project includes Cursor rules that affect code style:
 4. Add tests in `tests/unit/test_calculations.py`
 
 ### Processing New Species Data
-1. Download data: `uv run bigmap download --species XXXX --output data/`
-2. Create configuration in `cfg/species/species_XXXX.yaml`
-3. Run analysis: `uv run bigmap calculate data/species_XXXX.zarr --config cfg/species/species_XXXX.yaml`
+```python
+from bigmap import BigMapAPI
 
-### Extending the CLI
-1. Add new command in `cli/main.py` using `@app.command()` decorator
-2. Use type hints for arguments (Typer will handle parsing)
-3. Use rich console for output formatting
-4. Add corresponding tests in `tests/unit/test_cli.py`
+api = BigMapAPI()
+
+# Download species data
+files = api.download_species(
+    state="Montana",
+    species_codes=["0202", "0122"],  # Douglas-fir, Ponderosa Pine
+    output_dir="data/montana"
+)
+
+# Create Zarr store
+zarr_path = api.create_zarr("data/montana", "data/montana.zarr")
+
+# Run analysis
+results = api.calculate_metrics(
+    zarr_path,
+    calculations=["species_richness", "shannon_diversity", "total_biomass"]
+)
+```
+
+### Using in Jupyter Notebooks
+BigMap is designed for interactive use in Jupyter notebooks:
+
+```python
+from bigmap import BigMapAPI
+import pandas as pd
+
+api = BigMapAPI()
+
+# Explore species interactively
+species = api.list_species()
+species_df = pd.DataFrame([s.dict() for s in species])
+species_df.head()
+
+# Process and visualize
+zarr_path = api.create_zarr("downloads/", "data.zarr")
+results = api.calculate_metrics(zarr_path)
+maps = api.create_maps(zarr_path, map_type="diversity")
+```
