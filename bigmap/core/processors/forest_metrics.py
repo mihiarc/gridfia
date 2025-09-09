@@ -47,6 +47,7 @@ class ForestMetricsProcessor:
         """
         self.settings = settings or BigMapSettings()
         self.chunk_size = (1, 1000, 1000)  # Default chunk size for processing
+        self.zarr_group = None  # Will store the parent group if available
         
         logger.info(f"Initialized ForestMetricsProcessor with output dir: {self.settings.output_dir}")
     
@@ -72,7 +73,8 @@ class ForestMetricsProcessor:
             raise ValueError("No calculations enabled in configuration")
         
         # Load and validate zarr array
-        zarr_array = self._load_zarr_array(zarr_path)
+        zarr_array, zarr_group = self._load_zarr_array(zarr_path)
+        self.zarr_group = zarr_group  # Store for potential later use
         self._validate_zarr_array(zarr_array)
         
         # Extract metadata for output files
@@ -95,37 +97,75 @@ class ForestMetricsProcessor:
         """Get list of enabled calculations from settings."""
         return [calc for calc in self.settings.calculations if calc.enabled]
     
-    def _load_zarr_array(self, zarr_path: str) -> zarr.Array:
+    def _load_zarr_array(self, zarr_path: str) -> Tuple[Any, Optional[zarr.Group]]:
         """
-        Load zarr array from path.
+        Load zarr store and return both array and parent group.
         
         Parameters
         ----------
         zarr_path : str
-            Path to zarr array
+            Path to zarr store (can be group or array)
             
         Returns
         -------
-        zarr.Array
-            Loaded zarr array
+        Tuple[Any, Optional[zarr.Group]]
+            Tuple of (zarr array or wrapper, parent group if available)
         """
+        class ArrayWrapper:
+            """Wrapper to combine array with group metadata."""
+            def __init__(self, array, attrs_dict):
+                self._array = array
+                self.attrs = attrs_dict
+                self.shape = array.shape
+                self.ndim = array.ndim
+                self.dtype = array.dtype
+                self.chunks = array.chunks if hasattr(array, 'chunks') else None
+                
+            def __getitem__(self, key):
+                return self._array[key]
+                
+            def __getattr__(self, name):
+                return getattr(self._array, name)
+        
         try:
-            # Try to open as array first
-            z = zarr.open_array(zarr_path, mode='r')
-            return z
-        except ValueError:
-            # If that fails, try to open as group and look for common dataset names
-            # For zarr 3.x, handle groups differently
+            # First try to open as a group (most common case for our data)
+            root = zarr.open_group(zarr_path, mode='r')
+            
+            # Look for biomass array
+            if 'biomass' in root:
+                array = root['biomass']
+                # Create combined attributes dictionary
+                combined_attrs = dict(array.attrs)
+                if hasattr(root, 'attrs'):
+                    combined_attrs.update(root.attrs)
+                # Add species arrays as attributes if they exist
+                if 'species_codes' in root:
+                    species_codes = root['species_codes'][:]
+                    combined_attrs['species_codes'] = list(species_codes) if hasattr(species_codes, '__iter__') else []
+                if 'species_names' in root:
+                    species_names = root['species_names'][:]
+                    combined_attrs['species_names'] = list(species_names) if hasattr(species_names, '__iter__') else []
+                # Return wrapped array with combined attributes
+                return ArrayWrapper(array, combined_attrs), root
+                
+            # Fallback: look for other common array names
+            for name in ['data', 'species']:
+                if name in root:
+                    array = root[name]
+                    combined_attrs = dict(array.attrs)
+                    if hasattr(root, 'attrs'):
+                        combined_attrs.update(root.attrs)
+                    return ArrayWrapper(array, combined_attrs), root
+                    
+            raise ValueError(f"No biomass/data array found in zarr group at {zarr_path}")
+                    
+        except Exception as e:
+            # Try as standalone array (legacy support)
             try:
-                root = zarr.open_group(zarr_path, mode='r')
-                # Look for common dataset names
-                for name in ['biomass', 'data', 'species']:
-                    if name in root:
-                        return root[name]
-                # If no standard names found, look for arrays
-                raise ValueError(f"No arrays found in zarr group at {zarr_path}")
-            except Exception as e:
-                raise ValueError(f"Failed to load zarr from {zarr_path}: {e}")
+                array = zarr.open_array(zarr_path, mode='r')
+                return array, None
+            except:
+                raise ValueError(f"Cannot open {zarr_path} as Zarr group or array: {e}")
     
     def _validate_zarr_array(self, zarr_array: zarr.Array) -> None:
         """
