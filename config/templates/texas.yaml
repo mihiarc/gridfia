@@ -1,0 +1,89 @@
+# Configuration for Texas Forest Analysis
+project:
+  name: Texas Forest Biomass Analysis
+  description: Forest biomass and diversity analysis for Texas
+  version: 1.0.0
+
+location:
+  type: state
+  name: Texas
+  abbreviation: TX
+  fips_code: '48'
+
+crs:
+  source: EPSG:4326
+  target: EPSG:26914  # NAD83 / Texas Central State Plane
+  web_mercator: EPSG:3857
+
+bounding_boxes:
+  wgs84:
+    xmin: -106.645646
+    ymin: 25.837164
+    xmax: -93.508039
+    ymax: 36.500704
+  state_plane:
+    xmin: -784000.0
+    ymin: 2537000.0
+    xmax: 1145000.0
+    ymax: 3848000.0
+  web_mercator:
+    xmin: -11867927.88
+    ymin: 2973565.05
+    xmax: -10409446.39
+    ymax: 4378441.82
+
+species:
+  - code: '0131'
+    name: Loblolly pine
+    scientific_name: Pinus taeda
+  - code: '0128'
+    name: Longleaf pine
+    scientific_name: Pinus palustris
+  - code: '0132'
+    name: Shortleaf pine
+    scientific_name: Pinus echinata
+  - code: '0833'
+    name: Post oak
+    scientific_name: Quercus stellata
+  - code: '0802'
+    name: White oak
+    scientific_name: Quercus alba
+  - code: '0621'
+    name: Southern red oak
+    scientific_name: Quercus falcata
+  - code: '0316'
+    name: Sweetgum
+    scientific_name: Liquidambar styraciflua
+
+zarr:
+  output_path: output/data/texas_forest.zarr
+  chunk_size: [1, 1000, 1000]
+  compression: lz4
+  compression_level: 5
+
+download:
+  resolution_ft: 98.425197
+  output_dir: output/data/texas_species
+  max_retries: 3
+  timeout: 60
+  rate_limit_delay: 0.5
+
+visualization:
+  biomass_cmap: YlGn
+  diversity_cmap: plasma
+  richness_cmap: Spectral_r
+  boundary_color: black
+  boundary_linewidth: 0.5
+  figure_size: [14, 12]
+  dpi: 150
+
+analysis:
+  presence_threshold: 1.0
+  normalization_percentiles: [2, 98]
+  nodata_value: -9999
+
+paths:
+  data_dir: output/data
+  maps_dir: output/maps
+  scripts_dir: scripts
+  examples_dir: examples

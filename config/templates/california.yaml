@@ -1,0 +1,98 @@
+# Configuration for California Forest Analysis
+project:
+  name: California Forest Biomass Analysis
+  description: Forest biomass and diversity analysis for California
+  version: 1.0.0
+
+location:
+  type: state
+  name: California
+  abbreviation: CA
+  fips_code: '06'
+
+crs:
+  source: EPSG:4326
+  target: EPSG:26943  # NAD83 / California Zone III
+  web_mercator: EPSG:3857
+
+bounding_boxes:
+  wgs84:
+    xmin: -124.482003
+    ymin: 32.528832
+    xmax: -114.131211
+    ymax: 42.009517
+  state_plane:
+    xmin: 1603000.0
+    ymin: 325000.0
+    xmax: 2358000.0
+    ymax: 1084000.0
+  web_mercator:
+    xmin: -13849434.06
+    ymin: 3833651.47
+    xmax: -12705174.41
+    ymax: 5161149.10
+
+species:
+  - code: '0202'
+    name: Douglas-fir
+    scientific_name: Pseudotsuga menziesii
+  - code: '0122'
+    name: Ponderosa pine
+    scientific_name: Pinus ponderosa
+  - code: '0117'
+    name: Sugar pine
+    scientific_name: Pinus lambertiana
+  - code: '0015'
+    name: White fir
+    scientific_name: Abies concolor
+  - code: '0020'
+    name: Red fir
+    scientific_name: Abies magnifica
+  - code: '0081'
+    name: Incense-cedar
+    scientific_name: Calocedrus decurrens
+  - code: '0211'
+    name: Coast redwood
+    scientific_name: Sequoia sempervirens
+  - code: '0212'
+    name: Giant sequoia
+    scientific_name: Sequoiadendron giganteum
+  - code: '0361'
+    name: Tanoak
+    scientific_name: Notholithocarpus densiflorus
+  - code: '0631'
+    name: California black oak
+    scientific_name: Quercus kelloggii
+
+zarr:
+  output_path: output/data/california_forest.zarr
+  chunk_size: [1, 1000, 1000]
+  compression: lz4
+  compression_level: 5
+
+download:
+  resolution_ft: 98.425197
+  output_dir: output/data/california_species
+  max_retries: 3
+  timeout: 60
+  rate_limit_delay: 0.5
+
+visualization:
+  biomass_cmap: YlGn
+  diversity_cmap: plasma
+  richness_cmap: Spectral_r
+  boundary_color: black
+  boundary_linewidth: 0.5
+  figure_size: [10, 14]
+  dpi: 150
+
+analysis:
+  presence_threshold: 1.0
+  normalization_percentiles: [2, 98]
+  nodata_value: -9999
+
+paths:
+  data_dir: output/data
+  maps_dir: output/maps
+  scripts_dir: scripts
+  examples_dir: examples

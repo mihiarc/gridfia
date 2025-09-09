@@ -1,0 +1,89 @@
+# Configuration for North Carolina Forest Analysis
+project:
+  name: North Carolina Forest Biomass Analysis
+  description: Forest biomass and diversity analysis for North Carolina
+  version: 1.0.0
+
+location:
+  type: state
+  name: North Carolina
+  abbreviation: NC
+  fips_code: '37'
+
+crs:
+  source: EPSG:4326
+  target: EPSG:2264  # NAD83 / North Carolina State Plane
+  web_mercator: EPSG:3857
+
+bounding_boxes:
+  wgs84:
+    xmin: -84.321869
+    ymin: 33.752878
+    xmax: -75.400119
+    ymax: 36.588157
+  state_plane:
+    xmin: 406000.0
+    ymin: 35000.0
+    xmax: 3050000.0
+    ymax: 1040000.0
+  web_mercator:
+    xmin: -9384893.57
+    ymin: 3991053.10
+    xmax: -8386389.78
+    ymax: 4378062.36
+
+species:
+  - code: '0131'
+    name: Loblolly pine
+    scientific_name: Pinus taeda
+  - code: '0068'
+    name: Red maple
+    scientific_name: Acer rubrum
+  - code: '0132'
+    name: Shortleaf pine
+    scientific_name: Pinus echinata
+  - code: '0110'
+    name: Virginia pine
+    scientific_name: Pinus virginiana
+  - code: '0316'
+    name: Sweetgum
+    scientific_name: Liquidambar styraciflua
+  - code: '0621'
+    name: Southern red oak
+    scientific_name: Quercus falcata
+  - code: '0802'
+    name: White oak
+    scientific_name: Quercus alba
+
+zarr:
+  output_path: output/data/north_carolina_forest.zarr
+  chunk_size: [1, 1000, 1000]
+  compression: lz4
+  compression_level: 5
+
+download:
+  resolution_ft: 98.425197
+  output_dir: output/data/north_carolina_species
+  max_retries: 3
+  timeout: 60
+  rate_limit_delay: 0.5
+
+visualization:
+  biomass_cmap: YlGn
+  diversity_cmap: plasma
+  richness_cmap: Spectral_r
+  boundary_color: black
+  boundary_linewidth: 0.5
+  figure_size: [12, 10]
+  dpi: 150
+
+analysis:
+  presence_threshold: 1.0
+  normalization_percentiles: [2, 98]
+  nodata_value: -9999
+
+paths:
+  data_dir: output/data
+  maps_dir: output/maps
+  scripts_dir: scripts
+  examples_dir: examples

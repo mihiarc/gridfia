@@ -1,0 +1,81 @@
+# Configuration for Wake County, North Carolina
+project:
+  name: Wake County Forest Biomass Analysis
+  description: Forest biomass analysis for Wake County, NC (Raleigh area)
+  version: 1.0.0
+
+location:
+  type: county
+  name: Wake County, North Carolina
+  abbreviation: NC
+  fips_code: '37183'
+  county: Wake
+  state: North Carolina
+
+crs:
+  source: EPSG:4326
+  target: EPSG:2264  # NAD83 / North Carolina State Plane
+  web_mercator: EPSG:3857
+
+# Wake County approximate boundaries
+bounding_boxes:
+  wgs84:
+    xmin: -78.97
+    ymin: 35.53
+    xmax: -78.25
+    ymax: 36.09
+  web_mercator:
+    xmin: -8783000
+    ymin: 4229000
+    xmax: -8703000
+    ymax: 4311000
+  state_plane:
+    xmin: 1990000
+    ymin: 710000
+    xmax: 2180000
+    ymax: 920000
+
+# Common North Carolina tree species
+species:
+  - code: '0131'
+    name: Loblolly pine
+    scientific_name: Pinus taeda
+  - code: '0068'
+    name: Red maple
+    scientific_name: Acer rubrum
+  - code: '0110'
+    name: Virginia pine
+    scientific_name: Pinus virginiana
+
+zarr:
+  output_path: output/data/wake_county_forest.zarr
+  chunk_size: [1, 500, 500]
+  compression: lz4
+  compression_level: 5
+
+download:
+  resolution_ft: 98.425197  # ~30 meters
+  output_dir: output/data/wake_county_species
+  max_retries: 3
+  timeout: 60
+  rate_limit_delay: 0.5
+
+visualization:
+  biomass_cmap: YlGn
+  diversity_cmap: plasma
+  richness_cmap: Spectral_r
+  boundary_color: black
+  boundary_linewidth: 1.0
+  figure_size: [12, 10]
+  dpi: 150
+
+analysis:
+  presence_threshold: 1.0
+  normalization_percentiles: [2, 98]
+  nodata_value: -9999
+
+paths:
+  data_dir: output/data
+  maps_dir: output/maps/wake_county
+  scripts_dir: scripts
+  examples_dir: examples
