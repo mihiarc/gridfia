@@ -41,7 +41,7 @@ def sample_raster(temp_dir: Path) -> Path:
     
     # Write raster
     with rasterio.open(
-        raster_path,
+        str(raster_path),  # Convert Path to string
         'w',
         driver='GTiff',
         height=height,
