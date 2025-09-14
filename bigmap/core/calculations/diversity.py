@@ -106,26 +106,22 @@ class ShannonDiversity(ForestCalculation):
         
         if np.any(valid_mask):
             # Calculate proportions for valid pixels
-            proportions = np.zeros_like(species_data)
+            proportions = np.zeros_like(species_data, dtype=np.float32)
             proportions[:, valid_mask] = species_data[:, valid_mask] / total_biomass[valid_mask]
             
             # Calculate Shannon index
-            # Add small epsilon to avoid log(0)
-            epsilon = 1e-10
-            proportions_safe = proportions + epsilon
-            
             if base == '2':
                 log_func = np.log2
             else:  # default to natural log
                 log_func = np.log
-            
-            # Only calculate for non-zero proportions
+
+            # Only calculate for non-zero proportions to avoid log(0)
             mask = proportions > 0
             shannon_contrib = np.zeros_like(proportions)
-            shannon_contrib[mask] = proportions[mask] * log_func(proportions_safe[mask])
-            
+            shannon_contrib[mask] = -proportions[mask] * log_func(proportions[mask])
+
             # Sum across species
-            shannon = -np.sum(shannon_contrib, axis=0)
+            shannon = np.sum(shannon_contrib, axis=0)
         
         return shannon
     
@@ -184,7 +180,7 @@ class SimpsonDiversity(ForestCalculation):
         
         if np.any(valid_mask):
             # Calculate proportions for valid pixels
-            proportions = np.zeros_like(species_data)
+            proportions = np.zeros_like(species_data, dtype=np.float32)
             proportions[:, valid_mask] = species_data[:, valid_mask] / total_biomass[valid_mask]
             
             # Calculate Simpson index (sum of squared proportions)
