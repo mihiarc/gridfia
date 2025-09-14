@@ -21,11 +21,19 @@ def get_zarr_path(zarr_array):
     elif hasattr(zarr_array.store, 'directory'):
         # For zarr 3.x LocalStore
         return str(zarr_array.store.directory)
+    elif hasattr(zarr_array.store, 'root'):
+        # For zarr 3.x with root directory
+        return str(zarr_array.store.root)
     else:
         # Try to get from store's string representation
         store_str = str(zarr_array.store)
         if store_str.startswith("file://"):
             return store_str[7:]  # Remove file:// prefix
+        # For zarr 3.x LocalStore, extract path from repr
+        import re
+        match = re.search(r"path=PosixPath\('([^']+)'\)", store_str)
+        if match:
+            return match.group(1)
         return store_str
 
 
@@ -142,7 +150,7 @@ class TestForestMetricsPipeline:
     
     def test_run_forest_analysis_convenience_function(self, sample_zarr_array, temp_dir):
         """Test the convenience function run_forest_analysis."""
-        zarr_path = str(sample_zarr_array.store.path)
+        zarr_path = get_zarr_path(sample_zarr_array)
         
         # Create a simple config file
         config_path = temp_dir / "test_config.yaml"
@@ -167,7 +175,7 @@ calculations:
     
     def test_chunked_processing_consistency(self, sample_zarr_array, test_settings):
         """Test that chunked processing produces same results as full processing."""
-        zarr_path = str(sample_zarr_array.store.path)
+        zarr_path = get_zarr_path(sample_zarr_array)
         
         # Process with small chunks
         processor1 = ForestMetricsProcessor(test_settings)
@@ -191,7 +199,7 @@ calculations:
     
     def test_custom_output_names(self, sample_zarr_array, test_settings):
         """Test using custom output names for calculations."""
-        zarr_path = str(sample_zarr_array.store.path)
+        zarr_path = get_zarr_path(sample_zarr_array)
         
         # Configure custom names
         test_settings.calculations[0].output_name = "custom_richness"
@@ -206,7 +214,7 @@ calculations:
     
     def test_error_handling_invalid_calculation(self, sample_zarr_array, test_settings):
         """Test handling of invalid calculation names."""
-        zarr_path = str(sample_zarr_array.store.path)
+        zarr_path = get_zarr_path(sample_zarr_array)
         
         # Add invalid calculation
         test_settings.calculations.append(
@@ -223,7 +231,7 @@ calculations:
     
     def test_spatial_metadata_preservation(self, sample_zarr_array, test_settings):
         """Test that spatial metadata is preserved in outputs."""
-        zarr_path = str(sample_zarr_array.store.path)
+        zarr_path = get_zarr_path(sample_zarr_array)
         
         processor = ForestMetricsProcessor(test_settings)
         results = processor.run_calculations(zarr_path)
@@ -248,7 +256,7 @@ calculations:
     ])
     def test_calculation_value_ranges(self, sample_zarr_array, test_settings, calc_name, expected_range):
         """Test that calculation outputs are in expected ranges."""
-        zarr_path = str(sample_zarr_array.store.path)
+        zarr_path = get_zarr_path(sample_zarr_array)
         
         processor = ForestMetricsProcessor(test_settings)
         results = processor.run_calculations(zarr_path)
@@ -268,7 +276,7 @@ class TestErrorConditions:
     
     def test_no_enabled_calculations(self, sample_zarr_array, test_settings):
         """Test error when no calculations are enabled."""
-        zarr_path = str(sample_zarr_array.store.path)
+        zarr_path = get_zarr_path(sample_zarr_array)
         
         # Disable all calculations
         for calc in test_settings.calculations:
@@ -283,7 +291,7 @@ class TestErrorConditions:
         """Test error handling for invalid zarr path."""
         processor = ForestMetricsProcessor(test_settings)
         
-        with pytest.raises(ValueError, match="Failed to load zarr"):
+        with pytest.raises(ValueError, match="Cannot open"):
             processor.run_calculations("/path/does/not/exist.zarr")
     
     def test_missing_required_attributes(self, temp_dir, test_settings):

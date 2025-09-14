@@ -87,7 +87,7 @@ uv run pytest -n auto
 uv run black bigmap/ tests/
 uv run isort bigmap/ tests/
 
-# Lint code  
+# Lint code
 uv run flake8 bigmap/ tests/
 
 # Type checking

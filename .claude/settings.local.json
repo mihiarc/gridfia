@@ -2,7 +2,21 @@
   "permissions": {
     "allow": [
       "WebSearch",
-      "Bash(uv run:*)"
+      "Bash(uv run:*)",
+      "Bash(git checkout:*)",
+      "Bash(uv pip install:*)",
+      "Bash(find:*)",
+      "Bash(awk:*)",
+      "Bash(gh issue create:*)",
+      "Bash(gh issue view:*)",
+      "Bash(git add:*)",
+      "Bash(git push:*)",
+      "Bash(gh pr list:*)",
+      "Bash(gh pr view:*)",
+      "Bash(gh pr diff:*)",
+      "Bash(gh issue close:*)",
+      "Bash(gh issue:*)",
+      "Bash(uv pip:*)"
     ],
     "deny": [],
     "ask": []

@@ -133,7 +133,7 @@ class TestForestMetricsProcessor:
         
         # Patch internal methods to avoid full implementation
         with patch.object(processor, '_load_zarr_array') as mock_load:
-            mock_load.return_value = sample_zarr_array
+            mock_load.return_value = (sample_zarr_array, None)
             
             with patch.object(processor, '_validate_zarr_array'):
                 with patch.object(processor, '_process_in_chunks') as mock_process:
