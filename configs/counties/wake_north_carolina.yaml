@@ -1,0 +1,62 @@
+project:
+  name: Forest Biomass Analysis
+  description: Forest biomass and diversity analysis
+  version: 1.0.0
+location:
+  type: county
+  name: Wake
+  abbreviation: null
+  fips_code: null
+  state: North Carolina
+crs:
+  source: EPSG:4326
+  target: EPSG:32119
+  web_mercator: EPSG:3857
+bounding_boxes:
+  wgs84:
+    xmin: -78.97
+    ymin: 35.57
+    xmax: -78.25
+    ymax: 36.08
+  state_plane: null
+  web_mercator:
+    xmin: -8790900.187944813
+    ymin: 4241614.2086284105
+    xmax: -8710750.154573657
+    ymax: 4311634.83947306
+species: []
+zarr:
+  output_path: output/data/forest_biomass.zarr
+  chunk_size:
+  - 1
+  - 1000
+  - 1000
+  compression: lz4
+  compression_level: 5
+download:
+  resolution_ft: 98.425197
+  output_dir: output/data/species
+  max_retries: 3
+  timeout: 60
+  rate_limit_delay: 0.5
+visualization:
+  biomass_cmap: YlGn
+  diversity_cmap: plasma
+  richness_cmap: Spectral_r
+  boundary_color: black
+  boundary_linewidth: 0.5
+  figure_size:
+  - 12
+  - 10
+  dpi: 150
+analysis:
+  presence_threshold: 1.0
+  normalization_percentiles:
+  - 2
+  - 98
+  nodata_value: -9999
+paths:
+  data_dir: output/data
+  maps_dir: output/maps
+  scripts_dir: scripts
+  examples_dir: examples
