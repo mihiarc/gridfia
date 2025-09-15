@@ -177,10 +177,39 @@ uv pip install -e .
 - Verify species codes with `bigmap list-species`
 - Some species may not be available for all locations
 
+### Working with Custom Geographic Areas
+For locations other than the hardcoded examples, you have two options:
+
+1. **Use bounding box coordinates directly**:
+   ```python
+   files = api.download_species(
+       bbox=(-104.5, 39.5, -104.0, 40.0),  # xmin, ymin, xmax, ymax
+       crs="4326",  # WGS84
+       species_codes=["0131"]
+   )
+   ```
+
+   **Finding bounding boxes**: Use https://boundingbox.klokantech.com/ to visually select your area and get coordinates in different formats (WGS84, Web Mercator, etc.)
+
+2. **Download county shapefiles manually**:
+   - Visit: https://www.census.gov/geographies/mapping-files/time-series/geo/tiger-geodatabase-file.html
+   - Download county boundaries for your state
+   - Extract bounding box coordinates for your area of interest
+   - Use coordinates as shown above
+
+Note: The quickstart example uses hardcoded coordinates for Wake County, NC to avoid SSL certificate issues with automatic boundary downloads.
+
 ### Memory Issues
 - Reduce chunk sizes
 - Process smaller areas
 - Use sample data for testing
+
+### Zarr Compatibility Warnings
+You may see warnings like:
+```
+UnstableSpecificationWarning: The data type (FixedLengthUTF32) does not have a Zarr V3 specification
+```
+This is expected and safe to ignore. These warnings indicate that some metadata uses data types not yet standardized in Zarr V3, but won't affect functionality.
 
 ## 📝 Contributing
 

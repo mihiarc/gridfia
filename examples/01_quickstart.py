@@ -23,11 +23,19 @@ def main():
 
     # 1. Download species data (just 2 species for speed)
     print("\n1. Downloading forest data...")
+    print("   Using hardcoded bounding box for Wake County, NC")
+
+    # Wake County, NC bounding box (Web Mercator EPSG:3857)
+    # Note: For other locations, download county shapefiles manually
+    # from https://www.census.gov/geographies/mapping-files/time-series/geo/tiger-geodatabase-file.html
+    wake_bbox = (-8792000, 4274000, -8732000, 4334000)  # xmin, ymin, xmax, ymax
+
     try:
+        # Use safe wrapper with retry logic and error handling
         files = safe_download_species(
             api,
-            state="North Carolina",
-            county="Wake",
+            bbox=wake_bbox,
+            crs="3857",  # Web Mercator
             species_codes=["0131", "0068"],  # Loblolly Pine, Red Maple
             output_dir="quickstart_data"
         )
