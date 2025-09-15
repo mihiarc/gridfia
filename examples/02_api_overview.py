@@ -24,7 +24,7 @@ def example_1_list_species():
     print(f"Total species available: {len(species)}")
     print("\nFirst 5 species:")
     for s in species[:5]:
-        print(f"  {s.code}: {s.common_name} ({s.scientific_name})")
+        print(f"  {s.species_code}: {s.common_name} ({s.scientific_name})")
 
     # Find specific species
     pine_species = [s for s in species if "pine" in s.common_name.lower()]
@@ -166,14 +166,29 @@ def example_6_visualization():
     api = BigMapAPI()
 
     # Different map types
-    map_types = ["diversity", "biomass", "richness", "comparison"]
+    map_types = ["diversity", "species", "richness", "comparison"]
 
     for map_type in map_types:
-        maps = api.create_maps(
-            zarr_path=sample_path,
-            map_type=map_type,
-            output_dir=f"maps_{map_type}"
-        )
+        if map_type == "species":
+            maps = api.create_maps(
+                zarr_path=sample_path,
+                map_type=map_type,
+                output_dir=f"maps_{map_type}",
+                show_all=True
+            )
+        elif map_type == "comparison":
+            maps = api.create_maps(
+                zarr_path=sample_path,
+                map_type=map_type,
+                output_dir=f"maps_{map_type}",
+                species=["0001", "0002"]  # Compare first two species
+            )
+        else:
+            maps = api.create_maps(
+                zarr_path=sample_path,
+                map_type=map_type,
+                output_dir=f"maps_{map_type}"
+            )
         print(f"{map_type}: Created {len(maps)} maps")
 
     # Clean up

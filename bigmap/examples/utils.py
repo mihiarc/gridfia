@@ -288,20 +288,23 @@ def create_zarr_from_rasters(
 
 def create_sample_zarr(output_path: Path, n_species: int = 3) -> Path:
     """
-    Create a sample zarr array for testing with error handling.
+    Create a sample zarr group for testing with error handling.
 
     Args:
         output_path: Output path for zarr
         n_species: Number of species layers (plus total)
 
     Returns:
-        Path to created zarr array
+        Path to created zarr group
     """
     try:
+        # Create zarr group (not just array)
+        store = zarr.storage.LocalStore(str(output_path))
+        root = zarr.open_group(store=store, mode='w')
+
         shape = (n_species + 1, 100, 100)  # +1 for total layer
-        z = zarr.open_array(
-            str(output_path),
-            mode='w',
+        biomass_array = root.create_array(
+            'biomass',
             shape=shape,
             chunks=(1, 50, 50),
             dtype='float32'
@@ -323,17 +326,22 @@ def create_sample_zarr(output_path: Path, n_species: int = 3) -> Path:
             else:
                 freq = i * 0.5
                 data = np.abs(np.sin(X * freq) * np.cos(Y * freq) * 50)
-                z[i, :, :] = data
+                biomass_array[i, :, :] = data
                 total_biomass += data
 
         # Store total biomass in first layer
-        z[0, :, :] = total_biomass
+        biomass_array[0, :, :] = total_biomass
 
-        # Add metadata
-        z.attrs['crs'] = 'EPSG:32617'
-        z.attrs['species_codes'] = ['TOTAL'] + [f'SPCD{i:04d}' for i in range(1, n_species + 1)]
-        z.attrs['species_names'] = ['All Species Combined'] + [f'Species {i}' for i in range(1, n_species + 1)]
-        z.attrs['layer_names'] = ['total_biomass'] + [f'species_{i}' for i in range(1, n_species + 1)]
+        # Add metadata to the group
+        root.attrs['crs'] = 'EPSG:32617'
+        root.attrs['num_species'] = n_species + 1
+
+        # Create species metadata arrays
+        species_codes = ['0000'] + [f'{i:04d}' for i in range(1, n_species + 1)]
+        species_names = ['All Species Combined'] + [f'Sample Species {i}' for i in range(1, n_species + 1)]
+
+        root.create_array('species_codes', data=np.array(species_codes, dtype='U10'))
+        root.create_array('species_names', data=np.array(species_names, dtype='U50'))
 
         console.print(f"[green]Created sample zarr:[/green] {output_path}")
         return output_path
@@ -346,7 +354,8 @@ def create_sample_zarr(output_path: Path, n_species: int = 3) -> Path:
 def print_zarr_info(zarr_path: Path) -> None:
     """Print information about a zarr store with error handling."""
     try:
-        root = zarr.open_group(str(zarr_path), mode='r')
+        store = zarr.storage.LocalStore(str(zarr_path))
+        root = zarr.open_group(store=store, mode='r')
         biomass_array = root['biomass']
         console.print(f"\n[cyan]Zarr Store Info:[/cyan]")
         console.print(f"  Shape: {biomass_array.shape}")
@@ -383,7 +392,8 @@ def calculate_basic_stats(zarr_path: Path, sample_size: Optional[int] = 1000) ->
         Dictionary of statistics
     """
     try:
-        root = zarr.open_group(str(zarr_path), mode='r')
+        store = zarr.storage.LocalStore(str(zarr_path))
+        root = zarr.open_group(store=store, mode='r')
         z = root['biomass']
 
         # Sample data if specified
@@ -479,7 +489,7 @@ def validate_species_codes(api, species_codes: List[str]) -> List[str]:
     """
     try:
         all_species = api.list_species()
-        valid_codes = {s.code for s in all_species}
+        valid_codes = {s.species_code for s in all_species}
 
         validated = []
         for code in species_codes:
