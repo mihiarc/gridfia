@@ -216,6 +216,7 @@ analysis_comparison/
 *.docx
 *.md
 !README.md
+!CITATIONS.md
 !docs/**/*.md
 !CLAUDE.md
 
