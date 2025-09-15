@@ -3,37 +3,83 @@
 Location Configuration Examples
 
 Demonstrates how to work with different geographic locations:
-- States
-- Counties
+- States (using predefined bounding boxes)
+- Counties (using predefined bounding boxes)
 - Custom bounding boxes
 - Batch processing multiple locations
+
+Note: This example uses predefined bounding boxes to avoid downloading
+external boundary files, making it more reliable and faster to run.
 """
 
 from pathlib import Path
 from bigmap.utils.location_config import LocationConfig
-from bigmap.visualization.boundaries import STATE_ABBR
 from rich.console import Console
 from rich.table import Table
+import warnings
+
+# Suppress boundary download warnings since we'll use predefined boxes
+warnings.filterwarnings('ignore', message='.*boundaries.*')
 
 console = Console()
 
+# Predefined bounding boxes for common locations (WGS84)
+# These avoid the need to download boundary files
+STATE_BBOXES = {
+    'North Carolina': (-84.32, 33.84, -75.46, 36.59),
+    'Texas': (-106.65, 25.84, -93.51, 36.50),
+    'California': (-124.48, 32.53, -114.13, 42.01),
+    'Montana': (-116.05, 44.36, -104.04, 49.00),
+    'Georgia': (-85.61, 30.36, -80.84, 35.00),
+    'Vermont': (-73.44, 42.73, -71.46, 45.02),
+}
+
+COUNTY_BBOXES = {
+    ('Wake', 'North Carolina'): (-78.97, 35.57, -78.25, 36.08),
+    ('Harris', 'Texas'): (-95.91, 29.52, -95.01, 30.17),
+    ('Los Angeles', 'California'): (-118.95, 33.70, -117.65, 34.82),
+    ('Cook', 'Illinois'): (-88.26, 41.47, -87.52, 42.15),
+    ('King', 'Washington'): (-122.54, 47.08, -121.06, 47.78),
+    ('Orange', 'California'): (-118.15, 33.38, -117.41, 33.95),
+    ('Durham', 'North Carolina'): (-79.11, 35.87, -78.67, 36.24),
+}
+
+# State Plane CRS codes for states
+STATE_CRS = {
+    'North Carolina': 'EPSG:32119',  # NAD83 / North Carolina
+    'Texas': 'EPSG:32139',  # NAD83 / Texas Central
+    'California': 'EPSG:32610',  # WGS 84 / UTM zone 10N
+    'Montana': 'EPSG:32100',  # NAD83 / Montana
+    'Georgia': 'EPSG:32616',  # WGS 84 / UTM zone 16N
+    'Vermont': 'EPSG:32145',  # NAD83 / Vermont
+}
+
 
 def create_state_configs():
-    """Create configurations for multiple states."""
-    console.print("\n[bold blue]State Configurations[/bold blue]")
+    """Create configurations for multiple states using predefined bounding boxes."""
+    console.print("\n[bold blue]State Configurations (Using Predefined Bounding Boxes)[/bold blue]")
     console.print("-" * 40)
 
-    states = ['North Carolina', 'Texas', 'California', 'Montana', 'Georgia']
     configs = []
 
     table = Table(title="State Configurations")
     table.add_column("State", style="cyan")
     table.add_column("CRS", style="yellow")
-    table.add_column("Bbox (Web Mercator)", style="green")
+    table.add_column("Bbox (WGS84)", style="green")
+    table.add_column("Status", style="magenta")
 
-    for state in states:
+    for state, bbox in STATE_BBOXES.items():
         try:
-            config = LocationConfig.from_state(state)
+            # Create configuration using predefined bbox
+            config = LocationConfig.from_bbox(
+                bbox=bbox,
+                name=state
+            )
+
+            # Set the target CRS
+            config._config['crs']['target'] = STATE_CRS.get(state, 'EPSG:3857')
+            config._config['location']['type'] = 'state'
+            config._config['location']['name'] = state
             configs.append(config)
 
             # Save configuration
@@ -41,54 +87,56 @@ def create_state_configs():
             output_path.parent.mkdir(exist_ok=True)
             config.save(output_path)
 
-            # Add to table
-            bbox = config.web_mercator_bbox
-            bbox_str = f"({bbox[0]:.0f}, {bbox[1]:.0f}, {bbox[2]:.0f}, {bbox[3]:.0f})"
-            table.add_row(state, config.target_crs, bbox_str)
+            # Add to table with formatted bbox
+            bbox_str = f"({bbox[0]:.2f}, {bbox[1]:.2f}, {bbox[2]:.2f}, {bbox[3]:.2f})"
+            table.add_row(state, STATE_CRS.get(state, 'EPSG:3857'), bbox_str, "✅ Created")
 
         except Exception as e:
-            console.print(f"[red]Failed for {state}: {e}[/red]")
+            table.add_row(state, "N/A", "N/A", f"❌ {str(e)[:20]}")
 
     console.print(table)
     return configs
 
 
 def create_county_configs():
-    """Create configurations for specific counties."""
-    console.print("\n[bold blue]County Configurations[/bold blue]")
+    """Create configurations for specific counties using predefined bounding boxes."""
+    console.print("\n[bold blue]County Configurations (Using Predefined Bounding Boxes)[/bold blue]")
     console.print("-" * 40)
-
-    counties = [
-        ('Wake', 'North Carolina'),
-        ('Harris', 'Texas'),
-        ('Los Angeles', 'California'),
-        ('Cook', 'Illinois'),
-        ('King', 'Washington')
-    ]
 
     table = Table(title="County Configurations")
     table.add_column("County", style="cyan")
     table.add_column("State", style="yellow")
-    table.add_column("CRS", style="green")
+    table.add_column("Bbox (WGS84)", style="green")
     table.add_column("Status", style="magenta")
 
     configs = []
-    for county, state in counties:
-        try:
-            # Create configuration using public method
-            config = LocationConfig.from_county(county, state)
-            configs.append(config)
+    for (county, state), bbox in COUNTY_BBOXES.items():
+        if (county, state) not in [('Orange', 'California'), ('Durham', 'North Carolina')]:  # Skip extras for demo
+            try:
+                # Create configuration using predefined bbox
+                config = LocationConfig.from_bbox(
+                    bbox=bbox,
+                    name=f"{county}, {state}"
+                )
 
-            # Save
-            filename = f"{county.lower()}_{state.lower().replace(' ', '_')}.yaml"
-            output_path = Path(f"configs/counties/{filename}")
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-            config.save(output_path)
+                # Set metadata
+                config._config['location']['type'] = 'county'
+                config._config['location']['name'] = county
+                config._config['location']['state'] = state
+                config._config['crs']['target'] = STATE_CRS.get(state, 'EPSG:3857')
+                configs.append(config)
 
-            table.add_row(county, state, config.target_crs, "✅ Created")
+                # Save
+                filename = f"{county.lower()}_{state.lower().replace(' ', '_')}.yaml"
+                output_path = Path(f"configs/counties/{filename}")
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+                config.save(output_path)
 
-        except Exception as e:
-            table.add_row(county, state, "N/A", f"❌ {str(e)[:20]}")
+                bbox_str = f"({bbox[0]:.2f}, {bbox[1]:.2f}, {bbox[2]:.2f}, {bbox[3]:.2f})"
+                table.add_row(county, state, bbox_str, "✅ Created")
+
+            except Exception as e:
+                table.add_row(county, state, "N/A", f"❌ {str(e)[:20]}")
 
     console.print(table)
     return configs
@@ -144,9 +192,11 @@ def batch_process_locations():
 
     # Define batch of locations
     batch = [
-        {"type": "state", "name": "Vermont"},
-        {"type": "county", "name": "Orange", "state": "California"},
-        {"type": "county", "name": "Durham", "state": "North Carolina"},
+        {"type": "state", "name": "Vermont", "bbox": STATE_BBOXES.get('Vermont')},
+        {"type": "county", "name": "Orange", "state": "California",
+         "bbox": COUNTY_BBOXES.get(('Orange', 'California'))},
+        {"type": "county", "name": "Durham", "state": "North Carolina",
+         "bbox": COUNTY_BBOXES.get(('Durham', 'North Carolina'))},
         {"type": "custom", "name": "Mt. Hood", "bbox": (-122.0, 45.2, -121.4, 45.6)}
     ]
 
@@ -155,21 +205,25 @@ def batch_process_locations():
     for loc in batch:
         console.print(f"\n  {loc['name']}:")
 
-        if loc["type"] == "state":
-            config = LocationConfig.from_state(loc["name"])
-        elif loc["type"] == "county":
-            config = LocationConfig.from_county(
-                county=loc['name'],
-                state=loc['state']
-            )
-        else:  # custom
-            config = LocationConfig.from_bbox(
-                bbox=loc["bbox"],
-                name=loc["name"]
-            )
+        # All locations now use bbox-based configuration
+        config = LocationConfig.from_bbox(
+            bbox=loc["bbox"],
+            name=loc["name"] if loc["type"] == "custom" else
+                 loc["name"] if loc["type"] == "state" else
+                 f"{loc['name']}, {loc['state']}"
+        )
 
-        console.print(f"    Type: {config.location_type}")
-        console.print(f"    CRS: {config.target_crs}")
+        # Set appropriate metadata
+        config._config['location']['type'] = loc["type"]
+        if loc["type"] == "county":
+            config._config['location']['state'] = loc['state']
+            config._config['crs']['target'] = STATE_CRS.get(loc['state'], 'EPSG:3857')
+        elif loc["type"] == "state":
+            config._config['crs']['target'] = STATE_CRS.get(loc['name'], 'EPSG:3857')
+
+        console.print(f"    Type: {loc['type']}")
+        console.print(f"    Bbox: {loc['bbox']}")
+        console.print(f"    CRS: {config._config['crs'].get('target', 'EPSG:3857')}")
 
         # Here you would typically:
         # 1. Download species data using the bbox
@@ -188,34 +242,40 @@ def show_location_usage():
     from bigmap import BigMapAPI
     from bigmap.utils.location_config import LocationConfig
 
-    # Load saved configuration
-    config = LocationConfig("configs/wake_north_carolina.yaml")
+    # Method 1: Load saved configuration
+    config = LocationConfig("configs/wake_county.yaml")
+
+    # Method 2: Create configuration from predefined bbox
+    config = LocationConfig.from_bbox(
+        bbox=(-78.97, 35.57, -78.25, 36.08),  # Wake County, NC
+        name="Wake County, NC"
+    )
 
     # Use with API
     api = BigMapAPI()
 
     # Download using config bounds
     files = api.download_species(
-        bbox=config.web_mercator_bbox,
+        bbox=config.wgs84_bbox,  # or web_mercator_bbox
         species_codes=['0131', '0068'],
         output_dir="data/wake"
     )
 
-    # Or use the high-level method
-    api.download_from_config(
-        config=config,
-        species_codes=['0131'],
-        output_dir="data"
-    )
+    # Process the downloaded data
+    zarr_path = api.create_zarr("data/wake", "wake.zarr")
+    results = api.calculate_metrics(zarr_path)
     """)
 
-    console.print("\n[yellow]Command Line Usage:[/yellow]")
+    console.print("\n[yellow]Creating Custom Location Configs:[/yellow]")
     console.print("""
-    # Download using location config
-    bigmap download --location-config configs/montana.yaml --species 0202
+    # For any custom area - just provide the bounding box!
+    config = LocationConfig.from_bbox(
+        bbox=(-122.0, 45.2, -121.4, 45.6),  # Mt. Hood area
+        name="Mt. Hood Region"
+    )
 
-    # Or specify directly
-    bigmap download --state Texas --county Harris --species 0131
+    # Save for later use
+    config.save("configs/mt_hood.yaml")
     """)
 
 
@@ -223,6 +283,10 @@ def main():
     """Run all location configuration examples."""
     console.print("[bold green]Location Configuration Examples[/bold green]")
     console.print("=" * 60)
+
+    console.print("\n[yellow]Note:[/yellow] This example uses predefined bounding boxes")
+    console.print("to avoid downloading external boundary files. The same")
+    console.print("approach works for any location - just provide the bbox!\n")
 
     # Create different types of configs
     state_configs = create_state_configs()
@@ -246,6 +310,9 @@ def main():
     console.print("  - configs/           (states)")
     console.print("  - configs/counties/  (counties)")
     console.print("  - configs/custom/    (custom areas)")
+    console.print("\n[cyan]Tip:[/cyan] You can find bounding boxes for any location at:")
+    console.print("  - https://boundingbox.klokantech.com/")
+    console.print("  - https://www.openstreetmap.org/ (export feature)")
 
 
 if __name__ == "__main__":
