@@ -47,7 +47,14 @@ class TestExamplesSmoke:
                 mock_api.return_value = mock_instance
 
                 # Import should work without errors
-                import examples.01_quickstart as quickstart
+                # Use importlib to handle module name starting with digit
+                import importlib.util
+                spec = importlib.util.spec_from_file_location(
+                    "quickstart",
+                    EXAMPLES_DIR / "01_quickstart.py"
+                )
+                quickstart = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(quickstart)
                 assert hasattr(quickstart, 'main')
         finally:
             sys.path.pop(0)
@@ -57,7 +64,14 @@ class TestExamplesSmoke:
         sys.path.insert(0, str(EXAMPLES_DIR.parent))
         try:
             with patch('bigmap.BigMapAPI') as mock_api:
-                import examples.02_api_overview as api_overview
+                # Use importlib to handle module name starting with digit
+                import importlib.util
+                spec = importlib.util.spec_from_file_location(
+                    "api_overview",
+                    EXAMPLES_DIR / "02_api_overview.py"
+                )
+                api_overview = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(api_overview)
 
                 # Check that all example functions exist
                 assert hasattr(api_overview, 'example_1_list_species')
@@ -69,7 +83,14 @@ class TestExamplesSmoke:
         """Test that 03_location_configs.py can be imported."""
         sys.path.insert(0, str(EXAMPLES_DIR.parent))
         try:
-            import examples.03_location_configs as location_configs
+            # Use importlib to handle module name starting with digit
+            import importlib.util
+            spec = importlib.util.spec_from_file_location(
+                "location_configs",
+                EXAMPLES_DIR / "03_location_configs.py"
+            )
+            location_configs = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(location_configs)
 
             # Check main functions exist
             assert hasattr(location_configs, 'create_state_configs')
@@ -81,7 +102,14 @@ class TestExamplesSmoke:
         """Test that 04_calculations.py can be imported."""
         sys.path.insert(0, str(EXAMPLES_DIR.parent))
         try:
-            import examples.04_calculations as calculations
+            # Use importlib to handle module name starting with digit
+            import importlib.util
+            spec = importlib.util.spec_from_file_location(
+                "calculations",
+                EXAMPLES_DIR / "04_calculations.py"
+            )
+            calculations = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(calculations)
 
             # Check functions exist
             assert hasattr(calculations, 'list_available_calculations')
@@ -93,7 +121,14 @@ class TestExamplesSmoke:
         """Test that 05_species_analysis.py can be imported."""
         sys.path.insert(0, str(EXAMPLES_DIR.parent))
         try:
-            import examples.05_species_analysis as species_analysis
+            # Use importlib to handle module name starting with digit
+            import importlib.util
+            spec = importlib.util.spec_from_file_location(
+                "species_analysis",
+                EXAMPLES_DIR / "05_species_analysis.py"
+            )
+            species_analysis = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(species_analysis)
 
             # Check functions exist
             assert hasattr(species_analysis, 'analyze_species_proportions')
@@ -105,7 +140,14 @@ class TestExamplesSmoke:
         """Test that 06_wake_county_full.py can be imported."""
         sys.path.insert(0, str(EXAMPLES_DIR.parent))
         try:
-            import examples.06_wake_county_full as wake_county
+            # Use importlib to handle module name starting with digit
+            import importlib.util
+            spec = importlib.util.spec_from_file_location(
+                "wake_county",
+                EXAMPLES_DIR / "06_wake_county_full.py"
+            )
+            wake_county = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(wake_county)
 
             # Check main functions exist
             assert hasattr(wake_county, 'download_wake_county_data')
