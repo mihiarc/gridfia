@@ -150,8 +150,9 @@ Pre-configured templates are available for:
 
 ```python
 from bigmap.utils.location_config import LocationConfig
-from bigmap.api import BigMapRestClient
+from bigmap.external.fia_client import BigMapRestClient
 from bigmap.core.processors import ForestMetricsProcessor
+from pathlib import Path
 
 # Create configuration for any state
 config = LocationConfig.from_state("Oregon")
@@ -227,7 +228,7 @@ This project accesses the USDA Forest Service FIA BIGMAP Tree Species Abovegroun
 - **Coverage**: Continental United States
 - **Units**: Tons per acre (converted to Mg/ha in processing)
 - **Source**: Landsat 8 OLI (2014-2018) + 212,978 FIA plots
-- **REST API**: `https://apps.fs.usda.gov/arcx/rest/services/RDW_Biomass/`
+- **REST API**: `https://di-usfsdata.img.arcgis.com/arcgis/rest/services/FIA_BIGMAP_2018_Tree_Species_Aboveground_Biomass/ImageServer`
 
 ### Data Processing Pipeline
 1. **Download**: Fetch species-specific rasters via BIGMAP ImageServer REST API
