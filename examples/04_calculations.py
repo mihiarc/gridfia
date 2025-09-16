@@ -129,9 +129,8 @@ def example_custom_calculation():
             return biomass_data.ndim == 3 and biomass_data.shape[0] > 1
 
     # Register custom calculation
-    custom_calc = BiomassCoeffientOfVariation()
-    registry.register(custom_calc)
-    console.print(f"✅ Registered custom calculation: {custom_calc.name}")
+    registry.register("biomass_cv", BiomassCoeffientOfVariation)
+    console.print(f"✅ Registered custom calculation: biomass_cv")
 
     # Use in analysis
     zarr_path = create_sample_zarr(Path("temp_custom.zarr"), n_species=5)

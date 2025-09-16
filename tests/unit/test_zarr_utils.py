@@ -1055,3 +1055,80 @@ class TestZarrUtilsEdgeCases:
         original_data = data
         zarr_data = np.array(result['biomass'][0, :, :])
         np.testing.assert_array_equal(original_data, zarr_data)
+
+
+class TestSafeOpenZarrBiomass:
+    """Test the safe_open_zarr_biomass utility function from examples.utils."""
+
+    def test_safe_open_zarr_array_format(self, temp_dir: Path, sample_raster: Path):
+        """Test opening legacy zarr array format."""
+        from bigmap.examples.utils import safe_open_zarr_biomass
+
+        zarr_path = temp_dir / "array_format.zarr"
+
+        # Create legacy array format (single array, not group)
+        z = zarr.open_array(
+            str(zarr_path),
+            mode='w',
+            shape=(3, 100, 100),
+            chunks=(1, 50, 50),
+            dtype='float32'
+        )
+
+        # Add some test data
+        test_data = np.random.rand(3, 100, 100).astype(np.float32)
+        z[:] = test_data
+
+        # Test opening with utility function
+        root, biomass = safe_open_zarr_biomass(zarr_path)
+
+        # For array format, root and biomass should be the same
+        assert root is biomass
+        assert biomass.shape == (3, 100, 100)
+        np.testing.assert_array_equal(biomass[:], test_data)
+
+    def test_safe_open_zarr_group_format(self, temp_dir: Path, sample_raster: Path):
+        """Test opening group-based zarr format."""
+        from bigmap.examples.utils import safe_open_zarr_biomass
+
+        zarr_path = temp_dir / "group_format.zarr"
+
+        # Create group-based format
+        result = create_expandable_zarr_from_base_raster(
+            base_raster_path=sample_raster,
+            zarr_path=zarr_path
+        )
+
+        # Test opening with utility function
+        root, biomass = safe_open_zarr_biomass(zarr_path)
+
+        # Should return group and biomass array separately
+        assert root != biomass
+        assert hasattr(root, 'attrs')  # Group has attributes
+        assert 'biomass' in root
+        assert biomass.shape[1:] == (100, 100)  # From sample raster
+
+    def test_safe_open_zarr_missing_biomass_array(self, temp_dir: Path):
+        """Test error handling when biomass array is missing from group."""
+        from bigmap.examples.utils import safe_open_zarr_biomass
+
+        zarr_path = temp_dir / "no_biomass.zarr"
+
+        # Create group without biomass array
+        store = zarr.storage.LocalStore(zarr_path)
+        root = zarr.open_group(store=store, mode='w')
+        root.create_array('other_data', shape=(10, 10), dtype='f4')
+
+        # Should raise ValueError
+        with pytest.raises(ValueError, match="'biomass' array not found"):
+            safe_open_zarr_biomass(zarr_path)
+
+    def test_safe_open_zarr_nonexistent_path(self, temp_dir: Path):
+        """Test error handling with nonexistent path."""
+        from bigmap.examples.utils import safe_open_zarr_biomass
+
+        nonexistent_path = temp_dir / "does_not_exist.zarr"
+
+        # Should raise ValueError
+        with pytest.raises(ValueError, match="Cannot open zarr store"):
+            safe_open_zarr_biomass(nonexistent_path)

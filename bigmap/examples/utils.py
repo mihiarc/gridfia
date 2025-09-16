@@ -164,6 +164,34 @@ def safe_download_species(api, state: Optional[str] = None, county: Optional[str
     return []
 
 
+def safe_open_zarr_biomass(zarr_path: Path) -> Tuple[zarr.Group, zarr.Array]:
+    """
+    Safely open zarr store and return both group and biomass array.
+
+    Args:
+        zarr_path: Path to zarr store
+
+    Returns:
+        Tuple of (group_root, biomass_array)
+
+    Raises:
+        ValueError: If zarr store cannot be opened or biomass array not found
+    """
+    try:
+        # First try to open as array (legacy format)
+        z = zarr.open_array(str(zarr_path), mode='r')
+        return z, z
+    except (zarr.errors.NodeTypeValidationError, Exception):
+        # If it's a group, open the group and access biomass array
+        try:
+            root = zarr.open_group(str(zarr_path), mode='r')
+            if 'biomass' not in root:
+                raise KeyError(f"'biomass' array not found in zarr group: {zarr_path}")
+            return root, root['biomass']
+        except (Exception, KeyError) as e:
+            raise ValueError(f"Cannot open zarr store {zarr_path}: {e}")
+
+
 def safe_load_zarr_with_memory_check(zarr_path: Path,
                                     config: Optional[AnalysisConfig] = None) -> np.ndarray:
     """
@@ -180,7 +208,7 @@ def safe_load_zarr_with_memory_check(zarr_path: Path,
         config = AnalysisConfig()
 
     try:
-        z = zarr.open_array(str(zarr_path), mode='r')
+        root, z = safe_open_zarr_biomass(zarr_path)
 
         # Calculate total pixels
         total_pixels = z.shape[1] * z.shape[2]

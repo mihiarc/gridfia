@@ -34,7 +34,13 @@
       "Read(//usr/**)",
       "Bash(python:*)",
       "Bash(source:*)",
-      "Bash(git reset:*)"
+      "Bash(git reset:*)",
+      "Bash(git fetch:*)",
+      "Bash(git restore:*)",
+      "Bash(/dev/null)",
+      "Bash(echo \"Exit code: $?\")",
+      "Bash(PYTHONPATH=/home/mihiarc/bigmap-zarr python3 -c \"from bigmap.examples import create_sample_zarr; print(''Import successful'')\")",
+      "Bash(pytest:*)"
     ],
     "deny": [],
     "ask": []
