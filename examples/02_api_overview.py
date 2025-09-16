@@ -10,6 +10,7 @@ from pathlib import Path
 from bigmap import BigMapAPI
 from bigmap.config import BigMapSettings, CalculationConfig
 from bigmap.examples import create_sample_zarr, print_zarr_info
+from examples.common_locations import get_location_bbox, COUNTIES, STATES
 
 
 def example_1_list_species():
@@ -32,33 +33,34 @@ def example_1_list_species():
 
 
 def example_2_location_config():
-    """Get location configurations for different geographic areas."""
+    """Demonstrate using predefined location bounding boxes."""
     print("\n" + "=" * 60)
     print("Example 2: Location Configurations")
     print("=" * 60)
 
-    api = BigMapAPI()
+    # Using predefined bounding boxes to avoid external dependencies
+    print("Using predefined bounding boxes (no external downloads required)")
 
-    # State configuration
-    state_config = api.get_location_config(state="Montana")
-    print(f"State: {state_config.location_name}")
-    print(f"  CRS: {state_config.target_crs}")
-    print(f"  Bbox: {state_config.web_mercator_bbox}")
+    # County example - using predefined bbox
+    harris_bbox, harris_crs = get_location_bbox("harris_tx")
+    print(f"\nCounty: Harris County, Texas")
+    print(f"  Bbox: {harris_bbox}")
+    print(f"  CRS: {harris_crs}")
+    if "harris_tx" in COUNTIES:
+        print(f"  Description: {COUNTIES['harris_tx']['description']}")
 
-    # County configuration
-    county_config = api.get_location_config(
-        state="Texas",
-        county="Harris"
-    )
-    print(f"\nCounty: {county_config.location_name}")
-    print(f"  Type: {county_config.location_type}")
+    # Another county example
+    wake_bbox, wake_crs = get_location_bbox("wake_nc")
+    print(f"\nCounty: Wake County, North Carolina")
+    print(f"  Bbox: {wake_bbox}")
+    print(f"  CRS: {wake_crs}")
 
-    # Custom bounding box
-    custom_config = api.get_location_config(
-        bbox=(-104.5, 44.0, -104.0, 44.5),
-        crs="EPSG:4326"
-    )
-    print(f"\nCustom area created with bbox")
+    # Custom bounding box - no external dependencies needed
+    custom_bbox = (-104.5, 44.0, -104.0, 44.5)
+    print(f"\nCustom area:")
+    print(f"  Bbox (WGS84): {custom_bbox}")
+    print(f"  CRS: 4326")
+    print("  Note: Custom bboxes work directly without boundary downloads")
 
 
 def example_3_download_patterns():
@@ -70,20 +72,22 @@ def example_3_download_patterns():
     api = BigMapAPI()
 
     # Note: These are examples - uncomment to actually download
-    print("Download patterns (not executed):")
+    print("Download patterns using bounding boxes (not executed):")
 
-    print("\n1. Single species, single county:")
-    print('   api.download_species(state="NC", county="Wake", species_codes=["0131"])')
+    print("\n1. Single species, single county (using predefined bbox):")
+    print('   bbox, crs = get_location_bbox("wake_nc")')
+    print('   api.download_species(bbox=bbox, crs=crs, species_codes=["0131"])')
 
-    print("\n2. Multiple species, state-level:")
-    print('   api.download_species(state="Montana", species_codes=["0202", "0122"])')
+    print("\n2. Multiple species for a location:")
+    print('   bbox, crs = get_location_bbox("harris_tx")')
+    print('   api.download_species(bbox=bbox, crs=crs, species_codes=["0202", "0122"])')
 
-    print("\n3. All species for small area:")
-    print('   api.download_species(state="RI", species_codes="all")')
+    print("\n3. Custom bounding box:")
+    print('   api.download_species(bbox=(-104.5, 44.0, -104.0, 44.5), crs="4326")')
 
-    print("\n4. Using location config:")
-    print('   config = api.get_location_config(state="VT")')
-    print('   api.download_from_config(config, species_codes=["0068"])')
+    print("\n4. Using small test area:")
+    print('   bbox, crs = get_location_bbox("raleigh_downtown")  # Small area for testing')
+    print('   api.download_species(bbox=bbox, crs=crs, species_codes=["0068"])')
 
 
 def example_4_zarr_operations():
@@ -140,7 +144,7 @@ def example_5_calculations():
             ),
             CalculationConfig(
                 name="total_biomass",
-                output_format="netcdf"
+                output_format="geotiff"  # Changed from netcdf to geotiff
             )
         ]
     )
@@ -156,18 +160,23 @@ def example_5_calculations():
 
 
 def example_6_visualization():
-    """Creating visualizations."""
+    """Creating visualizations (demonstration with sample data)."""
     print("\n" + "=" * 60)
-    print("Example 6: Visualization Options")
+    print("Example 6: Visualization Options (Sample Data Demo)")
     print("=" * 60)
 
-    # Create sample data
+    print("Note: This example uses synthetic data to demonstrate the API.")
+    print("For real forest visualizations, see examples 01 or 06 which use")
+    print("actual BIGMAP data downloads.\n")
+
+    # Create sample data for demonstration
     sample_path = create_sample_zarr(Path("temp_sample.zarr"))
     api = BigMapAPI()
 
     # Different map types
     map_types = ["diversity", "species", "richness", "comparison"]
 
+    print("Demonstrating visualization API with sample data:")
     for map_type in map_types:
         if map_type == "species":
             maps = api.create_maps(
@@ -189,15 +198,18 @@ def example_6_visualization():
                 map_type=map_type,
                 output_dir=f"maps_{map_type}"
             )
-        print(f"{map_type}: Created {len(maps)} maps")
+        print(f"  {map_type}: Created {len(maps)} maps (sample data)")
 
-    # Clean up
+    # Clean up - remove sample visualizations as they're not real data
     import shutil
     shutil.rmtree(sample_path)
     for map_type in map_types:
         output_dir = Path(f"maps_{map_type}")
         if output_dir.exists():
             shutil.rmtree(output_dir)
+
+    print("\n💡 To create visualizations with real forest data:")
+    print("   Run examples/01_quickstart.py or examples/06_wake_county_full.py")
 
 
 def example_7_batch_processing():

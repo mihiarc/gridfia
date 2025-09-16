@@ -178,9 +178,19 @@ uv pip install -e .
 - Some species may not be available for all locations
 
 ### Working with Custom Geographic Areas
-For locations other than the hardcoded examples, you have two options:
 
-1. **Use bounding box coordinates directly**:
+The BigMap API supports multiple ways to specify geographic areas:
+
+1. **Use state and county names** (Recommended):
+   ```python
+   files = api.download_species(
+       state="North Carolina",
+       county="Wake",
+       species_codes=["0131", "0068"]
+   )
+   ```
+
+2. **Use custom bounding box coordinates**:
    ```python
    files = api.download_species(
        bbox=(-104.5, 39.5, -104.0, 40.0),  # xmin, ymin, xmax, ymax
@@ -190,14 +200,6 @@ For locations other than the hardcoded examples, you have two options:
    ```
 
    **Finding bounding boxes**: Use https://boundingbox.klokantech.com/ to visually select your area and get coordinates in different formats (WGS84, Web Mercator, etc.)
-
-2. **Download county shapefiles manually**:
-   - Visit: https://www.census.gov/geographies/mapping-files/time-series/geo/tiger-geodatabase-file.html
-   - Download county boundaries for your state
-   - Extract bounding box coordinates for your area of interest
-   - Use coordinates as shown above
-
-Note: The quickstart example uses hardcoded coordinates for Wake County, NC to avoid SSL certificate issues with automatic boundary downloads.
 
 ### Memory Issues
 - Reduce chunk sizes

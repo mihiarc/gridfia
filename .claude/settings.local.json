@@ -40,7 +40,8 @@
       "Bash(/dev/null)",
       "Bash(echo \"Exit code: $?\")",
       "Bash(PYTHONPATH=/home/mihiarc/bigmap-zarr python3 -c \"from bigmap.examples import create_sample_zarr; print(''Import successful'')\")",
-      "Bash(pytest:*)"
+      "Bash(pytest:*)",
+      "Bash(git revert:*)"
     ],
     "deny": [],
     "ask": []

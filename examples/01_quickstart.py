@@ -10,7 +10,8 @@ Takes about 2 minutes to run.
 
 from pathlib import Path
 from bigmap import BigMapAPI
-from bigmap.examples import print_zarr_info, calculate_basic_stats, safe_download_species
+from bigmap.examples import print_zarr_info, calculate_basic_stats
+from examples.common_locations import get_location_bbox
 
 
 def main():
@@ -23,26 +24,18 @@ def main():
 
     # 1. Download species data (just 2 species for speed)
     print("\n1. Downloading forest data...")
-    print("   Using hardcoded bounding box for Wake County, NC")
+    print("   Location: Wake County, NC")
 
-    # Wake County, NC bounding box (Web Mercator EPSG:3857)
-    # Note: For other locations, download county shapefiles manually
-    # from https://www.census.gov/geographies/mapping-files/time-series/geo/tiger-geodatabase-file.html
-    wake_bbox = (-8792000, 4274000, -8732000, 4334000)  # xmin, ymin, xmax, ymax
+    # Get predefined bounding box for Wake County
+    bbox, crs = get_location_bbox("wake_nc")
 
-    try:
-        # Use safe wrapper with retry logic and error handling
-        files = safe_download_species(
-            api,
-            bbox=wake_bbox,
-            crs="3857",  # Web Mercator
-            species_codes=["0131", "0068"],  # Loblolly Pine, Red Maple
-            output_dir="quickstart_data"
-        )
-        print(f"   Downloaded {len(files)} species files")
-    except Exception as e:
-        print(f"Download failed: {e}")
-        return
+    files = api.download_species(
+        bbox=bbox,
+        crs=crs,
+        species_codes=["0131", "0068"],  # Loblolly Pine, Red Maple
+        output_dir="quickstart_data"
+    )
+    print(f"   Downloaded {len(files)} species files")
 
     # 2. Create Zarr store
     print("\n2. Creating Zarr store...")

@@ -78,7 +78,7 @@ def download_wake_county_data():
                 bbox=wake_bbox,
                 crs="3857",  # Web Mercator
                 species_codes=[code],
-                output_dir="wake_county_data"
+                output_dir="examples/wake_county_data"
             )
             files.extend(result)
             console.print(f"    ✅ Downloaded {name}")
@@ -97,8 +97,8 @@ def create_wake_zarr():
     api = BigMapAPI()
 
     zarr_path = api.create_zarr(
-        input_dir="wake_county_data",
-        output_path="wake_county_data/wake_forest.zarr",
+        input_dir="examples/wake_county_data",
+        output_path="examples/wake_county_data/wake_forest.zarr",
         chunk_size=(1, 500, 500)
     )
 
@@ -133,7 +133,7 @@ def run_comprehensive_calculations(zarr_path: Path):
     results = api.calculate_metrics(
         zarr_path=zarr_path,
         calculations=calculations,
-        output_dir="wake_results/metrics"
+        output_dir="examples/wake_results/metrics"
     )
 
     console.print(f"✅ Completed {len(results)} calculations")
@@ -200,7 +200,7 @@ def create_visualization_suite(zarr_path: Path):
 
     # Initialize mapper
     mapper = ZarrMapper(str(zarr_path))
-    output_dir = Path("wake_results/maps")
+    output_dir = Path("examples/wake_results/maps")
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # 1. Individual species maps
@@ -281,7 +281,7 @@ def create_publication_figure(zarr_path: Path):
     # 2. Species Richness
     ax = axes[0, 1]
     richness = np.sum(data[1:] > 0, axis=0)
-    vmax_richness = richness.max() if richness.max() > 0 else 1
+    vmax_richness = max(richness.max(), 1)  # Ensure vmax is at least 1
     im = ax.imshow(richness, cmap='Spectral_r', vmin=0, vmax=vmax_richness)
     ax.set_title('Species Richness', fontsize=12)
     ax.axis('off')
@@ -299,7 +299,7 @@ def create_publication_figure(zarr_path: Path):
         shannon[mask] -= p[mask] * np.log(p[mask])
 
     # Handle case where all values are the same
-    vmax = shannon.max() if shannon.max() > 0 else 1.0
+    vmax = max(shannon.max(), 0.1)  # Ensure vmax is different from vmin
     im = ax.imshow(shannon, cmap='viridis', vmin=0, vmax=vmax)
     ax.set_title('Shannon Diversity', fontsize=12)
     ax.axis('off')
@@ -341,7 +341,7 @@ def create_publication_figure(zarr_path: Path):
     plt.tight_layout()
 
     # Save publication figure
-    output_path = Path("wake_results/wake_county_publication.png")
+    output_path = Path("examples/wake_results/wake_county_publication.png")
     try:
         plt.savefig(output_path, dpi=300, bbox_inches='tight', facecolor='white')
         console.print(f"✅ Created publication figure: {output_path}")
@@ -385,10 +385,10 @@ Maximum Species Richness: {stats['max_richness']} species/pixel
 
 Analysis Outputs
 ----------------
-- Zarr data store: wake_county_data/wake_forest.zarr
-- Metric calculations: wake_results/metrics/
-- Visualization maps: wake_results/maps/
-- Publication figure: wake_results/wake_county_publication.png
+- Zarr data store: examples/wake_county_data/wake_forest.zarr
+- Metric calculations: examples/wake_results/metrics/
+- Visualization maps: examples/wake_results/maps/
+- Publication figure: examples/wake_results/wake_county_publication.png
 
 Processing Complete
 -------------------
@@ -397,7 +397,7 @@ data download through publication-ready visualizations.
 """
 
     # Save report
-    report_path = Path("wake_results/analysis_report.txt")
+    report_path = Path("examples/wake_results/analysis_report.txt")
     report_path.parent.mkdir(exist_ok=True)
     report_path.write_text(report)
 
@@ -411,7 +411,7 @@ def main():
     console.print("=" * 60)
 
     # Check if data exists or download
-    zarr_path = Path("wake_county_data/wake_forest.zarr")
+    zarr_path = Path("examples/wake_county_data/wake_forest.zarr")
 
     if not zarr_path.exists():
         console.print("\n[yellow]Data not found. Starting download...[/yellow]")
@@ -446,7 +446,7 @@ def main():
     console.print("  • Spatial pattern visualization")
     console.print("  • Publication-ready figures")
     console.print("  • Statistical summary report")
-    console.print("\nAll outputs saved to wake_results/")
+    console.print("\nAll outputs saved to examples/wake_results/")
 
 
 if __name__ == "__main__":
