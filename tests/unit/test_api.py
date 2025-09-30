@@ -234,7 +234,7 @@ class TestBigMapAPIDownloadSpecies:
         """Test error when no location parameters provided."""
         api = BigMapAPI()
 
-        with pytest.raises(ValueError, match="Must specify state, bbox, or location_config"):
+        with pytest.raises(ValueError, match="Must specify state, county, bbox, polygon, or location_config"):
             api.download_species(output_dir=temp_dir, species_codes=['0202'])
 
     def test_download_species_creates_output_directory(self, temp_dir):
@@ -768,7 +768,7 @@ class TestBigMapAPIGetLocationConfig:
             config = api.get_location_config(state="Montana")
 
         assert config is mock_config
-        mock_location_config.from_state.assert_called_once_with("Montana", output_path=None)
+        mock_location_config.from_state.assert_called_once_with("Montana", store_boundary=False, output_path=None)
 
     def test_get_location_config_state_and_county(self):
         """Test getting location config for county."""
@@ -782,7 +782,7 @@ class TestBigMapAPIGetLocationConfig:
 
         assert config is mock_config
         mock_location_config.from_county.assert_called_once_with(
-            "Harris", "Texas", output_path=None
+            "Harris", "Texas", store_boundary=False, output_path=None
         )
 
     def test_get_location_config_custom_bbox(self):
@@ -813,7 +813,7 @@ class TestBigMapAPIGetLocationConfig:
             api.get_location_config(state="Montana", output_path=output_path)
 
         mock_location_config.from_state.assert_called_once_with(
-            "Montana", output_path=output_path
+            "Montana", store_boundary=False, output_path=output_path
         )
 
     def test_get_location_config_county_without_state(self):
@@ -827,7 +827,7 @@ class TestBigMapAPIGetLocationConfig:
         """Test error when no location parameters provided."""
         api = BigMapAPI()
 
-        with pytest.raises(ValueError, match="Must specify state, county, or bbox"):
+        with pytest.raises(ValueError, match="Must specify state, county, bbox, or polygon"):
             api.get_location_config()
 
 
