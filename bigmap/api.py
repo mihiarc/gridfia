@@ -137,12 +137,14 @@ class BigMapAPI:
         state: Optional[str] = None,
         county: Optional[str] = None,
         bbox: Optional[Tuple[float, float, float, float]] = None,
+        polygon: Optional[Union[str, Path, "gpd.GeoDataFrame"]] = None,
         location_config: Optional[Union[str, Path]] = None,
+        use_boundary_clip: bool = False,
         crs: str = "102100"
     ) -> List[Path]:
         """
         Download species data from FIA BIGMAP service.
-        
+
         Parameters
         ----------
         output_dir : str or Path, default="downloads"
@@ -155,69 +157,94 @@ class BigMapAPI:
             County name (requires state).
         bbox : Tuple[float, float, float, float], optional
             Custom bounding box (xmin, ymin, xmax, ymax).
+        polygon : str, Path, or GeoDataFrame, optional
+            Polygon boundary to use (GeoJSON, Shapefile, or GeoDataFrame).
+            Data will be downloaded for the polygon's bbox and clipped to the polygon.
         location_config : str or Path, optional
             Path to location configuration file.
+        use_boundary_clip : bool, default=False
+            If True and using state/county, stores actual boundary for clipping.
+            Only affects state/county downloads, ignored for bbox/polygon.
         crs : str, default="102100"
             Coordinate reference system for bbox.
-            
+
         Returns
         -------
         List[Path]
             Paths to downloaded files.
-            
+
         Examples
         --------
         >>> api = BigMapAPI()
         >>> # Download for entire state
         >>> files = api.download_species(state="Montana", species_codes=["0202"])
-        >>> 
-        >>> # Download for specific county
+        >>>
+        >>> # Download for specific county with boundary clipping
         >>> files = api.download_species(
-        ...     state="Texas", 
+        ...     state="Texas",
         ...     county="Harris",
-        ...     species_codes=["0131", "0068"]
+        ...     species_codes=["0131", "0068"],
+        ...     use_boundary_clip=True
         ... )
-        >>> 
+        >>>
         >>> # Download with custom bbox
         >>> files = api.download_species(
         ...     bbox=(-104, 44, -104.5, 44.5),
         ...     crs="4326"
         ... )
+        >>>
+        >>> # Download with custom polygon
+        >>> files = api.download_species(
+        ...     polygon="study_area.geojson",
+        ...     species_codes=["0202"]
+        ... )
         """
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Determine location and bbox
         location_name = "location"
         location_bbox = None
         bbox_crs = crs
-        
+        location_config_obj = None
+
         if location_config:
-            config = LocationConfig(Path(location_config))
-            location_name = config.location_name.lower().replace(' ', '_')
-            location_bbox = config.web_mercator_bbox
-            logger.info(f"Using location config: {config.location_name}")
-            
+            location_config_obj = LocationConfig(Path(location_config))
+            location_name = location_config_obj.location_name.lower().replace(' ', '_')
+            location_bbox = location_config_obj.web_mercator_bbox
+            logger.info(f"Using location config: {location_config_obj.location_name}")
+
+        elif polygon:
+            # Create config from polygon
+            location_config_obj = LocationConfig.from_polygon(polygon)
+            location_name = location_config_obj.location_name.lower().replace(' ', '_')
+            location_bbox = location_config_obj.web_mercator_bbox
+            logger.info(f"Using polygon boundary: {location_config_obj.location_name}")
+
         elif state:
             if county:
-                config = LocationConfig.from_county(county, state)
+                location_config_obj = LocationConfig.from_county(
+                    county, state, store_boundary=use_boundary_clip
+                )
                 location_name = f"{county}_{state}".lower().replace(' ', '_')
             else:
-                config = LocationConfig.from_state(state)
+                location_config_obj = LocationConfig.from_state(
+                    state, store_boundary=use_boundary_clip
+                )
                 location_name = state.lower().replace(' ', '_')
-            
-            location_bbox = config.web_mercator_bbox
-            logger.info(f"Using {config.location_name} boundaries")
-            
+
+            location_bbox = location_config_obj.web_mercator_bbox
+            logger.info(f"Using {location_config_obj.location_name} boundaries")
+
         elif bbox:
             location_bbox = bbox
-            
+
         else:
-            raise ValueError("Must specify state, bbox, or location_config")
-        
+            raise ValueError("Must specify state, county, bbox, polygon, or location_config")
+
         if not location_bbox:
             raise ValueError("Could not determine bounding box for location")
-        
+
         # Download species data
         exported_files = self.rest_client.batch_export_location_species(
             bbox=location_bbox,
@@ -226,8 +253,16 @@ class BigMapAPI:
             location_name=location_name,
             bbox_srs=bbox_crs
         )
-        
+
         logger.info(f"Downloaded {len(exported_files)} species rasters")
+
+        # Store location config for potential clipping
+        if location_config_obj and location_config_obj.has_polygon:
+            # Save config alongside downloads for later clipping
+            config_path = output_dir / f"{location_name}_config.yaml"
+            location_config_obj.save(config_path)
+            logger.info(f"Saved location config with polygon boundary to {config_path}")
+
         return exported_files
     
     def create_zarr(
@@ -238,11 +273,12 @@ class BigMapAPI:
         chunk_size: Tuple[int, int, int] = (1, 1000, 1000),
         compression: str = "lz4",
         compression_level: int = 5,
-        include_total: bool = True
+        include_total: bool = True,
+        clip_to_polygon: Optional[Union[bool, str, Path, "gpd.GeoDataFrame"]] = None
     ) -> Path:
         """
         Create a Zarr store from GeoTIFF files.
-        
+
         Parameters
         ----------
         input_dir : str or Path
@@ -259,12 +295,18 @@ class BigMapAPI:
             Compression level (1-9).
         include_total : bool, default=True
             Whether to include or calculate total biomass.
-            
+        clip_to_polygon : bool, str, Path, or GeoDataFrame, optional
+            Polygon to clip rasters to before creating Zarr.
+            - If True: looks for *_config.yaml in input_dir and uses its polygon
+            - If str/Path: path to polygon file or config file
+            - If GeoDataFrame: uses the provided polygon
+            - If None/False: no clipping
+
         Returns
         -------
         Path
             Path to created Zarr store.
-            
+
         Examples
         --------
         >>> api = BigMapAPI()
@@ -274,16 +316,75 @@ class BigMapAPI:
         ...     chunk_size=(1, 2000, 2000)
         ... )
         >>> print(f"Created Zarr store at {zarr_path}")
+        >>>
+        >>> # With polygon clipping
+        >>> zarr_path = api.create_zarr(
+        ...     "downloads/county_species/",
+        ...     "data/county.zarr",
+        ...     clip_to_polygon=True  # Auto-detect from config
+        ... )
         """
         input_dir = Path(input_dir)
         output_path = Path(output_path)
-        
+
         if not input_dir.exists():
             raise ValueError(f"Input directory does not exist: {input_dir}")
-        
+
+        # Handle polygon clipping
+        polygon_gdf = None
+        clipped_dir = None
+
+        if clip_to_polygon:
+            import geopandas as gpd
+            from .utils.polygon_utils import clip_geotiffs_batch
+
+            # Determine polygon source
+            if isinstance(clip_to_polygon, bool) and clip_to_polygon:
+                # Auto-detect config file in input_dir
+                config_files = list(input_dir.glob("*_config.yaml"))
+                if config_files:
+                    config = LocationConfig(config_files[0])
+                    if config.has_polygon:
+                        polygon_gdf = config.polygon_gdf
+                        logger.info(f"Using polygon from {config_files[0]}")
+                    else:
+                        logger.warning(f"Config file found but has no polygon boundary")
+                else:
+                    logger.warning(f"No config file found in {input_dir} for auto-clipping")
+
+            elif isinstance(clip_to_polygon, (str, Path)):
+                clip_path = Path(clip_to_polygon)
+                if clip_path.suffix in ['.yaml', '.yml']:
+                    # It's a config file
+                    config = LocationConfig(clip_path)
+                    if config.has_polygon:
+                        polygon_gdf = config.polygon_gdf
+                    else:
+                        raise ValueError(f"Config file has no polygon boundary: {clip_path}")
+                else:
+                    # It's a polygon file
+                    from .utils.polygon_utils import load_polygon
+                    polygon_gdf = load_polygon(clip_path)
+
+            elif isinstance(clip_to_polygon, gpd.GeoDataFrame):
+                polygon_gdf = clip_to_polygon
+
+            # Perform clipping if polygon available
+            if polygon_gdf is not None:
+                clipped_dir = input_dir / "clipped"
+                logger.info(f"Clipping GeoTIFFs to polygon boundary...")
+                clip_geotiffs_batch(
+                    input_dir=input_dir,
+                    polygon=polygon_gdf,
+                    output_dir=clipped_dir,
+                    pattern="*.tif*"
+                )
+                # Use clipped files as input
+                input_dir = clipped_dir
+
         # Find GeoTIFF files
         tiff_files = list(input_dir.glob("*.tif")) + list(input_dir.glob("*.tiff"))
-        
+
         if not tiff_files:
             raise ValueError(f"No GeoTIFF files found in {input_dir}")
         
@@ -627,12 +728,14 @@ class BigMapAPI:
         state: Optional[str] = None,
         county: Optional[str] = None,
         bbox: Optional[Tuple[float, float, float, float]] = None,
+        polygon: Optional[Union[str, Path, "gpd.GeoDataFrame"]] = None,
+        store_boundary: bool = False,
         crs: str = "EPSG:4326",
         output_path: Optional[Union[str, Path]] = None
     ) -> LocationConfig:
         """
         Create or retrieve location configuration.
-        
+
         Parameters
         ----------
         state : str, optional
@@ -641,36 +744,51 @@ class BigMapAPI:
             County name (requires state).
         bbox : Tuple[float, float, float, float], optional
             Custom bounding box.
+        polygon : str, Path, or GeoDataFrame, optional
+            Polygon boundary (GeoJSON, Shapefile, or GeoDataFrame).
+        store_boundary : bool, default=False
+            If True, stores actual boundary polygon for state/county.
         crs : str, default="EPSG:4326"
             CRS for custom bbox.
         output_path : str or Path, optional
             Path to save configuration.
-            
+
         Returns
         -------
         LocationConfig
             Location configuration object.
-            
+
         Examples
         --------
         >>> api = BigMapAPI()
         >>> # Get state configuration
         >>> config = api.get_location_config(state="Montana")
         >>> print(f"Bbox: {config.web_mercator_bbox}")
-        >>> 
-        >>> # Get county configuration
-        >>> config = api.get_location_config(state="Texas", county="Harris")
-        >>> 
+        >>>
+        >>> # Get county configuration with boundary
+        >>> config = api.get_location_config(
+        ...     state="Texas",
+        ...     county="Harris",
+        ...     store_boundary=True
+        ... )
+        >>>
         >>> # Custom bbox configuration
         >>> config = api.get_location_config(
         ...     bbox=(-104, 44, -104.5, 44.5),
         ...     crs="EPSG:4326"
         ... )
+        >>>
+        >>> # Polygon configuration
+        >>> config = api.get_location_config(polygon="study_area.geojson")
         """
         if county and not state:
             raise ValueError("County requires state to be specified")
-        
-        if bbox:
+
+        if polygon:
+            config = LocationConfig.from_polygon(
+                polygon, output_path=output_path
+            )
+        elif bbox:
             config = LocationConfig.from_bbox(
                 bbox,
                 name="Custom Region",
@@ -679,15 +797,19 @@ class BigMapAPI:
             )
         elif county:
             config = LocationConfig.from_county(
-                county, state, output_path=output_path
+                county, state,
+                store_boundary=store_boundary,
+                output_path=output_path
             )
         elif state:
             config = LocationConfig.from_state(
-                state, output_path=output_path
+                state,
+                store_boundary=store_boundary,
+                output_path=output_path
             )
         else:
-            raise ValueError("Must specify state, county, or bbox")
-        
+            raise ValueError("Must specify state, county, bbox, or polygon")
+
         return config
     
     def list_calculations(self) -> List[str]:

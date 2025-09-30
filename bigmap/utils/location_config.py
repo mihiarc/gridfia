@@ -3,11 +3,12 @@ Generic location configuration for any US state or county.
 """
 
 import yaml
+import json
 from pathlib import Path
 from typing import Dict, Any, Optional, Tuple, List, Union
 from rich.console import Console
 import geopandas as gpd
-from shapely.geometry import box
+from shapely.geometry import box, mapping, shape
 from rasterio.crs import CRS
 from rasterio.warp import transform_bounds
 
@@ -51,7 +52,9 @@ class LocationConfig:
                 'type': self._location_type,
                 'name': None,
                 'abbreviation': None,
-                'fips_code': None
+                'fips_code': None,
+                'polygon_file': None,
+                'polygon_geojson': None
             },
             'crs': {
                 'source': "EPSG:4326",
@@ -100,75 +103,104 @@ class LocationConfig:
         }
     
     @classmethod
-    def from_state(cls, state: str, output_path: Optional[Path] = None) -> 'LocationConfig':
+    def from_state(cls, state: str, store_boundary: bool = False, output_path: Optional[Path] = None) -> 'LocationConfig':
         """
         Create configuration for a specific US state.
-        
+
         Args:
             state: State name or abbreviation
+            store_boundary: If True, stores actual state boundary polygon (not just bbox)
             output_path: Path to save configuration file
-            
+
         Returns:
             LocationConfig instance for the state
         """
         config = cls(location_type="state")
-        config._setup_state_config(state)
-        
+        config._setup_state_config(state, store_boundary=store_boundary)
+
         if output_path:
             config.save(output_path)
-        
+
         return config
-    
+
     @classmethod
-    def from_county(cls, county: str, state: str, output_path: Optional[Path] = None) -> 'LocationConfig':
+    def from_county(cls, county: str, state: str, store_boundary: bool = False, output_path: Optional[Path] = None) -> 'LocationConfig':
         """
         Create configuration for a specific county.
-        
+
         Args:
             county: County name
             state: State name or abbreviation
+            store_boundary: If True, stores actual county boundary polygon (not just bbox)
             output_path: Path to save configuration file
-            
+
         Returns:
             LocationConfig instance for the county
         """
         config = cls(location_type="county")
-        config._setup_county_config(county, state)
-        
+        config._setup_county_config(county, state, store_boundary=store_boundary)
+
         if output_path:
             config.save(output_path)
-        
+
         return config
     
     @classmethod
-    def from_bbox(cls, bbox: Tuple[float, float, float, float], 
+    def from_bbox(cls, bbox: Tuple[float, float, float, float],
                   name: str = "Custom Region",
                   crs: str = "EPSG:4326",
                   output_path: Optional[Path] = None) -> 'LocationConfig':
         """
         Create configuration for a custom bounding box.
-        
+
         Args:
             bbox: Bounding box (xmin, ymin, xmax, ymax)
             name: Name for the region
             crs: CRS of the bounding box
             output_path: Path to save configuration file
-            
+
         Returns:
             LocationConfig instance for the custom region
         """
         config = cls(location_type="custom")
         config._setup_custom_config(bbox, name, crs)
-        
+
         if output_path:
             config.save(output_path)
-        
+
+        return config
+
+    @classmethod
+    def from_polygon(cls, polygon: Union[str, Path, gpd.GeoDataFrame],
+                     name: Optional[str] = None,
+                     output_path: Optional[Path] = None) -> 'LocationConfig':
+        """
+        Create configuration from a polygon boundary.
+
+        Args:
+            polygon: Polygon source - file path (GeoJSON, Shapefile, etc.) or GeoDataFrame
+            name: Name for the region (defaults to file name if not provided)
+            output_path: Path to save configuration file
+
+        Returns:
+            LocationConfig instance for the polygon region
+
+        Examples:
+            >>> config = LocationConfig.from_polygon("boundary.geojson", name="Study Area")
+            >>> config = LocationConfig.from_polygon(gdf, name="Custom Region")
+        """
+        config = cls(location_type="polygon")
+        config._setup_polygon_config(polygon, name)
+
+        if output_path:
+            config.save(output_path)
+
         return config
     
-    def _setup_state_config(self, state: str):
+    def _setup_state_config(self, state: str, store_boundary: bool = False):
         """Setup configuration for a US state."""
         from bigmap.visualization.boundaries import load_state_boundary, STATE_ABBR
-        
+
         state_lower = state.lower()
         if state_lower in STATE_ABBR:
             state_abbr = STATE_ABBR[state_lower]
@@ -180,24 +212,35 @@ class LocationConfig:
                 if abbr == state_abbr:
                     state_name = name.title()
                     break
-        
+
         if not state_name:
             raise ValueError(f"Unknown state: {state}")
-        
+
         self._config['location']['name'] = state_name
         self._config['location']['abbreviation'] = state_abbr
-        
+
         try:
             gdf = load_state_boundary(state)
-            self._setup_bounding_boxes(gdf)
+
+            # Optionally store polygon boundary
+            if store_boundary:
+                gdf_wgs84 = gdf.to_crs("EPSG:4326")
+                dissolved = gdf_wgs84.dissolve()
+                geom = dissolved.geometry.iloc[0]
+                # Convert to JSON-serializable dict (converts tuples to lists)
+                geom_dict = json.loads(json.dumps(mapping(geom)))
+                self._config['location']['polygon_geojson'] = geom_dict
+                console.print(f"[green]Stored state boundary polygon for {state_name}[/green]")
+
+            self._setup_bounding_boxes(gdf, store_polygon=store_boundary)
             self._detect_state_plane_crs(state_abbr)
         except Exception as e:
             console.print(f"[yellow]Warning: Could not load boundaries for {state_name}: {e}[/yellow]")
     
-    def _setup_county_config(self, county: str, state: str):
+    def _setup_county_config(self, county: str, state: str, store_boundary: bool = False):
         """Setup configuration for a county."""
         from bigmap.visualization.boundaries import load_counties_for_state, STATE_ABBR
-        
+
         state_lower = state.lower()
         if state_lower in STATE_ABBR:
             state_name = state_lower.title()
@@ -208,22 +251,32 @@ class LocationConfig:
                 if abbr == state_abbr:
                     state_name = name.title()
                     break
-        
+
         if not state_name:
             raise ValueError(f"Unknown state: {state}")
-        
+
         self._config['location']['name'] = f"{county} County, {state_name}"
         self._config['location']['state'] = state_name
         self._config['location']['county'] = county
-        
+
         try:
             counties_gdf = load_counties_for_state(state)
             county_gdf = counties_gdf[counties_gdf['NAME'].str.lower() == county.lower()]
-            
+
             if county_gdf.empty:
                 raise ValueError(f"County {county} not found in {state_name}")
-            
-            self._setup_bounding_boxes(county_gdf)
+
+            # Optionally store polygon boundary
+            if store_boundary:
+                gdf_wgs84 = county_gdf.to_crs("EPSG:4326")
+                dissolved = gdf_wgs84.dissolve()
+                geom = dissolved.geometry.iloc[0]
+                # Convert to JSON-serializable dict (converts tuples to lists)
+                geom_dict = json.loads(json.dumps(mapping(geom)))
+                self._config['location']['polygon_geojson'] = geom_dict
+                console.print(f"[green]Stored county boundary polygon for {county}, {state_name}[/green]")
+
+            self._setup_bounding_boxes(county_gdf, store_polygon=store_boundary)
             self._detect_state_plane_crs(state.upper() if len(state) == 2 else STATE_ABBR.get(state.lower()))
         except Exception as e:
             console.print(f"[yellow]Warning: Could not load boundaries for {county}, {state_name}: {e}[/yellow]")
@@ -231,7 +284,7 @@ class LocationConfig:
     def _setup_custom_config(self, bbox: Tuple[float, float, float, float], name: str, crs: str):
         """Setup configuration for a custom bounding box."""
         self._config['location']['name'] = name
-        
+
         if crs == "EPSG:4326":
             self._config['bounding_boxes']['wgs84'] = {
                 'xmin': bbox[0], 'ymin': bbox[1],
@@ -248,10 +301,50 @@ class LocationConfig:
                 'xmax': bbox[2], 'ymax': bbox[3]
             }
             self._config['crs']['target'] = crs
-        
+
         self._convert_bounding_boxes()
-    
-    def _setup_bounding_boxes(self, gdf: gpd.GeoDataFrame):
+
+    def _setup_polygon_config(self, polygon: Union[str, Path, gpd.GeoDataFrame], name: Optional[str] = None):
+        """Setup configuration from a polygon boundary."""
+        from .polygon_utils import load_polygon
+
+        # Load polygon
+        if isinstance(polygon, (str, Path)):
+            polygon_path = Path(polygon)
+            if not polygon_path.exists():
+                raise FileNotFoundError(f"Polygon file not found: {polygon_path}")
+            gdf = load_polygon(polygon_path)
+            self._config['location']['polygon_file'] = str(polygon_path.absolute())
+
+            # Use filename as default name if not provided
+            if name is None:
+                name = polygon_path.stem.replace('_', ' ').title()
+        else:
+            gdf = polygon
+            if name is None:
+                name = "Custom Polygon Region"
+
+        self._config['location']['name'] = name
+
+        # Store polygon as GeoJSON
+        # Dissolve all features into single polygon and store in WGS84
+        gdf_wgs84 = gdf.to_crs("EPSG:4326")
+        dissolved = gdf_wgs84.dissolve()
+        geom = dissolved.geometry.iloc[0]
+        # Convert to JSON-serializable dict (converts tuples to lists)
+        geom_dict = json.loads(json.dumps(mapping(geom)))
+        self._config['location']['polygon_geojson'] = geom_dict
+
+        # Setup bounding boxes from polygon
+        self._setup_bounding_boxes(gdf, store_polygon=True)
+
+        # Detect appropriate CRS
+        if gdf.crs:
+            self._config['crs']['source'] = str(gdf.crs)
+
+        console.print(f"[green]Loaded polygon boundary:[/green] {name}")
+
+    def _setup_bounding_boxes(self, gdf: gpd.GeoDataFrame, store_polygon: bool = False):
         """Setup bounding boxes from a GeoDataFrame."""
         bounds = gdf.total_bounds
         
@@ -414,7 +507,26 @@ class LocationConfig:
         if bbox:
             return (bbox['xmin'], bbox['ymin'], bbox['xmax'], bbox['ymax'])
         return None
-    
+
+    @property
+    def polygon_geojson(self) -> Optional[dict]:
+        """Get polygon geometry as GeoJSON dict."""
+        return self._config.get('location', {}).get('polygon_geojson')
+
+    @property
+    def polygon_gdf(self) -> Optional[gpd.GeoDataFrame]:
+        """Get polygon geometry as GeoDataFrame in WGS84."""
+        geojson = self.polygon_geojson
+        if geojson:
+            geom = shape(geojson)
+            return gpd.GeoDataFrame([{'geometry': geom}], crs="EPSG:4326")
+        return None
+
+    @property
+    def has_polygon(self) -> bool:
+        """Check if configuration has polygon boundary."""
+        return self.polygon_geojson is not None
+
     @property
     def species_list(self) -> List[Dict[str, str]]:
         """Get list of species."""
