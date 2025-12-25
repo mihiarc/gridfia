@@ -1,26 +1,26 @@
 #!/usr/bin/env python3
 """
-BigMap Quickstart Example
+GridFIA Quickstart Example
 
-The simplest possible example to get started with BigMap.
+The simplest possible example to get started with GridFIA.
 Downloads data for one county, creates a zarr store, and calculates species richness.
 
 Takes about 2 minutes to run.
 """
 
 from pathlib import Path
-from bigmap import BigMapAPI
-from bigmap.examples import print_zarr_info, calculate_basic_stats
+from gridfia import GridFIA
+from gridfia.examples import print_zarr_info, calculate_basic_stats
 from examples.common_locations import get_location_bbox
 
 
 def main():
     print("=" * 60)
-    print("BigMap Quickstart - Wake County, NC")
+    print("GridFIA Quickstart - Wake County, NC")
     print("=" * 60)
 
     # Initialize API
-    api = BigMapAPI()
+    api = GridFIA()
 
     # 1. Download species data (just 2 species for speed)
     print("\n1. Downloading forest data...")

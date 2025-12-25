@@ -1,6 +1,12 @@
-# BigMap Zarr
+# GridFIA
 
-🌲 **BigMap Zarr** makes USDA Forest Service FIA BIGMAP data analysis-ready by providing efficient Zarr-based storage and processing tools for localized forest biomass analysis.
+**GridFIA** is a spatial raster analysis tool for USDA Forest Service BIGMAP data, providing efficient Zarr-based storage and processing for localized forest biomass analysis.
+
+**Part of the FIA Python Ecosystem:**
+- **PyFIA**: Survey/plot data analysis ([github.com/mihiarc/pyfia](https://github.com/mihiarc/pyfia))
+- **GridFIA**: Spatial raster analysis (this package)
+- **PyFVS**: Growth/yield simulation ([github.com/mihiarc/pyfvs](https://github.com/mihiarc/pyfvs))
+- **AskFIA**: AI conversational interface ([github.com/mihiarc/askfia](https://github.com/mihiarc/askfia))
 
 ## About BIGMAP
 
@@ -8,7 +14,7 @@ The USDA Forest Service's BIGMAP project provides tree species aboveground bioma
 
 ## What This Project Does
 
-BigMap Zarr bridges the gap between the BIGMAP REST API and local analysis by:
+GridFIA bridges the gap between the BIGMAP REST API and local analysis by:
 - **Converting** raster data from the FIA BIGMAP ImageServer into efficient Zarr stores
 - **Enabling** localized analysis for any US state, county, or custom region
 - **Providing** ready-to-use tools for calculating forest diversity metrics
@@ -16,12 +22,12 @@ BigMap Zarr bridges the gap between the BIGMAP REST API and local analysis by:
 
 ## Key Features
 
-- 📦 **Zarr Storage**: Converts BIGMAP GeoTIFF data into cloud-optimized Zarr arrays for fast local analysis
-- 🌐 **REST API Integration**: Direct access to FIA BIGMAP ImageServer (327 tree species, 30m resolution)
-- 📍 **Location Flexibility**: Analyze any US state, county, or custom geographic region
-- 📊 **Analysis Ready**: Pre-configured calculations for diversity indices, biomass totals, and species distributions
-- 🚀 **Performance**: Chunked storage with compression for efficient data access patterns
-- 🗺️ **Visualization**: Create publication-ready maps with automatic boundary detection
+- **Zarr Storage**: Converts BIGMAP GeoTIFF data into cloud-optimized Zarr arrays for fast local analysis
+- **REST API Integration**: Direct access to FIA BIGMAP ImageServer (327 tree species, 30m resolution)
+- **Location Flexibility**: Analyze any US state, county, or custom geographic region
+- **Analysis Ready**: Pre-configured calculations for diversity indices, biomass totals, and species distributions
+- **Performance**: Chunked storage with compression for efficient data access patterns
+- **Visualization**: Create publication-ready maps with automatic boundary detection
 
 ## Installation
 
@@ -34,104 +40,70 @@ uv pip install -e ".[dev]"
 pip install -e ".[dev]"
 ```
 
-## How It Works
-
-BigMap Zarr transforms BIGMAP REST API data into analysis-ready Zarr stores:
-
-```
-BIGMAP ImageServer → GeoTIFF Downloads → Zarr Arrays → Local Analysis
-        ↓                    ↓                ↓              ↓
-   (REST API)         (Species Rasters)  (Chunked Storage) (Fast Access)
-```
-
-The Zarr format provides:
-- **Chunked arrays** for partial data loading
-- **Compression** to reduce storage requirements  
-- **Parallel access** for multi-threaded processing
-- **Metadata preservation** for CRS and spatial info
-
 ## Quick Start
 
-### 1. Create Location Configuration
+### Python API
 
-```bash
-# For a state
-bigmap location create --state California --output california.yaml
+```python
+from gridfia import GridFIA
 
-# For a county
-bigmap location create --state Texas --county Harris --output houston.yaml
+# Initialize API
+api = GridFIA()
 
-# For a custom region (bbox in WGS84)
-bigmap location create --bbox "-104.5,44.0,-104.0,44.5" --output custom.yaml
+# List available species
+species = api.list_species()
 
-# List all available states
-bigmap location list
+# Download species data for a location
+files = api.download_species(
+    state="North Carolina",
+    county="Wake",
+    species_codes=["0131", "0068"],  # Loblolly Pine, Red Maple
+    output_dir="data/wake"
+)
+
+# Create Zarr store from downloaded data
+zarr_path = api.create_zarr(
+    input_dir="data/wake",
+    output_path="data/wake_forest.zarr"
+)
+
+# Calculate forest metrics
+results = api.calculate_metrics(
+    zarr_path=zarr_path,
+    calculations=["species_richness", "shannon_diversity", "total_biomass"]
+)
+
+# Create visualization maps
+maps = api.create_maps(
+    zarr_path=zarr_path,
+    map_type="diversity",
+    output_dir="maps/"
+)
 ```
 
-### 2. Download Species Data
+### Using Bounding Boxes
 
-```bash
-# Download for a specific state
-bigmap download --state "North Carolina" --species 0131 --species 0068
+```python
+from gridfia import GridFIA
 
-# Download using location config
-bigmap download --location-config california.yaml --output data/california/
+api = GridFIA()
 
-# Download for custom bbox
-bigmap download --bbox "-9200000,4000000,-8400000,4400000" --crs 3857
-```
-
-### 3. Build Zarr Store
-
-```bash
-# Build from downloaded GeoTIFFs
-bigmap build-zarr --data-dir downloads/ --output forest.zarr
-
-# Specify chunk size and compression
-bigmap build-zarr --chunk-size "1,1000,1000" --compression lz4
-```
-
-### 4. Calculate Forest Metrics
-
-```bash
-# Run all calculations
-bigmap calculate forest.zarr --config config.yaml
-
-# Run specific calculations
-bigmap calculate forest.zarr --calc shannon_diversity --calc species_richness
-
-# List available calculations
-bigmap calculate forest.zarr --list
-```
-
-### 5. Create Maps
-
-```bash
-# Create species distribution maps
-bigmap map forest.zarr --type species --species 0131 --state NC
-
-# Create diversity maps
-bigmap map forest.zarr --type diversity --output maps/
-
-# Create richness map with basemap
-bigmap map forest.zarr --type richness --basemap CartoDB
+# Download using explicit bounding box (Web Mercator)
+files = api.download_species(
+    bbox=(-8792000, 4274000, -8732000, 4334000),
+    crs="3857",
+    species_codes=["0131"],
+    output_dir="data/custom"
+)
 ```
 
 ## Supported Locations
 
-BigMap supports analysis for:
+GridFIA supports analysis for:
 - **All 50 US States**: Automatic State Plane CRS detection
 - **Counties**: Any US county within a state
 - **Custom Regions**: Define your own bounding box
 - **Multi-State Regions**: Combine multiple states
-
-### Example State Configurations
-
-Pre-configured templates are available for:
-- North Carolina (`config/templates/north_carolina.yaml`)
-- Texas (`config/templates/texas.yaml`)
-- California (`config/templates/california.yaml`)
-- Montana (`config/montana_project.yml`)
 
 ## Available Calculations
 
@@ -140,66 +112,64 @@ Pre-configured templates are available for:
 | `species_richness` | Number of tree species per pixel | count |
 | `shannon_diversity` | Shannon diversity index | index |
 | `simpson_diversity` | Simpson diversity index | index |
+| `evenness` | Pielou's evenness (J) | ratio |
 | `total_biomass` | Total biomass across all species | Mg/ha |
 | `dominant_species` | Most abundant species by biomass | species_id |
 | `species_proportion` | Proportion of specific species | ratio |
 
 ## API Reference
 
-### Python API
+### GridFIA Class
+
+The main API interface for all GridFIA functionality:
 
 ```python
-from bigmap.utils.location_config import LocationConfig
-from bigmap.external.fia_client import BigMapRestClient
-from bigmap.core.processors import ForestMetricsProcessor
-from pathlib import Path
+from gridfia import GridFIA
+from gridfia.config import GridFIASettings, CalculationConfig
 
-# Create configuration for any state
-config = LocationConfig.from_state("Oregon")
+# Initialize with default settings
+api = GridFIA()
 
-# Download species data
-client = BigMapRestClient()
-client.batch_export_location_species(
-    bbox=config.web_mercator_bbox,
-    output_dir=Path("data/oregon"),
-    location_name="oregon"
+# Initialize with custom settings
+settings = GridFIASettings(
+    output_dir=Path("output"),
+    calculations=[
+        CalculationConfig(name="species_richness", enabled=True),
+        CalculationConfig(name="shannon_diversity", enabled=True)
+    ]
 )
-
-# Process metrics
-processor = ForestMetricsProcessor(settings)
-results = processor.run_calculations("oregon.zarr")
+api = GridFIA(config=settings)
 ```
 
-### CLI Commands
+### Methods
 
-- `bigmap location` - Manage location configurations
-- `bigmap download` - Download species data from REST API
-- `bigmap build-zarr` - Build Zarr store from GeoTIFFs
-- `bigmap calculate` - Run forest metric calculations
-- `bigmap map` - Create visualization maps
-- `bigmap list-species` - List available species codes
+- `list_species()` - List available species from BIGMAP
+- `download_species()` - Download species data for a location
+- `create_zarr()` - Create Zarr store from GeoTIFF files
+- `calculate_metrics()` - Run forest metric calculations
+- `create_maps()` - Create visualization maps
+- `validate_zarr()` - Validate a Zarr store
+- `get_location_config()` - Get location configuration
 
-## Configuration
+## Integration with FIA Ecosystem
 
-### Location Configuration Structure
+GridFIA works seamlessly with other FIA Python tools:
 
-```yaml
-location:
-  type: state        # state, county, or custom
-  name: California
-  abbreviation: CA
+```python
+# Use with PyFIA for survey data
+from pyfia import FIAData
+from gridfia import GridFIA
 
-crs:
-  target: EPSG:26943  # Auto-detected State Plane CRS
+# Get species information from PyFIA
+fia_data = FIAData()
+species_info = fia_data.query_species()
 
-bounding_boxes:
-  wgs84:             # Latitude/Longitude
-  state_plane:       # State-specific projection
-  web_mercator:      # For web mapping
-
-species:             # Species of interest
-  - code: '0202'
-    name: Douglas-fir
+# Use species codes with GridFIA
+api = GridFIA()
+files = api.download_species(
+    state="Oregon",
+    species_codes=species_info["species_code"].tolist()
+)
 ```
 
 ## Development
@@ -209,11 +179,11 @@ species:             # Species of interest
 uv run pytest
 
 # Format code
-uv run black bigmap/
-uv run isort bigmap/
+uv run black gridfia/
+uv run isort gridfia/
 
 # Type checking
-uv run mypy bigmap/
+uv run mypy gridfia/
 
 # Build documentation
 uv run mkdocs serve
@@ -230,21 +200,15 @@ This project accesses the USDA Forest Service FIA BIGMAP Tree Species Abovegroun
 - **Source**: Landsat 8 OLI (2014-2018) + 212,978 FIA plots
 - **REST API**: `https://di-usfsdata.img.arcgis.com/arcgis/rest/services/FIA_BIGMAP_2018_Tree_Species_Aboveground_Biomass/ImageServer`
 
-### Data Processing Pipeline
-1. **Download**: Fetch species-specific rasters via BIGMAP ImageServer REST API
-2. **Convert**: Transform GeoTIFF files into chunked Zarr arrays
-3. **Analyze**: Apply forest metrics calculations on local Zarr stores
-4. **Visualize**: Generate maps and statistics for regions of interest
-
 ## Citation
 
-If you use BigMap in your research, please cite:
+If you use GridFIA in your research, please cite:
 
 ```bibtex
-@software{bigmap2024,
-  title = {BigMap: Forest Biomass and Diversity Analysis Toolkit},
-  year = {2024},
-  url = {https://github.com/yourusername/bigmap-zarr}
+@software{gridfia2025,
+  title = {GridFIA: Spatial Raster Analysis for USDA Forest Service BIGMAP Data},
+  year = {2025},
+  url = {https://github.com/mihiarc/gridfia}
 }
 ```
 
@@ -258,6 +222,5 @@ Contributions are welcome! Please see CONTRIBUTING.md for guidelines.
 
 ## Support
 
-- 📖 [Documentation](https://yourdocs.com)
-- 🐛 [Issue Tracker](https://github.com/yourusername/bigmap-zarr/issues)
-- 💬 [Discussions](https://github.com/yourusername/bigmap-zarr/discussions)
+- [Issue Tracker](https://github.com/mihiarc/gridfia/issues)
+- [Discussions](https://github.com/mihiarc/gridfia/discussions)

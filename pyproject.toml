@@ -3,19 +3,19 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "bigmap"
-version = "0.2.0"
-description = "Forest biomass and species diversity analysis API"
+name = "gridfia"
+version = "0.3.0"
+description = "Spatial raster analysis for USDA Forest Service BIGMAP data - Part of the FIA Python Ecosystem"
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
-    {name = "Your Name", email = "your.email@example.com"}
+    {name = "Christopher Mihiar", email = "christopher.mihiar@usda.gov"}
 ]
 maintainers = [
-    {name = "Your Name", email = "your.email@example.com"}
+    {name = "Christopher Mihiar", email = "christopher.mihiar@usda.gov"}
 ]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
@@ -26,7 +26,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: GIS",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
 ]
-keywords = ["gis", "forestry", "biomass", "species-diversity", "north-carolina"]
+keywords = ["gis", "forestry", "biomass", "species-diversity", "fia", "bigmap", "zarr", "raster"]
 dependencies = [
     # Core scientific computing
     "numpy>=1.21.0",
@@ -80,13 +80,13 @@ test = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/yourusername/bigmap"
-Documentation = "https://bigmap.readthedocs.io/"
-Repository = "https://github.com/yourusername/bigmap.git"
-"Bug Tracker" = "https://github.com/yourusername/bigmap/issues"
+Homepage = "https://github.com/mihiarc/gridfia"
+Documentation = "https://gridfia.readthedocs.io/"
+Repository = "https://github.com/mihiarc/gridfia.git"
+"Bug Tracker" = "https://github.com/mihiarc/gridfia/issues"
 
 [tool.hatch.build.targets.wheel]
-packages = ["bigmap"]
+packages = ["gridfia"]
 
 [tool.black]
 line-length = 88
@@ -110,7 +110,7 @@ extend-exclude = '''
 profile = "black"
 multi_line_output = 3
 line_length = 88
-known_first_party = ["bigmap"]
+known_first_party = ["gridfia"]
 
 [tool.mypy]
 python_version = "3.9"
@@ -133,14 +133,14 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = [
-    "--cov=bigmap",
+    "--cov=gridfia",
     "--cov-report=term-missing",
     "--cov-report=html",
     "--cov-fail-under=80",
 ]
 
 [tool.coverage.run]
-source = ["bigmap"]
+source = ["gridfia"]
 omit = [
     "tests/*",
 ]

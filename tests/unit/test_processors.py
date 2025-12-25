@@ -8,9 +8,9 @@ import zarr
 from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
 
-from bigmap.core.processors.forest_metrics import ForestMetricsProcessor, run_forest_analysis
-from bigmap.config import BigMapSettings, CalculationConfig
-from bigmap.core.calculations import registry
+from gridfia.core.processors.forest_metrics import ForestMetricsProcessor, run_forest_analysis
+from gridfia.config import GridFIASettings, CalculationConfig
+from gridfia.core.calculations import registry
 
 
 class TestForestMetricsProcessor:
@@ -25,7 +25,7 @@ class TestForestMetricsProcessor:
     def test_initialization_with_default_settings(self):
         """Test processor initialization with default settings."""
         processor = ForestMetricsProcessor()
-        assert isinstance(processor.settings, BigMapSettings)
+        assert isinstance(processor.settings, GridFIASettings)
     
     def test_validate_zarr_array_valid(self, sample_zarr_array):
         """Test zarr validation with valid array."""
@@ -189,7 +189,7 @@ class TestRunForestAnalysis:
         config_path = temp_dir / "config.yaml"
         config_path.write_text("app_name: BigMap\n")
         
-        with patch('bigmap.core.processors.forest_metrics.ForestMetricsProcessor') as mock_processor:
+        with patch('gridfia.core.processors.forest_metrics.ForestMetricsProcessor') as mock_processor:
             mock_instance = Mock()
             mock_instance.run_calculations.return_value = {"test": "result"}
             mock_processor.return_value = mock_instance
@@ -201,7 +201,7 @@ class TestRunForestAnalysis:
     
     def test_run_forest_analysis_without_config(self):
         """Test run_forest_analysis without config file."""
-        with patch('bigmap.core.processors.forest_metrics.ForestMetricsProcessor') as mock_processor:
+        with patch('gridfia.core.processors.forest_metrics.ForestMetricsProcessor') as mock_processor:
             mock_instance = Mock()
             mock_instance.run_calculations.return_value = {"test": "result"}
             mock_processor.return_value = mock_instance

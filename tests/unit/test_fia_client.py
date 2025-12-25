@@ -1,5 +1,5 @@
 """
-Comprehensive tests for BigMapRestClient class.
+Comprehensive tests for GridFIARestClient class.
 
 This module provides comprehensive test coverage for the BigMapRestClient class,
 testing all public methods, HTTP request handling, error conditions, retry logic,
@@ -19,7 +19,7 @@ import numpy as np
 from requests.exceptions import ConnectionError, Timeout, RequestException
 from urllib3.util.retry import Retry
 
-from bigmap.external.fia_client import BigMapRestClient
+from gridfia.external.fia_client import BigMapRestClient
 
 
 class TestBigMapRestClientInitialization:
@@ -451,7 +451,7 @@ class TestBigMapRestClientExportSpeciesRaster:
                 mock_request.side_effect = [export_response, raster_response]
 
                 # Mock rasterio reading
-                with patch('bigmap.external.fia_client.MemoryFile') as mock_memory_file:
+                with patch('gridfia.external.fia_client.MemoryFile') as mock_memory_file:
                     mock_dataset = Mock()
                     mock_dataset.read.return_value = np.array([[1, 2], [3, 4]])
 
@@ -803,7 +803,7 @@ class TestBigMapRestClientExportTotalBiomassRaster:
 
                 mock_request.side_effect = [export_response, raster_response]
 
-                with patch('bigmap.external.fia_client.MemoryFile') as mock_memory_file:
+                with patch('gridfia.external.fia_client.MemoryFile') as mock_memory_file:
                     mock_dataset = Mock()
                     mock_dataset.read.return_value = np.array([[10, 20], [30, 40]])
 

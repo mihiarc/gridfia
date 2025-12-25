@@ -17,7 +17,7 @@ import pandas as pd
 from shapely.geometry import box, Polygon
 from rasterio.crs import CRS
 
-from bigmap.utils.location_config import (
+from gridfia.utils.location_config import (
     LocationConfig,
     load_location_config,
     get_location_config,
@@ -527,7 +527,7 @@ class TestGlobalConfigurationManagement:
         assert config.location_name == "North Carolina"
 
         # Should set global config
-        from bigmap.utils.location_config import _location_config
+        from gridfia.utils.location_config import _location_config
         assert _location_config is config
 
     def test_load_location_config_without_path(self):
@@ -551,7 +551,7 @@ class TestGlobalConfigurationManagement:
     def test_get_location_config_none(self):
         """Test getting location configuration when none exists."""
         # Clear global config
-        from bigmap.utils import location_config
+        from gridfia.utils import location_config
         location_config._location_config = None
 
         config = get_location_config()
@@ -713,7 +713,7 @@ class TestMockedStateAndCountyOperations:
 
         # Test the internal state lookup logic
         # This tests the actual STATE_ABBR mapping without external dependencies
-        with patch('bigmap.visualization.boundaries.load_state_boundary') as mock_load:
+        with patch('gridfia.visualization.boundaries.load_state_boundary') as mock_load:
             mock_load.side_effect = Exception("Network error")
 
             # Test with valid state name that should be found in STATE_ABBR

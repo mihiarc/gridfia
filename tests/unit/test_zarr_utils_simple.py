@@ -1,5 +1,5 @@
 """
-Simplified tests for bigmap.utils.zarr_utils module focused on maximum coverage.
+Simplified tests for gridfia.utils.zarr_utils module focused on maximum coverage.
 """
 
 import numpy as np
@@ -12,7 +12,7 @@ from rasterio.transform import from_bounds
 import zarr
 import zarr.storage
 
-from bigmap.utils.zarr_utils import (
+from gridfia.utils.zarr_utils import (
     create_expandable_zarr_from_base_raster,
     append_species_to_zarr,
     batch_append_species_from_dir,
@@ -491,7 +491,7 @@ class TestZarrUtilsEdgeCases:
         assert isinstance(result, zarr.Group)
         assert Path(zarr_path_str).exists()
 
-    @patch('bigmap.utils.zarr_utils.console')
+    @patch('gridfia.utils.zarr_utils.console')
     def test_console_output(self, mock_console, temp_dir, simple_raster):
         """Test console output during operations."""
         zarr_path = temp_dir / "console.zarr"

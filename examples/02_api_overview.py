@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """
-BigMap API Overview
+GridFIA API Overview
 
 Demonstrates all major API features and patterns.
 Each example is self-contained and can be run independently.
 """
 
 from pathlib import Path
-from bigmap import BigMapAPI
-from bigmap.config import BigMapSettings, CalculationConfig
-from bigmap.examples import create_sample_zarr, print_zarr_info
+from gridfia import GridFIA
+from gridfia.config import GridFIASettings, CalculationConfig
+from gridfia.examples import create_sample_zarr, print_zarr_info
 from examples.common_locations import get_location_bbox, COUNTIES, STATES
 
 
@@ -19,7 +19,7 @@ def example_1_list_species():
     print("Example 1: List Available Species")
     print("=" * 60)
 
-    api = BigMapAPI()
+    api = GridFIA()
     species = api.list_species()
 
     print(f"Total species available: {len(species)}")
@@ -69,7 +69,7 @@ def example_3_download_patterns():
     print("Example 3: Download Patterns")
     print("=" * 60)
 
-    api = BigMapAPI()
+    api = GridFIA()
 
     # Note: These are examples - uncomment to actually download
     print("Download patterns using bounding boxes (not executed):")
@@ -96,7 +96,7 @@ def example_4_zarr_operations():
     print("Example 4: Zarr Operations")
     print("=" * 60)
 
-    api = BigMapAPI()
+    api = GridFIA()
 
     # Create sample data for demonstration
     sample_path = create_sample_zarr(Path("temp_sample.zarr"))
@@ -126,7 +126,7 @@ def example_5_calculations():
     sample_path = create_sample_zarr(Path("temp_sample.zarr"))
 
     # Method 1: Simple calculation list
-    api = BigMapAPI()
+    api = GridFIA()
     results = api.calculate_metrics(
         zarr_path=sample_path,
         calculations=["species_richness", "shannon_diversity"]
@@ -134,7 +134,7 @@ def example_5_calculations():
     print(f"Simple: Calculated {len(results)} metrics")
 
     # Method 2: Custom configuration
-    settings = BigMapSettings(
+    settings = GridFIASettings(
         output_dir=Path("custom_output"),
         calculations=[
             CalculationConfig(
@@ -148,7 +148,7 @@ def example_5_calculations():
             )
         ]
     )
-    api_custom = BigMapAPI(config=settings)
+    api_custom = GridFIA(config=settings)
     results = api_custom.calculate_metrics(zarr_path=sample_path)
     print(f"Custom: Calculated {len(results)} metrics with custom settings")
 
@@ -171,7 +171,7 @@ def example_6_visualization():
 
     # Create sample data for demonstration
     sample_path = create_sample_zarr(Path("temp_sample.zarr"))
-    api = BigMapAPI()
+    api = GridFIA()
 
     # Different map types
     map_types = ["diversity", "species", "richness", "comparison"]
@@ -218,7 +218,7 @@ def example_7_batch_processing():
     print("Example 7: Batch Processing")
     print("=" * 60)
 
-    api = BigMapAPI()
+    api = GridFIA()
 
     locations = [
         {"state": "North Carolina", "counties": ["Wake", "Durham"]},
@@ -239,7 +239,7 @@ def example_7_batch_processing():
 def main():
     """Run all API examples."""
     print("\n" + "🌲" * 30)
-    print("BigMap API Overview")
+    print("GridFIA API Overview")
     print("Complete API Feature Demonstration")
     print("🌲" * 30)
 

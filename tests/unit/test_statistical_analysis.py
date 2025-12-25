@@ -14,7 +14,7 @@ from unittest.mock import Mock, patch, MagicMock
 import tempfile
 from pathlib import Path
 
-from bigmap.core.analysis.statistical_analysis import (
+from gridfia.core.analysis.statistical_analysis import (
     StatisticalConfig,
     DiversityAnalyzer,
     StatisticalTester,
@@ -712,8 +712,8 @@ class TestSpatialAutocorrelation:
             assert 'error' in result
             assert result['error'] == 'libpysal not available'
 
-    @patch('bigmap.core.analysis.statistical_analysis.libpysal.weights.Queen.from_dataframe')
-    @patch('bigmap.core.analysis.statistical_analysis.Moran')
+    @patch('gridfia.core.analysis.statistical_analysis.libpysal.weights.Queen.from_dataframe')
+    @patch('gridfia.core.analysis.statistical_analysis.Moran')
     def test_spatial_autocorrelation_success(self, mock_moran, mock_weights):
         """Test successful spatial autocorrelation calculation."""
         # Mock the spatial weights
@@ -744,7 +744,7 @@ class TestSpatialAutocorrelation:
         assert result['p_value'] == 0.012
         assert result['significant'] is True
 
-    @patch('bigmap.core.analysis.statistical_analysis.libpysal.weights.Queen.from_dataframe')
+    @patch('gridfia.core.analysis.statistical_analysis.libpysal.weights.Queen.from_dataframe')
     def test_spatial_autocorrelation_calculation_error(self, mock_weights):
         """Test spatial autocorrelation with calculation error."""
         # Mock weights to raise exception
@@ -762,8 +762,8 @@ class TestSpatialAutocorrelation:
 
     def test_spatial_autocorrelation_custom_columns(self):
         """Test spatial autocorrelation with custom column names."""
-        with patch('bigmap.core.analysis.statistical_analysis.libpysal.weights.Queen.from_dataframe') as mock_weights, \
-             patch('bigmap.core.analysis.statistical_analysis.Moran') as mock_moran:
+        with patch('gridfia.core.analysis.statistical_analysis.libpysal.weights.Queen.from_dataframe') as mock_weights, \
+             patch('gridfia.core.analysis.statistical_analysis.Moran') as mock_moran:
 
             # Setup mocks
             mock_weights.return_value = Mock()

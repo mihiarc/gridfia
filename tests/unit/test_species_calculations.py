@@ -9,7 +9,7 @@ Tests cover normal operation, edge cases, error conditions, and parameter handli
 import pytest
 import numpy as np
 from unittest.mock import patch
-from bigmap.core.calculations.species import (
+from gridfia.core.calculations.species import (
     DominantSpecies,
     SpeciesPresence,
     SpeciesDominance,
@@ -408,7 +408,7 @@ class TestSpeciesDominance:
             [[20, 15]]   # Species 2
         ], dtype=np.float32)
 
-        with patch('bigmap.core.calculations.species.DominantSpecies') as mock_dominant:
+        with patch('gridfia.core.calculations.species.DominantSpecies') as mock_dominant:
             mock_dominant.return_value.calculate.return_value = np.array([[1, 1]])
 
             calc = SpeciesDominance(species_index=1)

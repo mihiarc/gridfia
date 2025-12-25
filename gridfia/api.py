@@ -1,8 +1,13 @@
 """
-BigMap API - Clean programmatic interface for forest biomass analysis.
+GridFIA API - Spatial raster analysis for USDA Forest Service BIGMAP data.
 
-This module provides the primary API for BigMap functionality, offering a clean,
-well-documented interface for programmatic access to all features.
+Part of the FIA Python Ecosystem:
+- PyFIA: Survey/plot data analysis
+- GridFIA: Spatial raster analysis (this package)
+- PyFVS: Growth/yield simulation
+- AskFIA: AI conversational interface
+
+This module provides the primary API for GridFIA functionality.
 """
 
 from pathlib import Path
@@ -13,7 +18,7 @@ import numpy as np
 import xarray as xr
 from pydantic import BaseModel, Field
 
-from .config import BigMapSettings, CalculationConfig, load_settings
+from .config import GridFIASettings, CalculationConfig, load_settings
 from .core.processors.forest_metrics import ForestMetricsProcessor
 from .external.fia_client import BigMapRestClient
 from .utils.location_config import LocationConfig
@@ -40,46 +45,49 @@ class SpeciesInfo(BaseModel):
     function_name: Optional[str] = None
 
 
-class BigMapAPI:
+class GridFIA:
     """
-    Main API interface for BigMap forest analysis.
-    
-    This class provides a clean, programmatic interface to all BigMap functionality
-    including data download, processing, analysis, and visualization.
-    
+    Main API interface for GridFIA spatial forest analysis.
+
+    GridFIA provides spatial raster analysis of USDA Forest Service BIGMAP data,
+    including species biomass mapping, diversity metrics, and visualization.
+
+    Part of the FIA Python Ecosystem - use with PyFIA for survey data,
+    PyFVS for growth simulation, and AskFIA for AI-powered queries.
+
     Examples
     --------
-    >>> from bigmap import BigMapAPI
-    >>> api = BigMapAPI()
-    >>> 
+    >>> from gridfia import GridFIA
+    >>> api = GridFIA()
+    >>>
     >>> # Download species data for North Carolina
     >>> api.download_species(state="NC", species_codes=["0131", "0068"])
-    >>> 
+    >>>
     >>> # Create zarr store from downloaded data
     >>> api.create_zarr("downloads/", "data/nc_forest.zarr")
-    >>> 
+    >>>
     >>> # Calculate forest metrics
     >>> results = api.calculate_metrics(
     ...     "data/nc_forest.zarr",
     ...     calculations=["species_richness", "shannon_diversity"]
     ... )
-    >>> 
+    >>>
     >>> # Create visualization
     >>> api.create_maps("data/nc_forest.zarr", map_type="diversity")
     """
-    
-    def __init__(self, config: Optional[Union[str, Path, BigMapSettings]] = None):
+
+    def __init__(self, config: Optional[Union[str, Path, GridFIASettings]] = None):
         """
-        Initialize BigMap API.
-        
+        Initialize GridFIA API.
+
         Parameters
         ----------
-        config : str, Path, or BigMapSettings, optional
+        config : str, Path, or GridFIASettings, optional
             Configuration file path or settings object.
             If None, uses default settings.
         """
         if config is None:
-            self.settings = BigMapSettings()
+            self.settings = GridFIASettings()
         elif isinstance(config, (str, Path)):
             self.settings = load_settings(Path(config))
         else:
@@ -113,7 +121,7 @@ class BigMapAPI:
             
         Examples
         --------
-        >>> api = BigMapAPI()
+        >>> api = GridFIA()
         >>> species = api.list_species()
         >>> print(f"Found {len(species)} species")
         >>> for s in species[:5]:
@@ -167,7 +175,7 @@ class BigMapAPI:
             
         Examples
         --------
-        >>> api = BigMapAPI()
+        >>> api = GridFIA()
         >>> # Download for entire state
         >>> files = api.download_species(state="Montana", species_codes=["0202"])
         >>> 
@@ -267,7 +275,7 @@ class BigMapAPI:
             
         Examples
         --------
-        >>> api = BigMapAPI()
+        >>> api = GridFIA()
         >>> zarr_path = api.create_zarr(
         ...     "downloads/montana_species/",
         ...     "data/montana.zarr",
@@ -350,7 +358,7 @@ class BigMapAPI:
         zarr_path: Union[str, Path],
         calculations: Optional[List[str]] = None,
         output_dir: Optional[Union[str, Path]] = None,
-        config: Optional[Union[str, Path, BigMapSettings]] = None
+        config: Optional[Union[str, Path, GridFIASettings]] = None
     ) -> List[CalculationResult]:
         """
         Calculate forest metrics from Zarr data.
@@ -363,7 +371,7 @@ class BigMapAPI:
             Specific calculations to run. If None, uses config or defaults.
         output_dir : str or Path, optional
             Output directory for results.
-        config : str, Path, or BigMapSettings, optional
+        config : str, Path, or GridFIASettings, optional
             Configuration to use for calculations.
             
         Returns
@@ -373,7 +381,7 @@ class BigMapAPI:
             
         Examples
         --------
-        >>> api = BigMapAPI()
+        >>> api = GridFIA()
         >>> results = api.calculate_metrics(
         ...     "data/forest.zarr",
         ...     calculations=["species_richness", "shannon_diversity", "total_biomass"]
@@ -478,7 +486,7 @@ class BigMapAPI:
             
         Examples
         --------
-        >>> api = BigMapAPI()
+        >>> api = GridFIA()
         >>> # Create species map
         >>> maps = api.create_maps(
         ...     "data/forest.zarr",
@@ -653,7 +661,7 @@ class BigMapAPI:
             
         Examples
         --------
-        >>> api = BigMapAPI()
+        >>> api = GridFIA()
         >>> # Get state configuration
         >>> config = api.get_location_config(state="Montana")
         >>> print(f"Bbox: {config.web_mercator_bbox}")
@@ -701,7 +709,7 @@ class BigMapAPI:
             
         Examples
         --------
-        >>> api = BigMapAPI()
+        >>> api = GridFIA()
         >>> calcs = api.list_calculations()
         >>> print(f"Available calculations: {calcs}")
         """
@@ -723,7 +731,7 @@ class BigMapAPI:
             
         Examples
         --------
-        >>> api = BigMapAPI()
+        >>> api = GridFIA()
         >>> info = api.validate_zarr("data/forest.zarr")
         >>> print(f"Shape: {info['shape']}")
         >>> print(f"Species: {info['num_species']}")

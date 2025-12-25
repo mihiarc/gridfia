@@ -1,8 +1,8 @@
 """
-Configuration management for BigMap using Pydantic.
+Configuration management for GridFIA using Pydantic.
 
 This module defines configuration schemas and settings management
-for the BigMap package, demonstrating best practices with Pydantic.
+for the GridFIA package, part of the FIA Python Ecosystem.
 """
 
 from pathlib import Path
@@ -96,11 +96,11 @@ class CalculationConfig(BaseModel):
 
 
 
-class BigMapSettings(BaseSettings):
-    """Main settings class for BigMap application."""
-    
+class GridFIASettings(BaseSettings):
+    """Main settings class for GridFIA application."""
+
     # Application info
-    app_name: str = "BigMap"
+    app_name: str = "GridFIA"
     debug: bool = Field(default=False, description="Enable debug mode")
     verbose: bool = Field(default=False, description="Enable verbose output")
     
@@ -148,7 +148,7 @@ class BigMapSettings(BaseSettings):
     )
     
     model_config = ConfigDict(
-        env_prefix="BIGMAP_",      # Environment variables start with BIGMAP_
+        env_prefix="GRIDFIA_",     # Environment variables start with GRIDFIA_
         env_file=".env",           # Load from .env file if present
         case_sensitive=False,      # Case-insensitive environment variables
         extra="ignore"             # Ignore extra fields in config files
@@ -173,10 +173,13 @@ class BigMapSettings(BaseSettings):
 
 
 # Global settings instance
-settings = BigMapSettings()
+settings = GridFIASettings()
+
+# Backwards compatibility alias (deprecated)
+BigMapSettings = GridFIASettings
 
 
-def load_settings(config_file: Optional[Path] = None) -> BigMapSettings:
+def load_settings(config_file: Optional[Path] = None) -> GridFIASettings:
     """
     Load settings from file or environment.
     
@@ -198,13 +201,13 @@ def load_settings(config_file: Optional[Path] = None) -> BigMapSettings:
                 config_data = yaml.safe_load(f)
             else:
                 config_data = json.load(f)
-        return BigMapSettings(**config_data)
+        return GridFIASettings(**config_data)
     else:
         # Load from environment/defaults
-        return BigMapSettings()
+        return GridFIASettings()
 
 
-def save_settings(settings_obj: BigMapSettings, config_file: Path) -> None:
+def save_settings(settings_obj: GridFIASettings, config_file: Path) -> None:
     """
     Save settings to file.
     

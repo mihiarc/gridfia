@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Smoke tests for BigMap examples.
+Smoke tests for GridFIA examples.
 
 These tests verify that each example can be imported and runs without errors.
 They don't test the full functionality, just that the examples are syntactically
@@ -42,7 +42,7 @@ class TestExamplesSmoke:
         sys.path.insert(0, str(EXAMPLES_DIR.parent))
         try:
             # Mock the API to avoid actual downloads
-            with patch('bigmap.BigMapAPI') as mock_api:
+            with patch('gridfia.GridFIA') as mock_api:
                 mock_instance = MagicMock()
                 mock_api.return_value = mock_instance
 
@@ -63,7 +63,7 @@ class TestExamplesSmoke:
         """Test that 02_api_overview.py can be imported."""
         sys.path.insert(0, str(EXAMPLES_DIR.parent))
         try:
-            with patch('bigmap.BigMapAPI') as mock_api:
+            with patch('gridfia.GridFIA') as mock_api:
                 # Use importlib to handle module name starting with digit
                 import importlib.util
                 spec = importlib.util.spec_from_file_location(
@@ -179,8 +179,8 @@ class TestExamplesSmoke:
             pytest.fail(f"Syntax error in {example_file}: {e}")
 
     def test_utils_module(self):
-        """Test that the utils module can be imported from bigmap.examples."""
-        from bigmap.examples import (
+        """Test that the utils module can be imported from gridfia.examples."""
+        from gridfia.examples import (
             AnalysisConfig,
             cleanup_example_outputs,
             safe_download_species,
@@ -240,7 +240,7 @@ class TestExamplesSmoke:
 
     def test_cleanup_function_works(self):
         """Test that the cleanup function works correctly."""
-        from bigmap.examples import cleanup_example_outputs
+        from gridfia.examples import cleanup_example_outputs
 
         # Create test directories
         test_dirs = ["test_quickstart_data", "test_configs", "test_output"]
@@ -269,7 +269,7 @@ class TestExampleIntegration:
 
     def test_analysis_config_usage(self):
         """Test that AnalysisConfig works as expected."""
-        from bigmap.examples import AnalysisConfig
+        from gridfia.examples import AnalysisConfig
 
         # Test default config
         config = AnalysisConfig()
@@ -288,7 +288,7 @@ class TestExampleIntegration:
 
     def test_safe_download_with_mock(self):
         """Test safe_download_species with mocked API."""
-        from bigmap.examples import safe_download_species
+        from gridfia.examples import safe_download_species
 
         mock_api = MagicMock()
         mock_api.download_species.return_value = [Path("test1.tif"), Path("test2.tif")]
@@ -305,7 +305,7 @@ class TestExampleIntegration:
 
     def test_safe_download_with_retry(self):
         """Test that safe_download_species retries on failure."""
-        from bigmap.examples import safe_download_species
+        from gridfia.examples import safe_download_species
 
         mock_api = MagicMock()
         # Fail twice, then succeed

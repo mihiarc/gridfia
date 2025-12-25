@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Parallel Processing Utilities for BigMap
+Parallel Processing Utilities for GridFIA
 
 This module provides parallel processing capabilities optimized for
 multi-core systems to accelerate spatial sampling, species extraction,
@@ -29,7 +29,7 @@ and statistical computations.
 
 Example Usage::
 
-    from bigmap.utils import ParallelProcessor
+    from gridfia.utils import ParallelProcessor
     
     processor = ParallelProcessor(max_workers=8)
     
@@ -165,7 +165,7 @@ def _permutation_worker(data_tuple: Tuple[np.ndarray, int, int]) -> float:
 
 class ParallelProcessor:
     """
-    Handles parallel processing for BigMap operations with automatic resource optimization.
+    Handles parallel processing for GridFIA operations with automatic resource optimization.
     """
     
     def __init__(self, max_workers: Optional[int] = None, memory_limit_gb: Optional[float] = None):

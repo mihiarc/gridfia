@@ -23,7 +23,7 @@ from rich.console import Console
 console = Console()
 
 # Default cache directory for boundary files
-BOUNDARY_CACHE_DIR = Path.home() / ".bigmap" / "boundaries"
+BOUNDARY_CACHE_DIR = Path.home() / ".gridfia" / "boundaries"
 BOUNDARY_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 # URLs for boundary data sources

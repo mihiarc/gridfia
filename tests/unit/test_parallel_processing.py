@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Comprehensive tests for parallel processing utilities in bigmap.
+Comprehensive tests for parallel processing utilities in gridfia.
 
 Tests cover all parallel processing functions, error handling, resource management,
 chunking logic, and statistical analysis workflows with extensive edge cases.
@@ -21,7 +21,7 @@ import psutil
 import pytest
 from shapely.geometry import Point, Polygon
 
-from bigmap.utils.parallel_processing import (
+from gridfia.utils.parallel_processing import (
     ParallelProcessor,
     _bootstrap_worker,
     _permutation_worker,
@@ -489,7 +489,7 @@ class TestParallelSpatialIntersection:
         processor = ParallelProcessor(max_workers=2)
 
         # Mock the ThreadPoolExecutor to raise an exception
-        with patch('bigmap.utils.parallel_processing.ThreadPoolExecutor') as mock_executor:
+        with patch('gridfia.utils.parallel_processing.ThreadPoolExecutor') as mock_executor:
             mock_executor.side_effect = Exception("Parallel processing failed")
 
             result = processor.parallel_spatial_intersection(
@@ -582,7 +582,7 @@ class TestParallelBootstrapAnalysis:
         assert 'bootstrap_statistics' in result
         assert result['n_failed'] >= 0
 
-    @patch('bigmap.utils.parallel_processing.ProcessPoolExecutor')
+    @patch('gridfia.utils.parallel_processing.ProcessPoolExecutor')
     def test_parallel_bootstrap_analysis_execution_failure(self, mock_executor):
         """Test bootstrap analysis with parallel execution failure."""
         mock_executor.side_effect = Exception("Execution failed")
@@ -671,7 +671,7 @@ class TestParallelPermutationTest:
         # May have failures due to empty data
         assert 'permutation_statistics' in result
 
-    @patch('bigmap.utils.parallel_processing.ProcessPoolExecutor')
+    @patch('gridfia.utils.parallel_processing.ProcessPoolExecutor')
     def test_parallel_permutation_test_execution_failure(self, mock_executor):
         """Test permutation test with parallel execution failure."""
         mock_executor.side_effect = Exception("Execution failed")

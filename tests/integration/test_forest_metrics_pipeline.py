@@ -9,9 +9,9 @@ import rasterio
 import xarray as xr
 from pathlib import Path
 
-from bigmap.core.processors.forest_metrics import ForestMetricsProcessor, run_forest_analysis
-from bigmap.config import BigMapSettings, CalculationConfig
-from bigmap.core.calculations import registry
+from gridfia.core.processors.forest_metrics import ForestMetricsProcessor, run_forest_analysis
+from gridfia.config import GridFIASettings, CalculationConfig
+from gridfia.core.calculations import registry
 
 
 def get_zarr_path(zarr_array):
@@ -73,7 +73,7 @@ class TestForestMetricsPipeline:
         zarr_path = get_zarr_path(sample_zarr_array)
         
         # Configure different output formats
-        settings = BigMapSettings(
+        settings = GridFIASettings(
             output_dir=temp_dir / "multi_format_output",
             calculations=[
                 CalculationConfig(
