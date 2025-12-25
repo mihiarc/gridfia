@@ -4,13 +4,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Overview
 
-BigMap is a Python API for forest biomass and species diversity analysis that processes BIGMAP 2018 forest data at 30m resolution for any US state, county, or custom region. It provides a clean programmatic interface for analyzing forest metrics, calculating species diversity indices, and downloading data from the FIA BIGMAP ImageServer.
+GridFIA is a Python API for forest biomass and species diversity analysis that processes BIGMAP 2018 forest data at 30m resolution for any US state, county, or custom region. It provides a clean programmatic interface for analyzing forest metrics, calculating species diversity indices, and downloading data from the FIA BIGMAP ImageServer.
+
+**Part of the FIA Python Ecosystem:**
+- **PyFIA**: Survey/plot data analysis (https://github.com/mihiarc/pyfia)
+- **GridFIA**: Spatial raster analysis (this package)
+- **PyFVS**: Growth/yield simulation (https://github.com/mihiarc/pyfvs)
+- **AskFIA**: AI conversational interface (https://github.com/mihiarc/askfia)
 
 ## Architecture
 
 ### API-First Design
 
-BigMap uses a pure API architecture with no CLI, providing a single clean interface through the `BigMapAPI` class.
+GridFIA uses a pure API architecture with no CLI, providing a single clean interface through the `GridFIA` class.
 
 ### Core Components
 
@@ -42,10 +48,10 @@ uv pip install -e ".[dev,test,docs]"
 
 ### Using the API
 ```python
-from bigmap import BigMapAPI
+from gridfia import GridFIA
 
 # Initialize API
-api = BigMapAPI()
+api = GridFIA()
 
 # List available species
 species = api.list_species()
@@ -84,14 +90,14 @@ uv run pytest -n auto
 ### Code Quality
 ```bash
 # Format code
-uv run black bigmap/ tests/
-uv run isort bigmap/ tests/
+uv run black gridfia/ tests/
+uv run isort gridfia/ tests/
 
 # Lint code
-uv run flake8 bigmap/ tests/
+uv run flake8 gridfia/ tests/
 
 # Type checking
-uv run mypy bigmap/
+uv run mypy gridfia/
 ```
 
 ### Documentation
@@ -146,9 +152,9 @@ The `BigMapRestClient` in `external/fia_client.py` downloads species data from:
 
 ### Processing New Species Data
 ```python
-from bigmap import BigMapAPI
+from gridfia import GridFIA
 
-api = BigMapAPI()
+api = GridFIA()
 
 # Download species data
 files = api.download_species(
@@ -168,13 +174,13 @@ results = api.calculate_metrics(
 ```
 
 ### Using in Jupyter Notebooks
-BigMap is designed for interactive use in Jupyter notebooks:
+GridFIA is designed for interactive use in Jupyter notebooks:
 
 ```python
-from bigmap import BigMapAPI
+from gridfia import GridFIA
 import pandas as pd
 
-api = BigMapAPI()
+api = GridFIA()
 
 # Explore species interactively
 species = api.list_species()

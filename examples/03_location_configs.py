@@ -13,7 +13,7 @@ external boundary files, making it more reliable and faster to run.
 """
 
 from pathlib import Path
-from bigmap.utils.location_config import LocationConfig
+from gridfia.utils.location_config import LocationConfig
 from rich.console import Console
 from rich.table import Table
 import warnings
@@ -239,8 +239,8 @@ def show_location_usage():
 
     console.print("\n[yellow]Python API Usage:[/yellow]")
     console.print("""
-    from bigmap import BigMapAPI
-    from bigmap.utils.location_config import LocationConfig
+    from gridfia import GridFIA
+    from gridfia.utils.location_config import LocationConfig
 
     # Method 1: Load saved configuration
     config = LocationConfig("configs/wake_county.yaml")
@@ -252,7 +252,7 @@ def show_location_usage():
     )
 
     # Use with API
-    api = BigMapAPI()
+    api = GridFIA()
 
     # Download using config bounds
     files = api.download_species(

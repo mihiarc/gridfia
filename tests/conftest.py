@@ -1,5 +1,5 @@
 """
-Pytest configuration and shared fixtures for BigMap tests.
+Pytest configuration and shared fixtures for GridFIA tests.
 """
 
 import tempfile
@@ -13,7 +13,7 @@ import rasterio
 from rasterio.transform import from_bounds
 import zarr
 
-from bigmap.config import BigMapSettings, CalculationConfig
+from gridfia.config import GridFIASettings, CalculationConfig
 
 
 @pytest.fixture
@@ -118,7 +118,7 @@ def sample_zarr_array(temp_dir: Path) -> zarr.Array:
         'Edge Birch',
         'Scattered Ash'
     ]
-    z.attrs['description'] = 'Test biomass data for BigMap'
+    z.attrs['description'] = 'Test biomass data for GridFIA'
     z.attrs['units'] = 'Mg/ha'
     z.attrs['crs'] = 'ESRI:102039'
     z.attrs['transform'] = [-2000000, 30, 0, -900000, 0, -30]
@@ -145,9 +145,9 @@ def sample_species_data() -> dict:
 
 
 @pytest.fixture
-def test_settings(temp_dir: Path) -> BigMapSettings:
+def test_settings(temp_dir: Path) -> GridFIASettings:
     """Create test settings with temporary directories."""
-    settings = BigMapSettings(
+    settings = GridFIASettings(
         data_dir=temp_dir / "data",
         output_dir=temp_dir / "output",
         cache_dir=temp_dir / "cache",

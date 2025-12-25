@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Shared utilities for BigMap examples.
+Shared utilities for GridFIA examples.
 
 This module contains common functions used across multiple examples
 to avoid code duplication and provide consistent functionality.
@@ -120,7 +120,7 @@ def safe_download_species(api, state: Optional[str] = None, county: Optional[str
     Download species data with error handling and retry logic.
 
     Args:
-        api: BigMapAPI instance
+        api: GridFIA instance
         state: State name (optional if bbox provided)
         county: County name (optional)
         bbox: Bounding box coordinates (xmin, ymin, xmax, ymax)
@@ -509,7 +509,7 @@ def validate_species_codes(api, species_codes: List[str]) -> List[str]:
     Validate species codes against available species.
 
     Args:
-        api: BigMapAPI instance
+        api: GridFIA instance
         species_codes: List of species codes to validate
 
     Returns:

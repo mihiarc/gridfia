@@ -11,7 +11,7 @@ import numpy as np
 import logging
 from typing import List
 
-from bigmap.core.calculations.biomass import (
+from gridfia.core.calculations.biomass import (
     TotalBiomass,
     TotalBiomassComparison,
     SpeciesProportion,

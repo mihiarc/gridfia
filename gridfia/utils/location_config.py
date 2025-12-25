@@ -167,7 +167,7 @@ class LocationConfig:
     
     def _setup_state_config(self, state: str):
         """Setup configuration for a US state."""
-        from bigmap.visualization.boundaries import load_state_boundary, STATE_ABBR
+        from gridfia.visualization.boundaries import load_state_boundary, STATE_ABBR
         
         state_lower = state.lower()
         if state_lower in STATE_ABBR:
@@ -196,7 +196,7 @@ class LocationConfig:
     
     def _setup_county_config(self, county: str, state: str):
         """Setup configuration for a county."""
-        from bigmap.visualization.boundaries import load_counties_for_state, STATE_ABBR
+        from gridfia.visualization.boundaries import load_counties_for_state, STATE_ABBR
         
         state_lower = state.lower()
         if state_lower in STATE_ABBR:

@@ -1,5 +1,5 @@
 """
-Comprehensive tests for bigmap.utils.zarr_utils module.
+Comprehensive tests for gridfia.utils.zarr_utils module.
 """
 
 import numpy as np
@@ -13,7 +13,7 @@ import zarr
 import zarr.storage
 from rich.console import Console
 
-from bigmap.utils.zarr_utils import (
+from gridfia.utils.zarr_utils import (
     create_expandable_zarr_from_base_raster,
     append_species_to_zarr,
     batch_append_species_from_dir,
@@ -124,7 +124,7 @@ class TestCreateExpandableZarrFromBaseRaster:
         assert isinstance(result, zarr.Group)
         assert Path(zarr_path).exists()
 
-    @patch('bigmap.utils.zarr_utils.console')
+    @patch('gridfia.utils.zarr_utils.console')
     def test_console_output(self, mock_console, temp_dir: Path, sample_raster: Path):
         """Test console output during zarr creation."""
         zarr_path = temp_dir / "console_test.zarr"
@@ -295,7 +295,7 @@ class TestAppendSpeciesToZarr:
                 validate_alignment=True
             )
 
-    @patch('bigmap.utils.zarr_utils.console')
+    @patch('gridfia.utils.zarr_utils.console')
     def test_append_species_crs_warning(self, mock_console, base_zarr, temp_dir: Path):
         """Test CRS mismatch warning."""
         root, zarr_path = base_zarr
@@ -495,7 +495,7 @@ class TestBatchAppendSpeciesFromDir:
         root = zarr.open_group(store=store, mode='r')
         assert root.attrs['num_species'] == 4
 
-    @patch('bigmap.utils.zarr_utils.console')
+    @patch('gridfia.utils.zarr_utils.console')
     def test_batch_append_unknown_species(self, mock_console, base_zarr_for_batch, temp_dir: Path):
         """Test batch append with files containing unknown species codes."""
         root, zarr_path = base_zarr_for_batch
@@ -533,7 +533,7 @@ class TestBatchAppendSpeciesFromDir:
         call_args = [str(call[0][0]) for call in mock_console.print.call_args_list]
         assert any("Could not find species code" in arg for arg in call_args)
 
-    @patch('bigmap.utils.zarr_utils.console')
+    @patch('gridfia.utils.zarr_utils.console')
     def test_batch_append_error_handling(self, mock_console, base_zarr_for_batch, species_directory, temp_dir: Path):
         """Test error handling during batch append."""
         root, zarr_path = base_zarr_for_batch
@@ -1062,7 +1062,7 @@ class TestSafeOpenZarrBiomass:
 
     def test_safe_open_zarr_array_format(self, temp_dir: Path, sample_raster: Path):
         """Test opening legacy zarr array format."""
-        from bigmap.examples.utils import safe_open_zarr_biomass
+        from gridfia.examples.utils import safe_open_zarr_biomass
 
         zarr_path = temp_dir / "array_format.zarr"
 
@@ -1089,7 +1089,7 @@ class TestSafeOpenZarrBiomass:
 
     def test_safe_open_zarr_group_format(self, temp_dir: Path, sample_raster: Path):
         """Test opening group-based zarr format."""
-        from bigmap.examples.utils import safe_open_zarr_biomass
+        from gridfia.examples.utils import safe_open_zarr_biomass
 
         zarr_path = temp_dir / "group_format.zarr"
 
@@ -1110,7 +1110,7 @@ class TestSafeOpenZarrBiomass:
 
     def test_safe_open_zarr_missing_biomass_array(self, temp_dir: Path):
         """Test error handling when biomass array is missing from group."""
-        from bigmap.examples.utils import safe_open_zarr_biomass
+        from gridfia.examples.utils import safe_open_zarr_biomass
 
         zarr_path = temp_dir / "no_biomass.zarr"
 
@@ -1125,7 +1125,7 @@ class TestSafeOpenZarrBiomass:
 
     def test_safe_open_zarr_nonexistent_path(self, temp_dir: Path):
         """Test error handling with nonexistent path."""
-        from bigmap.examples.utils import safe_open_zarr_biomass
+        from gridfia.examples.utils import safe_open_zarr_biomass
 
         nonexistent_path = temp_dir / "does_not_exist.zarr"
 

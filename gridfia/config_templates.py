@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Dict, Any, List, Optional
 import yaml
 
-from .config import BigMapSettings, CalculationConfig
+from .config import GridFIASettings, CalculationConfig
 
 
 def create_config_template(

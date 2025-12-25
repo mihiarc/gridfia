@@ -15,7 +15,7 @@ This script examines each species layer in the zarr array and reports:
 .. todo::
    Integration improvements:
    
-   - [ ] Convert to proper CLI command in main BigMap CLI
+   - [ ] Convert to proper CLI command in main GridFIA CLI
    - [ ] Add configuration file support instead of hardcoded paths
    - [ ] Integrate with REST API for dynamic species list
    - [ ] Add export options (CSV, JSON, GeoPackage)
@@ -30,10 +30,10 @@ This script examines each species layer in the zarr array and reports:
 Example Usage::
 
     # Direct execution
-    python -m bigmap.core.analysis.species_presence
+    python -m gridfia.core.analysis.species_presence
     
     # Programmatic usage
-    from bigmap.core.analysis import analyze_species_presence
+    from gridfia.core.analysis import analyze_species_presence
     
     results = analyze_species_presence(
         zarr_path="data/nc_biomass.zarr",

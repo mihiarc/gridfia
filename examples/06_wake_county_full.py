@@ -2,7 +2,7 @@
 """
 Wake County Complete Analysis
 
-A comprehensive case study demonstrating the full BigMap workflow:
+A comprehensive case study demonstrating the full GridFIA workflow:
 - Data download
 - Zarr creation
 - All calculations
@@ -16,8 +16,8 @@ import numpy as np
 import zarr
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
-from bigmap import BigMapAPI
-from bigmap.examples import (
+from gridfia import GridFIA
+from gridfia.examples import (
     calculate_basic_stats,
     safe_download_species,
     safe_load_zarr_with_memory_check,
@@ -25,8 +25,8 @@ from bigmap.examples import (
     AnalysisConfig,
     cleanup_example_outputs
 )
-from bigmap.visualization.mapper import ZarrMapper
-from bigmap.visualization.plots import set_plot_style, save_figure
+from gridfia.visualization.mapper import ZarrMapper
+from gridfia.visualization.plots import set_plot_style, save_figure
 from rich.console import Console
 
 console = Console()
@@ -37,7 +37,7 @@ def download_wake_county_data():
     console.print("\n[bold blue]Step 1: Data Download[/bold blue]")
     console.print("-" * 40)
 
-    api = BigMapAPI()
+    api = GridFIA()
 
     # Wake County, NC bounding box (Web Mercator EPSG:3857)
     # Source: US Census Bureau Tiger/Line Shapefiles 2021
@@ -94,7 +94,7 @@ def create_wake_zarr():
     console.print("\n[bold blue]Step 2: Zarr Creation[/bold blue]")
     console.print("-" * 40)
 
-    api = BigMapAPI()
+    api = GridFIA()
 
     zarr_path = api.create_zarr(
         input_dir="examples/wake_county_data",
@@ -117,7 +117,7 @@ def run_comprehensive_calculations(zarr_path: Path):
     console.print("\n[bold blue]Step 3: Forest Metrics Calculation[/bold blue]")
     console.print("-" * 40)
 
-    api = BigMapAPI()
+    api = GridFIA()
 
     calculations = [
         "species_richness",
@@ -335,7 +335,7 @@ def create_publication_figure(zarr_path: Path):
 
     # Add footer
     fig.text(0.5, 0.02,
-             'Data: USDA Forest Service FIA BIGMAP | Resolution: 30m | Analysis: BigMap Python Toolkit',
+             'Data: USDA Forest Service FIA BIGMAP | Resolution: 30m | Analysis: GridFIA Python Toolkit',
              ha='center', fontsize=10, style='italic')
 
     plt.tight_layout()
@@ -392,7 +392,7 @@ Analysis Outputs
 
 Processing Complete
 -------------------
-This analysis demonstrates the full BigMap workflow from
+This analysis demonstrates the full GridFIA workflow from
 data download through publication-ready visualizations.
 """
 
@@ -420,7 +420,7 @@ def main():
         # If download failed, use sample data
         if not files:
             console.print("\n[yellow]Download failed. Using sample data instead.[/yellow]")
-            from bigmap.examples import create_sample_zarr
+            from gridfia.examples import create_sample_zarr
             # Create directory if it doesn't exist
             zarr_path.parent.mkdir(parents=True, exist_ok=True)
             zarr_path = create_sample_zarr(zarr_path, n_species=5)

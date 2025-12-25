@@ -285,25 +285,28 @@ def confirm_action(message: str, default: bool = False) -> bool:
 
 
 def print_package_info() -> None:
-    """Print BigMap package information in a nice format."""
-    from bigmap import __version__, __author__, __email__
-    
+    """Print GridFIA package information in a nice format."""
+    from gridfia import __version__, __author__, __email__
+
     info_panel = Panel(
-        f"""[bold blue]BigMap[/bold blue] v{__version__}
-        
-North Carolina Forest Biomass and Species Diversity Analysis Tools
+        f"""[bold blue]GridFIA[/bold blue] v{__version__}
+
+Spatial Raster Analysis for USDA Forest Service BIGMAP Data
+Part of the FIA Python Ecosystem
 
 [dim]Author:[/dim] {__author__}
 [dim]Email:[/dim] {__email__}
 [dim]License:[/dim] MIT
 
-🌲 Analyze forest biomass data
-📊 Calculate species diversity metrics  
-🗺️  Create beautiful visualizations
-📦 Efficient data storage with Zarr""",
+🌲 Analyze forest biomass at 30m resolution
+📊 Calculate species diversity metrics
+🗺️  Create publication-ready visualizations
+📦 Efficient Zarr-based data storage
+
+[dim]Ecosystem:[/dim] PyFIA | GridFIA | PyFVS | AskFIA""",
         title="Package Information",
         border_style="blue",
         padding=(1, 2)
     )
-    
+
     console.print(info_panel) 

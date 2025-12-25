@@ -11,10 +11,10 @@ Demonstrates the flexible calculation framework:
 
 from pathlib import Path
 import numpy as np
-from bigmap.examples import create_sample_zarr, print_zarr_info, AnalysisConfig
-from bigmap.config import BigMapSettings, CalculationConfig
-from bigmap.core.processors.forest_metrics import ForestMetricsProcessor
-from bigmap.core.calculations import ForestCalculation, registry
+from gridfia.examples import create_sample_zarr, print_zarr_info, AnalysisConfig
+from gridfia.config import GridFIASettings, CalculationConfig
+from gridfia.core.processors.forest_metrics import ForestMetricsProcessor
+from gridfia.core.calculations import ForestCalculation, registry
 from rich.console import Console
 from rich.table import Table
 
@@ -57,7 +57,7 @@ def example_basic_calculations():
     zarr_path = create_sample_zarr(Path("temp_calculations.zarr"), n_species=5)
 
     # Configure basic calculations
-    settings = BigMapSettings(
+    settings = GridFIASettings(
         output_dir=Path("results/basic"),
         calculations=[
             CalculationConfig(
@@ -135,7 +135,7 @@ def example_custom_calculation():
     # Use in analysis
     zarr_path = create_sample_zarr(Path("temp_custom.zarr"), n_species=5)
 
-    settings = BigMapSettings(
+    settings = GridFIASettings(
         output_dir=Path("results/custom"),
         calculations=[
             CalculationConfig(
@@ -175,7 +175,7 @@ def example_output_formats():
     for format_type, description in formats:
         console.print(f"\n{format_type.upper()}: {description}")
 
-        settings = BigMapSettings(
+        settings = GridFIASettings(
             output_dir=Path(f"results/{format_type}"),
             calculations=[
                 CalculationConfig(
@@ -245,7 +245,7 @@ def example_calculation_parameters():
     for example in param_examples:
         console.print(f"\n{example['name']}:")
 
-        settings = BigMapSettings(
+        settings = GridFIASettings(
             output_dir=Path("results/params"),
             calculations=example["calculations"]
         )
@@ -271,7 +271,7 @@ def example_batch_calculations():
     zarr_path = create_sample_zarr(Path("temp_batch.zarr"), n_species=10)
 
     # Configure comprehensive analysis
-    settings = BigMapSettings(
+    settings = GridFIASettings(
         output_dir=Path("results/comprehensive"),
         calculations=[
             # Diversity metrics

@@ -18,7 +18,7 @@ from rasterio.transform import from_bounds, Affine
 import xarray as xr
 from tqdm import tqdm
 
-from ...config import BigMapSettings, load_settings, CalculationConfig
+from ...config import GridFIASettings, load_settings, CalculationConfig
 from ..calculations import registry
 from ..calculations.base import ForestCalculation
 
@@ -36,16 +36,16 @@ class ForestMetricsProcessor:
     - Saving results in multiple formats
     """
     
-    def __init__(self, settings: Optional[BigMapSettings] = None):
+    def __init__(self, settings: Optional[GridFIASettings] = None):
         """
         Initialize the processor with settings.
-        
+
         Parameters
         ----------
-        settings : BigMapSettings, optional
+        settings : GridFIASettings, optional
             Configuration settings. If None, uses default settings.
         """
-        self.settings = settings or BigMapSettings()
+        self.settings = settings or GridFIASettings()
         self.chunk_size = (1, 1000, 1000)  # Default chunk size for processing
         self.zarr_group = None  # Will store the parent group if available
         
@@ -463,8 +463,8 @@ class ForestMetricsProcessor:
             
             # Add metadata tags
             dst.update_tags(
-                SOFTWARE='BigMap Forest Metrics Processor',
-                PROCESSED_BY='bigmap.core.processors.forest_metrics'
+                SOFTWARE='GridFIA Forest Metrics Processor',
+                PROCESSED_BY='gridfia.core.processors.forest_metrics'
             )
     
     def _save_zarr(
@@ -493,7 +493,7 @@ class ForestMetricsProcessor:
             'transform': list(metadata.get('transform', Affine.identity())),
             'variable': var_name,
             'units': 'varies',  # Could be improved with calc-specific units
-            'software': 'BigMap Forest Metrics Processor'
+            'software': 'GridFIA Forest Metrics Processor'
         })
     
     def _save_netcdf(
@@ -559,7 +559,7 @@ def run_forest_analysis(
         settings = load_settings(Path(config_path))
         logger.info(f"Loaded configuration from {config_path}")
     else:
-        settings = BigMapSettings()
+        settings = GridFIASettings()
         logger.info("Using default configuration")
     
     processor = ForestMetricsProcessor(settings)

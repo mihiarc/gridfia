@@ -19,7 +19,7 @@ from rasterio.transform import Affine
 from rasterio.crs import CRS
 import warnings
 
-from bigmap.visualization.mapper import ZarrMapper
+from gridfia.visualization.mapper import ZarrMapper
 
 
 def setup_mock_axes():
@@ -203,7 +203,7 @@ class TestZarrMapperInitialization:
         assert len(mapper.species_codes) >= 0
         assert len(mapper.species_names) >= 0
 
-    @patch('bigmap.visualization.mapper.console')
+    @patch('gridfia.visualization.mapper.console')
     def test_console_output_during_initialization(self, mock_console, complete_zarr_store):
         """Test that appropriate console output is generated during initialization."""
         mapper = ZarrMapper(complete_zarr_store)
@@ -501,9 +501,9 @@ class TestSpeciesMapCreation:
         assert ax is mock_ax
         mock_subplots.assert_not_called()  # Should not create new figure
 
-    @patch('bigmap.visualization.mapper.load_state_boundary')
-    @patch('bigmap.visualization.mapper.plot_boundaries')
-    @patch('bigmap.visualization.mapper.clip_boundaries_to_extent')
+    @patch('gridfia.visualization.mapper.load_state_boundary')
+    @patch('gridfia.visualization.mapper.plot_boundaries')
+    @patch('gridfia.visualization.mapper.clip_boundaries_to_extent')
     def test_create_species_map_with_state_boundary(self, mock_clip, mock_plot, mock_load,
                                                   mock_tight_layout, mock_colorbar, mock_subplots, complete_zarr_store):
         """Test species map creation with state boundary overlay."""
@@ -526,8 +526,8 @@ class TestSpeciesMapCreation:
         mock_clip.assert_called_once()
         mock_plot.assert_called_once()
 
-    @patch('bigmap.visualization.mapper.get_basemap_zoom_level')
-    @patch('bigmap.visualization.mapper.add_basemap')
+    @patch('gridfia.visualization.mapper.get_basemap_zoom_level')
+    @patch('gridfia.visualization.mapper.add_basemap')
     def test_create_species_map_with_basemap(self, mock_add_basemap, mock_get_zoom,
                                            mock_tight_layout, mock_colorbar, mock_subplots, complete_zarr_store):
         """Test species map creation with basemap."""
@@ -550,7 +550,7 @@ class TestSpeciesMapCreation:
         args, kwargs = imshow_call
         assert kwargs['alpha'] == 0.7
 
-    @patch('bigmap.visualization.mapper.console')
+    @patch('gridfia.visualization.mapper.console')
     def test_create_species_map_boundary_error_handling(self, mock_console, mock_tight_layout,
                                                        mock_colorbar, mock_subplots, complete_zarr_store):
         """Test error handling when boundary loading fails."""
@@ -560,7 +560,7 @@ class TestSpeciesMapCreation:
         mock_im = Mock()
         mock_ax.imshow.return_value = mock_im
 
-        with patch('bigmap.visualization.mapper.load_state_boundary', side_effect=Exception('Boundary error')):
+        with patch('gridfia.visualization.mapper.load_state_boundary', side_effect=Exception('Boundary error')):
             mapper = ZarrMapper(complete_zarr_store)
             # Should not raise exception, but should print warning
             mapper.create_species_map(species=1, state_boundary='California')
@@ -684,7 +684,7 @@ class TestDiversityMapCreation:
         # Verify no colorbar
         mock_colorbar.assert_not_called()
 
-    @patch('bigmap.visualization.mapper.console')
+    @patch('gridfia.visualization.mapper.console')
     def test_diversity_calculation_console_output(self, mock_console, mock_tight_layout,
                                                  mock_colorbar, mock_subplots, complete_zarr_store):
         """Test console output during diversity calculation."""
@@ -784,7 +784,7 @@ class TestRichnessMapCreation:
         title = mock_ax.set_title.call_args[0][0]
         assert title == 'Custom Richness Map'
 
-    @patch('bigmap.visualization.mapper.console')
+    @patch('gridfia.visualization.mapper.console')
     def test_richness_calculation_console_output(self, mock_console, mock_tight_layout,
                                                 mock_colorbar, mock_subplots, complete_zarr_store):
         """Test console output during richness calculation."""
@@ -979,7 +979,7 @@ class TestComparisonMapCreation:
             assert args[0] == 3  # nrows
             assert args[1] == 1  # ncols
 
-    @patch('bigmap.visualization.mapper.console')
+    @patch('gridfia.visualization.mapper.console')
     def test_comparison_map_global_minmax_calculation(self, mock_console, mock_tight_layout, mock_subplots, complete_zarr_store):
         """Test global min/max calculation for shared colorbar."""
         mock_fig = Mock(spec=Figure)
@@ -998,7 +998,7 @@ class TestComparisonMapCreation:
 class TestMapExportFunctionality:
     """Test suite for map export functionality."""
 
-    @patch('bigmap.visualization.mapper.console')
+    @patch('gridfia.visualization.mapper.console')
     def test_export_map_basic(self, mock_console, temp_dir, complete_zarr_store):
         """Test basic map export functionality."""
         mapper = ZarrMapper(complete_zarr_store)

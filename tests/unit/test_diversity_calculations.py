@@ -6,7 +6,7 @@ Tests the Shannon diversity bug fix (Issue #2) and other diversity metrics.
 
 import pytest
 import numpy as np
-from bigmap.core.calculations.diversity import (
+from gridfia.core.calculations.diversity import (
     ShannonDiversity,
     SimpsonDiversity,
     SpeciesRichness,

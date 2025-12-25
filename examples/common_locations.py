@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Common location bounding boxes for BigMap examples.
+Common location bounding boxes for GridFIA examples.
 
 These are pre-calculated bounding boxes for commonly used locations
 in the examples. Using explicit bounding boxes ensures examples run

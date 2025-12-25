@@ -12,16 +12,16 @@ Comprehensive species analysis including:
 from pathlib import Path
 import numpy as np
 import zarr
-from bigmap.examples import (
+from gridfia.examples import (
     create_sample_zarr,
     calculate_basic_stats,
     safe_load_zarr_with_memory_check,
     safe_open_zarr_biomass,
     AnalysisConfig
 )
-from bigmap.config import BigMapSettings, CalculationConfig
-from bigmap.core.processors.forest_metrics import ForestMetricsProcessor
-from bigmap.core.calculations import SpeciesProportion, SpeciesGroupProportion, registry
+from gridfia.config import GridFIASettings, CalculationConfig
+from gridfia.core.processors.forest_metrics import ForestMetricsProcessor
+from gridfia.core.calculations import SpeciesProportion, SpeciesGroupProportion, registry
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
@@ -156,7 +156,7 @@ def analyze_species_groups(zarr_path: Path):
     console.print("✅ Registered hardwood and softwood group calculations")
 
     # Configure calculations
-    settings = BigMapSettings(
+    settings = GridFIASettings(
         output_dir=Path("results/groups"),
         calculations=[
             CalculationConfig(
@@ -243,7 +243,7 @@ def analyze_southern_yellow_pine(zarr_path: Path):
     registry.register("species_group_proportion_southern_yellow_pine", SYPGroupProportion)
 
     # Calculate SYP proportion
-    settings = BigMapSettings(
+    settings = GridFIASettings(
         output_dir=Path("results/syp"),
         calculations=[
             CalculationConfig(
@@ -281,7 +281,7 @@ def identify_diversity_hotspots(zarr_path: Path):
     console.print("-" * 40)
 
     # Calculate Shannon diversity
-    settings = BigMapSettings(
+    settings = GridFIASettings(
         output_dir=Path("results/diversity"),
         calculations=[
             CalculationConfig(
@@ -339,7 +339,7 @@ def run_comprehensive_analysis(zarr_path: Path):
     console.print("\n[bold blue]Comprehensive Species Analysis[/bold blue]")
     console.print("-" * 40)
 
-    settings = BigMapSettings(
+    settings = GridFIASettings(
         output_dir=Path("results/comprehensive"),
         calculations=[
             # Diversity metrics
