@@ -1,12 +1,22 @@
-# GridFIA
+<div align="center">
+  <img src="https://fiatools.org/logos/gridfia_logo.png" alt="gridFIA" width="140">
 
-**GridFIA** is a spatial raster analysis tool for USDA Forest Service BIGMAP data, providing efficient Zarr-based storage and processing for localized forest biomass analysis.
+  <h1>GridFIA</h1>
 
-**Part of the FIA Python Ecosystem:**
-- **PyFIA**: Survey/plot data analysis ([github.com/mihiarc/pyfia](https://github.com/mihiarc/pyfia))
-- **GridFIA**: Spatial raster analysis (this package)
-- **PyFVS**: Growth/yield simulation ([github.com/mihiarc/pyfvs](https://github.com/mihiarc/pyfvs))
-- **AskFIA**: AI conversational interface ([github.com/mihiarc/askfia](https://github.com/mihiarc/askfia))
+  <p><strong>Spatial raster analysis for USDA Forest Service BIGMAP data</strong></p>
+
+  <p>
+    <sub>Part of the <a href="https://fiatools.org"><strong>FIAtools</strong></a> ecosystem:
+    <a href="https://github.com/mihiarc/pyfia">pyFIA</a> ·
+    <a href="https://github.com/mihiarc/gridfia">gridFIA</a> ·
+    <a href="https://github.com/mihiarc/pyfvs">pyFVS</a> ·
+    <a href="https://github.com/mihiarc/askfia">askFIA</a></sub>
+  </p>
+</div>
+
+---
+
+**GridFIA** provides efficient Zarr-based storage and processing for localized forest biomass analysis.
 
 ## About BIGMAP
 
