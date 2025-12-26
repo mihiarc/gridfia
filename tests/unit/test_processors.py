@@ -344,8 +344,9 @@ class TestSaveResultsFormats:
         assert "species_richness" in output_paths
         assert output_paths["species_richness"].endswith(".zarr")
 
-        # Verify zarr file was created correctly
-        z = zarr.open_array(output_paths["species_richness"], mode='r')
+        # Verify zarr file was created correctly (Zarr v3 uses group with 'data' array)
+        root = zarr.open_group(output_paths["species_richness"], mode='r')
+        z = root['data']
         assert z.shape == (100, 100)
         assert 'crs' in z.attrs
         assert z.attrs['variable'] == 'species_richness'
@@ -513,8 +514,9 @@ class TestMetadataPreservation:
 
         output_paths = processor._save_results(results, metadata, test_settings.output_dir)
 
-        # Read back and check metadata
-        z = zarr.open_array(output_paths["species_richness"], mode='r')
+        # Read back and check metadata (Zarr v3 uses group with 'data' array)
+        root = zarr.open_group(output_paths["species_richness"], mode='r')
+        z = root['data']
         assert z.attrs['crs'] == 'ESRI:102039'
         assert z.attrs['variable'] == 'species_richness'
         assert z.attrs['software'] == 'GridFIA Forest Metrics Processor'

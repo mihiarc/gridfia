@@ -9,6 +9,8 @@ to avoid code duplication and provide consistent functionality.
 from pathlib import Path
 import numpy as np
 import zarr
+import zarr.storage
+import zarr.codecs
 import rasterio
 import shutil
 from typing import List, Optional, Dict, Any, Tuple
@@ -168,28 +170,43 @@ def safe_open_zarr_biomass(zarr_path: Path) -> Tuple[zarr.Group, zarr.Array]:
     """
     Safely open zarr store and return both group and biomass array.
 
+    Supports both Zarr v3 group format (with 'biomass' array) and legacy
+    array format (single array at root level).
+
     Args:
         zarr_path: Path to zarr store
 
     Returns:
-        Tuple of (group_root, biomass_array)
+        Tuple of (group_root, biomass_array). For legacy array format,
+        both elements point to the same array.
 
     Raises:
         ValueError: If zarr store cannot be opened or biomass array not found
     """
     try:
-        # First try to open as array (legacy format)
-        z = zarr.open_array(str(zarr_path), mode='r')
-        return z, z
-    except (zarr.errors.NodeTypeValidationError, Exception):
-        # If it's a group, open the group and access biomass array
+        # Use Zarr v3 API with LocalStore
+        store = zarr.storage.LocalStore(str(zarr_path))
+
+        # First try to open as group (Zarr v3 format)
         try:
-            root = zarr.open_group(str(zarr_path), mode='r')
-            if 'biomass' not in root:
-                raise KeyError(f"'biomass' array not found in zarr group: {zarr_path}")
-            return root, root['biomass']
-        except (Exception, KeyError) as e:
-            raise ValueError(f"Cannot open zarr store {zarr_path}: {e}")
+            root = zarr.open_group(store=store, mode='r')
+
+            # Check if this is a group with biomass array
+            if 'biomass' in root:
+                return root, root['biomass']
+            else:
+                raise ValueError(f"'biomass' array not found in zarr group: {zarr_path}")
+        except (zarr.errors.NodeTypeValidationError, zarr.errors.ContainsArrayError):
+            # This is a legacy array format (single array, not group)
+            # Open as array instead
+            arr = zarr.open_array(store=store, mode='r')
+            return arr, arr
+
+    except ValueError:
+        # Re-raise ValueError as-is
+        raise
+    except Exception as e:
+        raise ValueError(f"Cannot open zarr store {zarr_path}: {e}")
 
 
 def safe_load_zarr_with_memory_check(zarr_path: Path,
@@ -270,24 +287,29 @@ def create_zarr_from_rasters(
             crs = src.crs
             bounds = src.bounds
 
-        # Create zarr array with total + species layers
+        # Create zarr group with biomass array using Zarr v3 API
         n_layers = len(raster_files) + 1  # +1 for total biomass
-        z = zarr.open_array(
-            str(output_path),
-            mode='w',
+        store = zarr.storage.LocalStore(str(output_path))
+        root = zarr.open_group(store=store, mode='w')
+
+        # Use BloscCodec for compression (Zarr v3 pattern)
+        blosc_codec = zarr.codecs.BloscCodec(cname='lz4', clevel=5, shuffle='shuffle')
+
+        z = root.create_array(
+            'biomass',
             shape=(n_layers, height, width),
             chunks=config.chunk_size,
             dtype='float32',
             fill_value=config.nodata_value,
-            compressor=zarr.Blosc(cname='lz4', clevel=5, shuffle=2)
+            compressors=[blosc_codec]
         )
 
-        # Store metadata
-        z.attrs['crs'] = str(crs)
-        z.attrs['transform'] = transform.to_gdal()
-        z.attrs['bounds'] = bounds
-        z.attrs['layer_names'] = ['total_biomass'] + [f.stem for f in raster_files]
-        z.attrs['nodata'] = config.nodata_value
+        # Store metadata on the group
+        root.attrs['crs'] = str(crs)
+        root.attrs['transform'] = transform.to_gdal()
+        root.attrs['bounds'] = bounds
+        root.attrs['layer_names'] = ['total_biomass'] + [f.stem for f in raster_files]
+        root.attrs['nodata'] = config.nodata_value
 
         # Load species data
         total = np.zeros((height, width), dtype='float32')

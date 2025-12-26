@@ -12,6 +12,8 @@ import pytest
 import rasterio
 from rasterio.transform import from_bounds
 import zarr
+import zarr.codecs
+import zarr.storage
 
 from gridfia.config import GridFIASettings, CalculationConfig
 
@@ -61,26 +63,31 @@ def sample_raster(temp_dir: Path) -> Path:
 def sample_zarr_array(temp_dir: Path) -> zarr.Array:
     """Create a sample zarr array with multiple species for testing."""
     zarr_path = temp_dir / "test_biomass.zarr"
-    
+
     # Create test data: 5 species + 1 total, 100x100 pixels
     n_species = 6
     height, width = 100, 100
-    
-    # Create zarr array
-    z = zarr.open_array(
-        str(zarr_path),
-        mode='w',
+
+    # Create store and group using Zarr v3 API
+    store = zarr.storage.LocalStore(str(zarr_path))
+    root = zarr.open_group(store=store, mode='w')
+
+    # Create zarr array within group using v3 codec pattern
+    codec = zarr.codecs.BloscCodec(cname='zstd', clevel=3)
+    z = root.create_array(
+        name='biomass',
         shape=(n_species, height, width),
         chunks=(1, 50, 50),  # Chunk by species and spatial blocks
-        dtype='f4'
+        dtype='f4',
+        compressors=[codec]
     )
-    
+
     # Generate test data
     np.random.seed(42)  # Reproducible tests
-    
+
     # Species 0: Total biomass (sum of all others)
     total_biomass = np.zeros((height, width), dtype=np.float32)
-    
+
     # Species 1-5: Individual species with different patterns
     for i in range(1, n_species):
         # Create different spatial patterns for each species
@@ -101,29 +108,34 @@ def sample_zarr_array(temp_dir: Path) -> zarr.Array:
         else:  # Random scattered species
             data = np.random.rand(height, width) * 15
             data[data < 12] = 0
-        
+
         z[i] = data
         total_biomass += data
-    
+
     # Set total biomass layer
     z[0] = total_biomass
-    
-    # Add metadata attributes
-    z.attrs['species_codes'] = ['TOTAL', 'SP001', 'SP002', 'SP003', 'SP004', 'SP005']
-    z.attrs['species_names'] = [
-        'All Species Combined',
-        'Dominant Oak',
-        'Common Pine', 
-        'Rare Maple',
-        'Edge Birch',
-        'Scattered Ash'
-    ]
-    z.attrs['description'] = 'Test biomass data for GridFIA'
-    z.attrs['units'] = 'Mg/ha'
-    z.attrs['crs'] = 'ESRI:102039'
-    z.attrs['transform'] = [-2000000, 30, 0, -900000, 0, -30]
-    z.attrs['bounds'] = [-2000000, -1000000, -1900000, -900000]
-    
+
+    # Add metadata attributes to both group and array for compatibility
+    metadata = {
+        'species_codes': ['TOTAL', 'SP001', 'SP002', 'SP003', 'SP004', 'SP005'],
+        'species_names': [
+            'All Species Combined',
+            'Dominant Oak',
+            'Common Pine',
+            'Rare Maple',
+            'Edge Birch',
+            'Scattered Ash'
+        ],
+        'description': 'Test biomass data for GridFIA',
+        'units': 'Mg/ha',
+        'crs': 'ESRI:102039',
+        'transform': [-2000000, 30, 0, -900000, 0, -30],
+        'bounds': [-2000000, -1000000, -1900000, -900000]
+    }
+    for key, value in metadata.items():
+        root.attrs[key] = value
+        z.attrs[key] = value
+
     return z
 
 
@@ -184,25 +196,35 @@ def test_settings(temp_dir: Path) -> GridFIASettings:
 def empty_zarr_array(temp_dir: Path) -> zarr.Array:
     """Create an empty zarr array for edge case testing."""
     zarr_path = temp_dir / "empty_biomass.zarr"
-    
-    # Create empty array
-    z = zarr.open_array(
-        str(zarr_path),
-        mode='w',
+
+    # Create store and group using Zarr v3 API
+    store = zarr.storage.LocalStore(str(zarr_path))
+    root = zarr.open_group(store=store, mode='w')
+
+    # Create empty array using v3 codec pattern
+    codec = zarr.codecs.BloscCodec(cname='zstd', clevel=3)
+    z = root.create_array(
+        name='biomass',
         shape=(3, 50, 50),
         chunks=(1, 50, 50),
         dtype='f4',
-        fill_value=0.0
+        fill_value=0.0,
+        compressors=[codec]
     )
-    
+
     # All zeros
     z[:] = 0
-    
-    # Minimal metadata
-    z.attrs['species_codes'] = ['TOTAL', 'SP001', 'SP002']
-    z.attrs['species_names'] = ['All Species', 'Species 1', 'Species 2']
-    z.attrs['crs'] = 'ESRI:102039'
-    
+
+    # Minimal metadata on both group and array for compatibility
+    metadata = {
+        'species_codes': ['TOTAL', 'SP001', 'SP002'],
+        'species_names': ['All Species', 'Species 1', 'Species 2'],
+        'crs': 'ESRI:102039'
+    }
+    for key, value in metadata.items():
+        root.attrs[key] = value
+        z.attrs[key] = value
+
     return z
 
 
@@ -210,25 +232,36 @@ def empty_zarr_array(temp_dir: Path) -> zarr.Array:
 def single_species_zarr(temp_dir: Path) -> zarr.Array:
     """Create a zarr array with only one species for testing."""
     zarr_path = temp_dir / "single_species.zarr"
-    
-    # Single species plus total
-    z = zarr.open_array(
-        str(zarr_path),
-        mode='w',
+
+    # Create store and group using Zarr v3 API
+    store = zarr.storage.LocalStore(str(zarr_path))
+    root = zarr.open_group(store=store, mode='w')
+
+    # Single species plus total using v3 codec pattern
+    codec = zarr.codecs.BloscCodec(cname='zstd', clevel=3)
+    z = root.create_array(
+        name='biomass',
         shape=(2, 100, 100),
         chunks=(1, 100, 100),
-        dtype='f4'
+        dtype='f4',
+        compressors=[codec]
     )
-    
+
     # Generate data
     data = np.random.rand(100, 100) * 75
     data[data < 20] = 0
-    
+
     z[0] = data  # Total
     z[1] = data  # Single species
-    
-    z.attrs['species_codes'] = ['TOTAL', 'SP001']
-    z.attrs['species_names'] = ['All Species Combined', 'Single Pine Species']
-    z.attrs['crs'] = 'ESRI:102039'
-    
+
+    # Metadata on both group and array for compatibility
+    metadata = {
+        'species_codes': ['TOTAL', 'SP001'],
+        'species_names': ['All Species Combined', 'Single Pine Species'],
+        'crs': 'ESRI:102039'
+    }
+    for key, value in metadata.items():
+        root.attrs[key] = value
+        z.attrs[key] = value
+
     return z

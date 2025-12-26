@@ -25,6 +25,8 @@ import warnings
 
 import numpy as np
 import zarr
+import zarr.storage
+import zarr.codecs
 import rasterio
 from rasterio.transform import from_bounds, Affine
 import xarray as xr
@@ -182,9 +184,10 @@ class ForestMetricsProcessor:
             # Re-raise our own exceptions
             raise
         except Exception as e:
-            # Try as standalone array (legacy support)
+            # Try as standalone array (legacy support) using v3 API
             try:
-                array = zarr.open_array(zarr_path, mode='r')
+                store = zarr.storage.LocalStore(zarr_path)
+                array = zarr.open_array(store=store, mode='r')
                 return array, None
             except Exception:
                 raise InvalidZarrStructure(
@@ -564,26 +567,31 @@ class ForestMetricsProcessor:
             )
     
     def _save_zarr(
-        self, 
-        data: np.ndarray, 
-        output_path: Path, 
+        self,
+        data: np.ndarray,
+        output_path: Path,
         metadata: Dict[str, Any],
         var_name: str
     ) -> None:
-        """Save data as zarr array."""
-        # Create zarr array
-        z = zarr.open_array(
-            str(output_path),
-            mode='w',
+        """Save data as zarr array using Zarr v3 API."""
+        # Create zarr group using v3 API with LocalStore
+        store = zarr.storage.LocalStore(str(output_path))
+        root = zarr.open_group(store=store, mode='w')
+
+        # Create array with BloscCodec compression using v3 pattern
+        codec = zarr.codecs.BloscCodec(cname='zstd', clevel=5)
+        z = root.create_array(
+            name='data',
             shape=data.shape,
             chunks=(1000, 1000),
-            dtype=data.dtype
+            dtype=data.dtype,
+            compressors=[codec]
         )
-        
+
         # Write data
         z[:] = data
-        
-        # Add metadata
+
+        # Add metadata to the array
         z.attrs.update({
             'crs': metadata.get('crs'),
             'transform': list(metadata.get('transform', Affine.identity())),

@@ -41,9 +41,11 @@ Example Usage::
     )
 """
 
-import zarr
 import numpy as np
 from pathlib import Path
+from typing import List, Dict, Optional
+
+from ...utils.zarr_utils import ZarrStore
 
 def analyze_species_presence(
     zarr_path: str = "output/nc_biomass_expandable.zarr",
@@ -64,33 +66,34 @@ def analyze_species_presence(
     """
     
     print("=== Analyzing Species Presence in North Carolina ===\n")
-    
-    # Load zarr array
+
+    # Load zarr store using ZarrStore wrapper (Zarr v3 API)
     if not Path(zarr_path).exists():
-        print(f"❌ Zarr file not found: {zarr_path}")
+        print(f"Zarr file not found: {zarr_path}")
         return
-    
-    zarr_array = zarr.open_array(zarr_path, mode='r')
-    species_codes = zarr_array.attrs['species_codes']
-    species_names = zarr_array.attrs['species_names']
-    
-    print(f"📊 Total species in zarr: {len(species_codes)}")
-    print(f"📊 Zarr shape: {zarr_array.shape}")
-    print(f"📊 Total pixels per species: {zarr_array.shape[1] * zarr_array.shape[2]:,}")
+
+    # Open Zarr store using the ZarrStore wrapper class
+    zarr_store = ZarrStore.from_path(zarr_path, mode='r')
+    species_codes = zarr_store.species_codes
+    species_names = zarr_store.species_names
+
+    print(f"Total species in zarr: {len(species_codes)}")
+    print(f"Zarr shape: {zarr_store.shape}")
+    print(f"Total pixels per species: {zarr_store.shape[1] * zarr_store.shape[2]:,}")
     print()
     
     # Analyze each species
     species_with_data = []
     species_without_data = []
     
-    print("🔍 Analyzing each species layer...")
+    print("Analyzing each species layer...")
     print("="*80)
     
     for i, (code, name) in enumerate(zip(species_codes, species_names)):
         print(f"Processing {i+1}/{len(species_codes)}: {code}", end=" ... ")
-        
-        # Load species data
-        data = zarr_array[i]
+
+        # Load species data from the biomass array using Zarr v3 group access pattern
+        data = zarr_store.biomass[i, :, :]
         
         # Calculate statistics
         nonzero_pixels = np.count_nonzero(data > biomass_threshold)
@@ -112,20 +115,20 @@ def analyze_species_presence(
                 'mean_biomass': mean_biomass,
                 'max_biomass': max_biomass
             })
-            print(f"✅ {nonzero_pixels:,} pixels ({coverage_pct:.3f}%)")
+            print(f"[OK] {nonzero_pixels:,} pixels ({coverage_pct:.3f}%)")
         else:
             species_without_data.append({
                 'index': i,
                 'code': code,
                 'name': name
             })
-            print("❌ No data")
+            print("[NO DATA]")
     
     print("="*80)
     print()
     
     # Summary statistics
-    print("📈 SUMMARY STATISTICS")
+    print("SUMMARY STATISTICS")
     print("="*50)
     print(f"Species with biomass data: {len(species_with_data):2d} ({len(species_with_data)/len(species_codes)*100:.1f}%)")
     print(f"Species without data:      {len(species_without_data):2d} ({len(species_without_data)/len(species_codes)*100:.1f}%)")
@@ -133,7 +136,7 @@ def analyze_species_presence(
     
     # Species WITH data (sorted by coverage)
     if species_with_data:
-        print("🌲 SPECIES WITH BIOMASS DATA IN NORTH CAROLINA")
+        print("SPECIES WITH BIOMASS DATA IN NORTH CAROLINA")
         print("="*80)
         species_with_data.sort(key=lambda x: x['coverage_pct'], reverse=True)
         
@@ -149,7 +152,7 @@ def analyze_species_presence(
     
     # Species WITHOUT data
     if species_without_data:
-        print("🚫 SPECIES WITHOUT BIOMASS DATA IN NORTH CAROLINA")
+        print("SPECIES WITHOUT BIOMASS DATA IN NORTH CAROLINA")
         print("="*80)
         print("These species likely don't naturally occur in North Carolina:")
         print()
@@ -185,23 +188,32 @@ def analyze_species_presence(
                     'max_biomass': species['max_biomass']
                 })
         
-        print(f"💾 Results saved to: {csv_path}")
+        print(f"Results saved to: {csv_path}")
     
     # Top species by coverage
     if len(species_with_data) > 0:
-        print("🏆 TOP 10 SPECIES BY COVERAGE")
+        print("TOP 10 SPECIES BY COVERAGE")
         print("="*50)
         for i, species in enumerate(species_with_data[:10], 1):
             print(f"{i:2d}. {species['name']} ({species['code']}) - {species['coverage_pct']:.3f}%")
     
     # Summary for next steps
     print()
-    print("🎯 NEXT STEPS")
+    print("NEXT STEPS")
     print("="*30)
-    print(f"• Use species indices 0-{len(species_with_data)-1} for analysis of NC forest species")
-    print(f"• Total forest coverage: {species_with_data[0]['coverage_pct']:.1f}% of NC land area")
-    print(f"• Most common species: {species_with_data[1]['name']} ({species_with_data[1]['coverage_pct']:.3f}%)")
-    print(f"• Zarr file size: {get_folder_size(zarr_path):.1f} MB")
+    if len(species_with_data) >= 2:
+        print(f"* Use species indices 0-{len(species_with_data)-1} for analysis of NC forest species")
+        print(f"* Total forest coverage: {species_with_data[0]['coverage_pct']:.1f}% of NC land area")
+        print(f"* Most common species: {species_with_data[1]['name']} ({species_with_data[1]['coverage_pct']:.3f}%)")
+    elif len(species_with_data) == 1:
+        print(f"* Only 1 species with data found")
+        print(f"* Coverage: {species_with_data[0]['coverage_pct']:.1f}% of land area")
+    else:
+        print("* No species with biomass data found")
+    print(f"* Zarr file size: {get_folder_size(zarr_path):.1f} MB")
+
+    # Close the ZarrStore to release resources
+    zarr_store.close()
 
 def get_folder_size(folder_path):
     """Calculate total size of folder in MB."""

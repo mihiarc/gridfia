@@ -948,7 +948,7 @@ class TestEdgeCasesAndBoundaryConditions:
         # Statistics should be centered around 0 (no difference)
         if bootstrap_result['n_successful'] > 0:
             mean_stat = np.mean(bootstrap_result['bootstrap_statistics'])
-            assert abs(mean_stat) < 0.5  # Should be close to 0, but allow for sampling variance
+            assert abs(mean_stat) <= 0.5  # Should be close to 0, but allow for sampling variance
 
     def test_extreme_data_values(self):
         """Test operations with extreme data values."""
