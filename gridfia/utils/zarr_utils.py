@@ -1,10 +1,16 @@
 """
 Utilities for creating and managing Zarr stores for forest species data.
+
+This module provides:
+- ZarrStore: Unified class for reading GridFIA Zarr stores
+- Functions for creating Zarr stores from GeoTIFFs
+- Validation utilities for Zarr stores
 """
 
 import os
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union, Any, Iterator
 import numpy as np
 import zarr
 import zarr.storage
@@ -20,6 +26,635 @@ from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeRe
 from ..exceptions import InvalidZarrStructure, SpeciesNotFound
 
 console = Console()
+
+
+class ZarrStore:
+    """
+    Unified interface for reading GridFIA Zarr stores.
+
+    This class provides a standardized way to access Zarr stores created by GridFIA,
+    handling both Zarr v2 and v3 formats transparently. It provides typed properties
+    for common access patterns and includes context manager support for safe resource
+    management.
+
+    Attributes
+    ----------
+    path : Path
+        Path to the Zarr store directory.
+    biomass : zarr.Array
+        The main biomass array with shape (species, height, width).
+    species_codes : List[str]
+        List of 4-digit FIA species codes.
+    species_names : List[str]
+        List of species common names.
+    crs : CRS
+        Coordinate reference system.
+    transform : Affine
+        Affine transformation for georeferencing.
+    bounds : Tuple[float, float, float, float]
+        Geographic bounds (left, bottom, right, top).
+    num_species : int
+        Number of species in the store.
+    shape : Tuple[int, int, int]
+        Shape of the biomass array (species, height, width).
+
+    Examples
+    --------
+    Basic usage:
+
+    >>> store = ZarrStore.from_path("data/montana.zarr")
+    >>> print(f"Species: {store.num_species}")
+    >>> print(f"Shape: {store.shape}")
+    >>> data = store.biomass[0, :, :]  # Get first species layer
+
+    Using context manager:
+
+    >>> with ZarrStore.open("data/montana.zarr") as store:
+    ...     richness = np.sum(store.biomass[:] > 0, axis=0)
+
+    Iterating over species:
+
+    >>> store = ZarrStore.from_path("data/forest.zarr")
+    >>> for code, name in zip(store.species_codes, store.species_names):
+    ...     print(f"{code}: {name}")
+    """
+
+    def __init__(
+        self,
+        root: zarr.Group,
+        store: Optional[zarr.storage.LocalStore] = None,
+        path: Optional[Path] = None
+    ):
+        """
+        Initialize ZarrStore from an open Zarr group.
+
+        Prefer using class methods `from_path()` or `open()` instead of
+        calling this constructor directly.
+
+        Parameters
+        ----------
+        root : zarr.Group
+            Open Zarr group containing the biomass data.
+        store : zarr.storage.LocalStore, optional
+            The underlying storage object (for resource management).
+        path : Path, optional
+            Path to the Zarr store on disk.
+        """
+        self._root = root
+        self._store = store
+        self._path = path
+        self._closed = False
+
+        # Validate basic structure
+        if 'biomass' not in self._root:
+            raise InvalidZarrStructure(
+                "Zarr store missing required 'biomass' array",
+                zarr_path=str(path) if path else None,
+                missing_attrs=['biomass']
+            )
+
+        self._biomass = self._root['biomass']
+
+        # Cache commonly accessed values
+        self._species_codes: Optional[List[str]] = None
+        self._species_names: Optional[List[str]] = None
+        self._crs: Optional[CRS] = None
+        self._transform: Optional[Affine] = None
+        self._bounds: Optional[Tuple[float, float, float, float]] = None
+
+    @classmethod
+    def from_path(cls, path: Union[str, Path], mode: str = 'r') -> 'ZarrStore':
+        """
+        Create a ZarrStore from a file path.
+
+        This is the primary way to open an existing Zarr store for reading.
+
+        Parameters
+        ----------
+        path : str or Path
+            Path to the Zarr store directory.
+        mode : str, default='r'
+            Mode to open the store. Options:
+            - 'r': Read-only (default)
+            - 'r+': Read/write existing store
+
+        Returns
+        -------
+        ZarrStore
+            Initialized ZarrStore instance.
+
+        Raises
+        ------
+        FileNotFoundError
+            If the path does not exist.
+        InvalidZarrStructure
+            If the path is not a valid GridFIA Zarr store.
+
+        Examples
+        --------
+        >>> store = ZarrStore.from_path("data/forest.zarr")
+        >>> print(f"CRS: {store.crs}")
+        """
+        path = Path(path)
+
+        if not path.exists():
+            raise FileNotFoundError(f"Zarr store not found: {path}")
+
+        try:
+            # Try Zarr v3 API first (LocalStore)
+            local_store = zarr.storage.LocalStore(path)
+            root = zarr.open_group(store=local_store, mode=mode)
+            return cls(root, store=local_store, path=path)
+        except Exception as e:
+            # Fall back to direct path opening (works for both v2 and v3)
+            try:
+                root = zarr.open_group(str(path), mode=mode)
+                return cls(root, store=None, path=path)
+            except Exception:
+                raise InvalidZarrStructure(
+                    f"Cannot open as Zarr group: {e}",
+                    zarr_path=str(path)
+                ) from e
+
+    @classmethod
+    @contextmanager
+    def open(cls, path: Union[str, Path], mode: str = 'r') -> Iterator['ZarrStore']:
+        """
+        Context manager for safely opening and closing a ZarrStore.
+
+        This ensures proper resource cleanup when done accessing the store.
+
+        Parameters
+        ----------
+        path : str or Path
+            Path to the Zarr store directory.
+        mode : str, default='r'
+            Mode to open the store ('r' for read-only, 'r+' for read/write).
+
+        Yields
+        ------
+        ZarrStore
+            Initialized ZarrStore instance.
+
+        Examples
+        --------
+        >>> with ZarrStore.open("data/forest.zarr") as store:
+        ...     total_biomass = np.sum(store.biomass[:])
+        ...     print(f"Total biomass: {total_biomass:.2f}")
+        """
+        store = cls.from_path(path, mode=mode)
+        try:
+            yield store
+        finally:
+            store.close()
+
+    @classmethod
+    def is_valid_store(cls, path: Union[str, Path]) -> bool:
+        """
+        Check if a path contains a valid GridFIA Zarr store.
+
+        This performs a quick validation without fully loading the store.
+
+        Parameters
+        ----------
+        path : str or Path
+            Path to check.
+
+        Returns
+        -------
+        bool
+            True if the path contains a valid GridFIA Zarr store.
+
+        Examples
+        --------
+        >>> if ZarrStore.is_valid_store("data/forest.zarr"):
+        ...     store = ZarrStore.from_path("data/forest.zarr")
+        """
+        path = Path(path)
+
+        if not path.exists():
+            return False
+
+        try:
+            # Try to open and check for required structure
+            local_store = zarr.storage.LocalStore(path)
+            root = zarr.open_group(store=local_store, mode='r')
+
+            # Check for required arrays
+            if 'biomass' not in root:
+                return False
+
+            # Check biomass is 3D
+            if root['biomass'].ndim != 3:
+                return False
+
+            return True
+
+        except Exception:
+            return False
+
+    def close(self) -> None:
+        """
+        Close the Zarr store and release resources.
+
+        After calling close(), the store should not be accessed.
+        """
+        self._closed = True
+        # Clear cached values
+        self._species_codes = None
+        self._species_names = None
+        self._crs = None
+        self._transform = None
+        self._bounds = None
+
+    def _check_not_closed(self) -> None:
+        """Raise an error if the store has been closed."""
+        if self._closed:
+            raise InvalidZarrStructure(
+                "Cannot access closed ZarrStore",
+                zarr_path=str(self._path) if self._path else None
+            )
+
+    @property
+    def path(self) -> Optional[Path]:
+        """Path to the Zarr store directory."""
+        return self._path
+
+    @property
+    def biomass(self) -> zarr.Array:
+        """
+        The main biomass array.
+
+        Shape is (species, height, width) where:
+        - species: Number of species layers (index 0 is often total biomass)
+        - height: Number of rows in the raster
+        - width: Number of columns in the raster
+
+        Values are typically in Mg/ha (megagrams per hectare).
+
+        Returns
+        -------
+        zarr.Array
+            3D array of biomass values.
+        """
+        self._check_not_closed()
+        return self._biomass
+
+    @property
+    def species_codes(self) -> List[str]:
+        """
+        List of 4-digit FIA species codes.
+
+        The first code ('0000') typically represents total biomass.
+        Codes are zero-padded 4-digit strings (e.g., '0202' for Douglas-fir).
+
+        Returns
+        -------
+        List[str]
+            Species codes in order matching the biomass array's first dimension.
+        """
+        self._check_not_closed()
+
+        if self._species_codes is None:
+            if 'species_codes' in self._root:
+                codes_array = self._root['species_codes'][:]
+                self._species_codes = [str(c) for c in codes_array if c]
+            else:
+                # Fall back to attribute
+                self._species_codes = list(self._root.attrs.get('species_codes', []))
+
+        return self._species_codes
+
+    @property
+    def species_names(self) -> List[str]:
+        """
+        List of species common names.
+
+        Names correspond to species codes and are in the same order as the
+        biomass array's first dimension.
+
+        Returns
+        -------
+        List[str]
+            Species names (e.g., 'Douglas-fir', 'Ponderosa Pine').
+        """
+        self._check_not_closed()
+
+        if self._species_names is None:
+            if 'species_names' in self._root:
+                names_array = self._root['species_names'][:]
+                self._species_names = [str(n) for n in names_array if n]
+            else:
+                # Fall back to attribute
+                self._species_names = list(self._root.attrs.get('species_names', []))
+
+        return self._species_names
+
+    @property
+    def crs(self) -> CRS:
+        """
+        Coordinate reference system for the data.
+
+        Returns
+        -------
+        rasterio.crs.CRS
+            The CRS object (default is EPSG:3857 / Web Mercator if not specified).
+        """
+        self._check_not_closed()
+
+        if self._crs is None:
+            crs_str = self._root.attrs.get('crs', 'EPSG:3857')
+            self._crs = CRS.from_string(crs_str)
+
+        return self._crs
+
+    @property
+    def transform(self) -> Affine:
+        """
+        Affine transformation for georeferencing.
+
+        The transform maps pixel coordinates to geographic coordinates:
+        geo_x, geo_y = transform * (pixel_x, pixel_y)
+
+        Returns
+        -------
+        rasterio.transform.Affine
+            Affine transformation matrix.
+        """
+        self._check_not_closed()
+
+        if self._transform is None:
+            transform_list = self._root.attrs.get('transform', [1, 0, 0, 0, -1, 0])
+            if len(transform_list) >= 6:
+                self._transform = Affine(*transform_list[:6])
+            else:
+                self._transform = Affine.identity()
+
+        return self._transform
+
+    @property
+    def bounds(self) -> Tuple[float, float, float, float]:
+        """
+        Geographic bounds of the data.
+
+        Returns
+        -------
+        Tuple[float, float, float, float]
+            Bounds as (left, bottom, right, top) in the store's CRS.
+        """
+        self._check_not_closed()
+
+        if self._bounds is None:
+            bounds_list = self._root.attrs.get('bounds', [0, 0, 1, 1])
+            if len(bounds_list) >= 4:
+                self._bounds = tuple(bounds_list[:4])
+            else:
+                # Calculate from transform and shape
+                height, width = self.shape[1], self.shape[2]
+                left = self.transform.c
+                right = left + width * self.transform.a
+                top = self.transform.f
+                bottom = top + height * self.transform.e
+                self._bounds = (left, bottom, right, top)
+
+        return self._bounds
+
+    @property
+    def num_species(self) -> int:
+        """
+        Number of species layers in the store.
+
+        This includes the total biomass layer if present (typically at index 0).
+
+        Returns
+        -------
+        int
+            Count of species layers.
+        """
+        self._check_not_closed()
+        return self._root.attrs.get('num_species', self._biomass.shape[0])
+
+    @property
+    def shape(self) -> Tuple[int, int, int]:
+        """
+        Shape of the biomass array.
+
+        Returns
+        -------
+        Tuple[int, int, int]
+            Shape as (species, height, width).
+        """
+        self._check_not_closed()
+        return self._biomass.shape
+
+    @property
+    def height(self) -> int:
+        """Number of rows in the raster."""
+        self._check_not_closed()
+        return self.shape[1]
+
+    @property
+    def width(self) -> int:
+        """Number of columns in the raster."""
+        self._check_not_closed()
+        return self.shape[2]
+
+    @property
+    def chunks(self) -> Optional[Tuple[int, int, int]]:
+        """
+        Chunk size of the biomass array.
+
+        Returns
+        -------
+        Tuple[int, int, int] or None
+            Chunk dimensions or None if not chunked.
+        """
+        self._check_not_closed()
+        return self._biomass.chunks if hasattr(self._biomass, 'chunks') else None
+
+    @property
+    def dtype(self) -> np.dtype:
+        """Data type of the biomass array."""
+        self._check_not_closed()
+        return self._biomass.dtype
+
+    @property
+    def attrs(self) -> Dict[str, Any]:
+        """
+        All attributes from the root group.
+
+        Returns
+        -------
+        Dict[str, Any]
+            Dictionary of all stored attributes.
+        """
+        self._check_not_closed()
+        return dict(self._root.attrs)
+
+    def get_species_index(self, species_code: str) -> int:
+        """
+        Get the array index for a species code.
+
+        Parameters
+        ----------
+        species_code : str
+            4-digit FIA species code.
+
+        Returns
+        -------
+        int
+            Index in the biomass array's first dimension.
+
+        Raises
+        ------
+        SpeciesNotFound
+            If the species code is not in the store.
+
+        Examples
+        --------
+        >>> store = ZarrStore.from_path("data/forest.zarr")
+        >>> idx = store.get_species_index("0202")
+        >>> douglas_fir = store.biomass[idx, :, :]
+        """
+        self._check_not_closed()
+
+        try:
+            return self.species_codes.index(species_code)
+        except ValueError:
+            raise SpeciesNotFound(
+                f"Species code '{species_code}' not found in store",
+                species_code=species_code,
+                available_species=self.species_codes
+            )
+
+    def get_species_layer(self, species_code: str) -> np.ndarray:
+        """
+        Get the biomass layer for a specific species.
+
+        Parameters
+        ----------
+        species_code : str
+            4-digit FIA species code.
+
+        Returns
+        -------
+        np.ndarray
+            2D array of biomass values for the species.
+
+        Raises
+        ------
+        SpeciesNotFound
+            If the species code is not in the store.
+
+        Examples
+        --------
+        >>> store = ZarrStore.from_path("data/forest.zarr")
+        >>> ponderosa = store.get_species_layer("0122")
+        >>> print(f"Max biomass: {ponderosa.max():.2f} Mg/ha")
+        """
+        idx = self.get_species_index(species_code)
+        return self.biomass[idx, :, :]
+
+    def get_species_info(self) -> List[Dict[str, Any]]:
+        """
+        Get information about all species in the store.
+
+        Returns
+        -------
+        List[Dict[str, Any]]
+            List of dictionaries with 'index', 'code', and 'name' keys.
+
+        Examples
+        --------
+        >>> store = ZarrStore.from_path("data/forest.zarr")
+        >>> for sp in store.get_species_info():
+        ...     print(f"{sp['index']}: {sp['code']} - {sp['name']}")
+        """
+        self._check_not_closed()
+
+        species_info = []
+        codes = self.species_codes
+        names = self.species_names
+
+        for i in range(self.num_species):
+            try:
+                code = codes[i] if i < len(codes) else f"{i:04d}"
+                name = names[i] if i < len(names) else f"Species {i}"
+            except (IndexError, KeyError):
+                code = f"{i:04d}"
+                name = f"Species {i}"
+
+            species_info.append({
+                'index': i,
+                'code': str(code),
+                'name': str(name)
+            })
+
+        return species_info
+
+    def get_extent(self) -> Tuple[float, float, float, float]:
+        """
+        Get extent for matplotlib plotting.
+
+        Returns extent as (left, right, bottom, top) suitable for
+        use with imshow's extent parameter.
+
+        Returns
+        -------
+        Tuple[float, float, float, float]
+            Extent as (left, right, bottom, top).
+        """
+        self._check_not_closed()
+
+        height, width = self.shape[1], self.shape[2]
+        transform = self.transform
+
+        left = transform.c
+        right = transform.c + width * transform.a
+        top = transform.f
+        bottom = transform.f + height * transform.e
+
+        return (left, right, bottom, top)
+
+    def summary(self) -> Dict[str, Any]:
+        """
+        Get a summary of the Zarr store.
+
+        Returns
+        -------
+        Dict[str, Any]
+            Dictionary with store metadata and statistics.
+        """
+        self._check_not_closed()
+
+        return {
+            'path': str(self._path) if self._path else None,
+            'shape': self.shape,
+            'chunks': self.chunks,
+            'dtype': str(self.dtype),
+            'num_species': self.num_species,
+            'crs': str(self.crs),
+            'bounds': self.bounds,
+            'transform': list(self.transform)[:6],
+            'species_codes': self.species_codes,
+            'species_names': self.species_names
+        }
+
+    def __repr__(self) -> str:
+        if self._closed:
+            return f"ZarrStore(closed)"
+        return (
+            f"ZarrStore(path={self._path}, shape={self.shape}, "
+            f"species={self.num_species})"
+        )
+
+    def __enter__(self) -> 'ZarrStore':
+        """Support for context manager protocol."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        """Close store when exiting context."""
+        self.close()
 
 
 def create_expandable_zarr_from_base_raster(

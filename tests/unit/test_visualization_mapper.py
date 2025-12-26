@@ -190,12 +190,12 @@ class TestZarrMapperInitialization:
         mapper = ZarrMapper(complete_zarr_store)
 
         assert mapper.zarr_path == Path(complete_zarr_store)
-        assert mapper.root is not None
+        assert mapper._store is not None  # Now uses ZarrStore internally
         assert mapper.biomass is not None
         assert mapper.num_species == 6
         assert mapper.crs == CRS.from_string('EPSG:3857')
-        assert mapper.species_codes.shape[0] == 6
-        assert mapper.species_names.shape[0] == 6
+        assert len(mapper.species_codes) == 6  # Now returns a list
+        assert len(mapper.species_names) == 6  # Now returns a list
         assert isinstance(mapper.transform, Affine)
         assert len(mapper.bounds) == 4
         assert mapper._diversity_cache == {}
@@ -219,9 +219,9 @@ class TestZarrMapperInitialization:
 
         assert mapper.num_species == 2
         assert mapper.crs == CRS.from_string('EPSG:4326')
-        # Should handle species_codes/names as Zarr arrays
-        assert mapper.species_codes.shape[0] == 2
-        assert mapper.species_names.shape[0] == 2
+        # Species codes/names are now returned as lists by ZarrStore
+        assert len(mapper.species_codes) == 2
+        assert len(mapper.species_names) == 2
 
     @patch('gridfia.visualization.mapper.console')
     def test_console_output_during_initialization(self, mock_console, complete_zarr_store):
@@ -268,16 +268,15 @@ class TestSpeciesInfo:
 
         assert len(species_info) == 2
 
-        # Should generate default names when metadata is missing
+        # Should generate correct species info from the minimal store
         for i, info in enumerate(species_info):
             assert info['index'] == i
             assert 'code' in info
             assert 'name' in info
-            # Default format when metadata is missing
-            if (isinstance(mapper.species_codes, list) and len(mapper.species_codes) <= i) or \
-               (hasattr(mapper.species_codes, 'shape') and mapper.species_codes.shape[0] <= i):
-                assert info['code'] == f"{i:04d}"
-                assert info['name'] == f"Species {i}"
+            # Check actual values from the minimal store (species codes are now lists)
+            if i < len(mapper.species_codes):
+                assert info['code'] == mapper.species_codes[i]
+                assert info['name'] == mapper.species_names[i]
 
 
 class TestDataNormalization:

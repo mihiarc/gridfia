@@ -12,6 +12,7 @@ Exception Hierarchy:
     |-- APIConnectionError
     |-- InvalidLocationConfig
     |-- DownloadError
+    |-- CircuitBreakerOpen
 """
 
 from typing import Optional, List, Any
@@ -288,3 +289,49 @@ class DownloadError(GridFIAException):
         self.species_code = species_code
         self.output_path = output_path
         self.original_error = original_error
+
+
+class CircuitBreakerOpen(GridFIAException):
+    """
+    Raised when circuit breaker is in OPEN state and requests are blocked.
+
+    This exception is raised when:
+    - Too many consecutive failures have occurred
+    - The circuit breaker is protecting against cascading failures
+    - The recovery timeout has not yet elapsed
+
+    The circuit breaker will automatically transition to HALF_OPEN state
+    after the recovery timeout to test if the service has recovered.
+
+    Examples
+    --------
+    >>> try:
+    ...     api.list_species()
+    ... except CircuitBreakerOpen as e:
+    ...     print(f"Service unavailable: {e}")
+    ...     print(f"Retry after: {e.retry_after} seconds")
+    """
+
+    def __init__(
+        self,
+        message: str,
+        failure_count: Optional[int] = None,
+        failure_threshold: Optional[int] = None,
+        retry_after: Optional[float] = None,
+        last_failure_time: Optional[float] = None
+    ):
+        details = {}
+        if failure_count is not None:
+            details["failure_count"] = failure_count
+        if failure_threshold is not None:
+            details["failure_threshold"] = failure_threshold
+        if retry_after is not None:
+            details["retry_after_seconds"] = round(retry_after, 2)
+        if last_failure_time is not None:
+            details["last_failure_time"] = last_failure_time
+
+        super().__init__(message, details)
+        self.failure_count = failure_count
+        self.failure_threshold = failure_threshold
+        self.retry_after = retry_after
+        self.last_failure_time = last_failure_time

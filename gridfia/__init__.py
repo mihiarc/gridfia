@@ -22,6 +22,9 @@ from gridfia.api import GridFIA
 # Configuration management for advanced users
 from gridfia.config import GridFIASettings, load_settings, save_settings
 
+# Utility classes for advanced users
+from gridfia.utils.zarr_utils import ZarrStore
+
 # Domain-specific exceptions
 from gridfia.exceptions import (
     GridFIAException,
@@ -46,6 +49,9 @@ __all__ = [
     "GridFIASettings",
     "load_settings",
     "save_settings",
+
+    # Utility classes
+    "ZarrStore",
 
     # Exceptions
     "GridFIAException",

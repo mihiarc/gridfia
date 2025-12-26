@@ -8,7 +8,8 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 import rasterio
-from rasterio.transform import from_bounds
+from rasterio.transform import from_bounds, Affine
+from rasterio.crs import CRS
 import zarr
 import zarr.storage
 from rich.console import Console
@@ -1141,3 +1142,922 @@ class TestSafeOpenZarrBiomass:
         # Should raise ValueError (from examples/utils.py which still uses ValueError)
         with pytest.raises(ValueError, match="Cannot open zarr store"):
             safe_open_zarr_biomass(nonexistent_path)
+
+
+class TestZarrStoreClass:
+    """
+    Comprehensive tests for the ZarrStore class.
+
+    Tests cover all public methods and properties:
+    - from_path() class method
+    - is_valid_store() class method
+    - open() context manager
+    - biomass property
+    - species_codes, species_names properties
+    - crs, transform, bounds properties
+    - num_species, shape, height, width properties
+    - get_species_index() method
+    - get_species_layer() method
+    - get_species_info() method
+    - get_extent() method
+    - summary() method
+    - close() method
+    """
+
+    from gridfia.utils.zarr_utils import ZarrStore
+
+    @pytest.fixture
+    def zarr_store_path(self, temp_dir: Path, sample_raster: Path):
+        """Create a complete Zarr store for ZarrStore testing."""
+        zarr_path = temp_dir / "zarr_store_test.zarr"
+
+        # Create store with multiple species using the existing function
+        root = create_expandable_zarr_from_base_raster(
+            base_raster_path=sample_raster,
+            zarr_path=zarr_path,
+            max_species=10
+        )
+
+        # Add additional species data
+        store = zarr.storage.LocalStore(zarr_path)
+        root = zarr.open_group(store=store, mode='r+')
+
+        # Add test species
+        np.random.seed(42)
+        height, width = 100, 100
+
+        root['biomass'][1, :, :] = np.random.rand(height, width) * 50
+        root['biomass'][2, :, :] = np.random.rand(height, width) * 30
+        root['biomass'][3, :, :] = np.random.rand(height, width) * 20
+
+        root['species_codes'][1] = '0202'
+        root['species_names'][1] = 'Douglas-fir'
+        root['species_codes'][2] = '0122'
+        root['species_names'][2] = 'Ponderosa Pine'
+        root['species_codes'][3] = '0746'
+        root['species_names'][3] = 'Quaking Aspen'
+        root.attrs['num_species'] = 4
+
+        return zarr_path
+
+    # Tests for from_path() class method
+
+    def test_from_path_success(self, zarr_store_path: Path):
+        """Test successful ZarrStore creation from path."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        store = ZarrStore.from_path(zarr_store_path)
+
+        assert store is not None
+        assert store.path == zarr_store_path
+        assert store.num_species == 4
+
+        store.close()
+
+    def test_from_path_with_string(self, zarr_store_path: Path):
+        """Test from_path accepts string paths."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        store = ZarrStore.from_path(str(zarr_store_path))
+
+        assert store is not None
+        assert store.path == zarr_store_path
+
+        store.close()
+
+    def test_from_path_nonexistent(self, temp_dir: Path):
+        """Test from_path raises FileNotFoundError for missing path."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        nonexistent_path = temp_dir / "does_not_exist.zarr"
+
+        with pytest.raises(FileNotFoundError, match="Zarr store not found"):
+            ZarrStore.from_path(nonexistent_path)
+
+    def test_from_path_invalid_zarr(self, temp_dir: Path):
+        """Test from_path raises InvalidZarrStructure for invalid zarr."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        # Create a directory that is not a valid zarr store
+        invalid_path = temp_dir / "invalid.zarr"
+        invalid_path.mkdir()
+        (invalid_path / "some_file.txt").write_text("not a zarr store")
+
+        with pytest.raises(InvalidZarrStructure):
+            ZarrStore.from_path(invalid_path)
+
+    def test_from_path_missing_biomass_array(self, temp_dir: Path):
+        """Test from_path raises InvalidZarrStructure when biomass array missing."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        zarr_path = temp_dir / "no_biomass.zarr"
+        store = zarr.storage.LocalStore(zarr_path)
+        root = zarr.open_group(store=store, mode='w')
+        root.create_array('other_array', shape=(10, 10), dtype='f4')
+
+        with pytest.raises(InvalidZarrStructure, match="missing required 'biomass' array"):
+            ZarrStore.from_path(zarr_path)
+
+    def test_from_path_read_write_mode(self, zarr_store_path: Path):
+        """Test from_path with read/write mode."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        store = ZarrStore.from_path(zarr_store_path, mode='r+')
+
+        assert store is not None
+        # Verify we can access the store
+        assert store.num_species >= 1
+
+        store.close()
+
+    # Tests for is_valid_store() class method
+
+    def test_is_valid_store_true(self, zarr_store_path: Path):
+        """Test is_valid_store returns True for valid store."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        assert ZarrStore.is_valid_store(zarr_store_path) is True
+
+    def test_is_valid_store_false_nonexistent(self, temp_dir: Path):
+        """Test is_valid_store returns False for nonexistent path."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        nonexistent_path = temp_dir / "nonexistent.zarr"
+        assert ZarrStore.is_valid_store(nonexistent_path) is False
+
+    def test_is_valid_store_false_no_biomass(self, temp_dir: Path):
+        """Test is_valid_store returns False when biomass array missing."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        zarr_path = temp_dir / "no_biomass_check.zarr"
+        store = zarr.storage.LocalStore(zarr_path)
+        root = zarr.open_group(store=store, mode='w')
+        root.create_array('other_data', shape=(5, 5), dtype='f4')
+
+        assert ZarrStore.is_valid_store(zarr_path) is False
+
+    def test_is_valid_store_false_wrong_dimensions(self, temp_dir: Path):
+        """Test is_valid_store returns False when biomass is not 3D."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        zarr_path = temp_dir / "wrong_dims.zarr"
+        store = zarr.storage.LocalStore(zarr_path)
+        root = zarr.open_group(store=store, mode='w')
+        # Create 2D array instead of 3D
+        root.create_array('biomass', shape=(100, 100), dtype='f4')
+
+        assert ZarrStore.is_valid_store(zarr_path) is False
+
+    def test_is_valid_store_with_string_path(self, zarr_store_path: Path):
+        """Test is_valid_store accepts string paths."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        assert ZarrStore.is_valid_store(str(zarr_store_path)) is True
+
+    # Tests for open() context manager
+
+    def test_open_context_manager(self, zarr_store_path: Path):
+        """Test open() context manager properly opens and closes store."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        with ZarrStore.open(zarr_store_path) as store:
+            assert store is not None
+            assert store.num_species == 4
+            # Store should be accessible inside context
+            biomass = store.biomass
+            assert biomass is not None
+
+    def test_open_context_manager_closes_on_exit(self, zarr_store_path: Path):
+        """Test open() context manager properly closes store on exit."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        with ZarrStore.open(zarr_store_path) as store:
+            pass
+
+        # After exiting context, store should be closed
+        with pytest.raises(InvalidZarrStructure, match="Cannot access closed"):
+            _ = store.biomass
+
+    def test_open_context_manager_closes_on_exception(self, zarr_store_path: Path):
+        """Test open() context manager closes store even on exception."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        store_ref = None
+        try:
+            with ZarrStore.open(zarr_store_path) as store:
+                store_ref = store
+                raise ValueError("Test exception")
+        except ValueError:
+            pass
+
+        # Store should still be closed after exception
+        with pytest.raises(InvalidZarrStructure, match="Cannot access closed"):
+            _ = store_ref.biomass
+
+    def test_open_read_write_mode(self, zarr_store_path: Path):
+        """Test open() context manager with read/write mode."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        with ZarrStore.open(zarr_store_path, mode='r+') as store:
+            assert store.num_species >= 1
+
+    # Tests for biomass property
+
+    def test_biomass_property(self, zarr_store_path: Path):
+        """Test biomass property returns the biomass array."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        with ZarrStore.open(zarr_store_path) as store:
+            biomass = store.biomass
+
+            assert biomass is not None
+            assert isinstance(biomass, zarr.Array)
+            assert biomass.ndim == 3
+
+    def test_biomass_property_closed_store(self, zarr_store_path: Path):
+        """Test biomass property raises error on closed store."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        store = ZarrStore.from_path(zarr_store_path)
+        store.close()
+
+        with pytest.raises(InvalidZarrStructure, match="Cannot access closed"):
+            _ = store.biomass
+
+    def test_biomass_data_integrity(self, zarr_store_path: Path):
+        """Test biomass data can be read correctly."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        with ZarrStore.open(zarr_store_path) as store:
+            # Access first layer (total biomass)
+            total_biomass = np.array(store.biomass[0, :, :])
+
+            assert total_biomass.shape == (100, 100)
+            assert total_biomass.dtype == np.float32
+
+    # Tests for species_codes and species_names properties
+
+    def test_species_codes_property(self, zarr_store_path: Path):
+        """Test species_codes property returns list of codes."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        with ZarrStore.open(zarr_store_path) as store:
+            codes = store.species_codes
+
+            assert isinstance(codes, list)
+            assert len(codes) >= 4
+            assert '0000' in codes  # Total biomass code
+            assert '0202' in codes  # Douglas-fir
+            assert '0122' in codes  # Ponderosa Pine
+            assert '0746' in codes  # Quaking Aspen
+
+    def test_species_names_property(self, zarr_store_path: Path):
+        """Test species_names property returns list of names."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        with ZarrStore.open(zarr_store_path) as store:
+            names = store.species_names
+
+            assert isinstance(names, list)
+            assert len(names) >= 4
+            assert 'Total Biomass' in names
+            assert 'Douglas-fir' in names
+            assert 'Ponderosa Pine' in names
+            assert 'Quaking Aspen' in names
+
+    def test_species_codes_caching(self, zarr_store_path: Path):
+        """Test species_codes are cached after first access."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        with ZarrStore.open(zarr_store_path) as store:
+            codes1 = store.species_codes
+            codes2 = store.species_codes
+
+            # Should return same cached list
+            assert codes1 is codes2
+
+    def test_species_names_caching(self, zarr_store_path: Path):
+        """Test species_names are cached after first access."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        with ZarrStore.open(zarr_store_path) as store:
+            names1 = store.species_names
+            names2 = store.species_names
+
+            # Should return same cached list
+            assert names1 is names2
+
+    def test_species_codes_closed_store(self, zarr_store_path: Path):
+        """Test species_codes raises error on closed store."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        store = ZarrStore.from_path(zarr_store_path)
+        store.close()
+
+        with pytest.raises(InvalidZarrStructure, match="Cannot access closed"):
+            _ = store.species_codes
+
+    # Tests for crs, transform, bounds properties
+
+    def test_crs_property(self, zarr_store_path: Path):
+        """Test crs property returns CRS object."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        with ZarrStore.open(zarr_store_path) as store:
+            crs = store.crs
+
+            assert crs is not None
+            assert isinstance(crs, CRS)
+            assert 'ESRI:102039' in crs.to_string() or '102039' in str(crs)
+
+    def test_transform_property(self, zarr_store_path: Path):
+        """Test transform property returns Affine transform."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        with ZarrStore.open(zarr_store_path) as store:
+            transform = store.transform
+
+            assert transform is not None
+            assert isinstance(transform, Affine)
+            # Transform should have 6 parameters
+            assert len(list(transform)[:6]) == 6
+
+    def test_bounds_property(self, zarr_store_path: Path):
+        """Test bounds property returns tuple of bounds."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        with ZarrStore.open(zarr_store_path) as store:
+            bounds = store.bounds
+
+            assert bounds is not None
+            assert isinstance(bounds, tuple)
+            assert len(bounds) == 4
+            # Bounds should be (left, bottom, right, top)
+            left, bottom, right, top = bounds
+            assert left < right
+            assert bottom < top
+
+    def test_crs_caching(self, zarr_store_path: Path):
+        """Test CRS is cached after first access."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        with ZarrStore.open(zarr_store_path) as store:
+            crs1 = store.crs
+            crs2 = store.crs
+
+            assert crs1 is crs2
+
+    def test_transform_caching(self, zarr_store_path: Path):
+        """Test transform is cached after first access."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        with ZarrStore.open(zarr_store_path) as store:
+            transform1 = store.transform
+            transform2 = store.transform
+
+            assert transform1 is transform2
+
+    def test_bounds_caching(self, zarr_store_path: Path):
+        """Test bounds are cached after first access."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        with ZarrStore.open(zarr_store_path) as store:
+            bounds1 = store.bounds
+            bounds2 = store.bounds
+
+            assert bounds1 is bounds2
+
+    def test_crs_closed_store(self, zarr_store_path: Path):
+        """Test crs raises error on closed store."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        store = ZarrStore.from_path(zarr_store_path)
+        store.close()
+
+        with pytest.raises(InvalidZarrStructure, match="Cannot access closed"):
+            _ = store.crs
+
+    # Tests for num_species, shape, height, width properties
+
+    def test_num_species_property(self, zarr_store_path: Path):
+        """Test num_species property returns correct count."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        with ZarrStore.open(zarr_store_path) as store:
+            num_species = store.num_species
+
+            assert num_species == 4
+
+    def test_shape_property(self, zarr_store_path: Path):
+        """Test shape property returns tuple of dimensions."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        with ZarrStore.open(zarr_store_path) as store:
+            shape = store.shape
+
+            assert isinstance(shape, tuple)
+            assert len(shape) == 3
+            # Shape is (species, height, width)
+            assert shape[0] == 10  # max_species
+            assert shape[1] == 100  # height
+            assert shape[2] == 100  # width
+
+    def test_height_property(self, zarr_store_path: Path):
+        """Test height property returns correct value."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        with ZarrStore.open(zarr_store_path) as store:
+            height = store.height
+
+            assert height == 100
+
+    def test_width_property(self, zarr_store_path: Path):
+        """Test width property returns correct value."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        with ZarrStore.open(zarr_store_path) as store:
+            width = store.width
+
+            assert width == 100
+
+    def test_shape_consistency(self, zarr_store_path: Path):
+        """Test height and width are consistent with shape."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        with ZarrStore.open(zarr_store_path) as store:
+            shape = store.shape
+
+            assert store.height == shape[1]
+            assert store.width == shape[2]
+
+    def test_num_species_closed_store(self, zarr_store_path: Path):
+        """Test num_species raises error on closed store."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        store = ZarrStore.from_path(zarr_store_path)
+        store.close()
+
+        with pytest.raises(InvalidZarrStructure, match="Cannot access closed"):
+            _ = store.num_species
+
+    # Tests for get_species_index() method
+
+    def test_get_species_index_valid_code(self, zarr_store_path: Path):
+        """Test get_species_index returns correct index for valid code."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        with ZarrStore.open(zarr_store_path) as store:
+            idx = store.get_species_index('0202')
+
+            assert idx == 1  # Douglas-fir is at index 1
+
+    def test_get_species_index_total_biomass(self, zarr_store_path: Path):
+        """Test get_species_index returns 0 for total biomass."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        with ZarrStore.open(zarr_store_path) as store:
+            idx = store.get_species_index('0000')
+
+            assert idx == 0
+
+    def test_get_species_index_invalid_code(self, zarr_store_path: Path):
+        """Test get_species_index raises SpeciesNotFound for invalid code."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        with ZarrStore.open(zarr_store_path) as store:
+            with pytest.raises(SpeciesNotFound, match="not found"):
+                store.get_species_index('9999')
+
+    def test_get_species_index_provides_available_species(self, zarr_store_path: Path):
+        """Test SpeciesNotFound includes available species list."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        with ZarrStore.open(zarr_store_path) as store:
+            try:
+                store.get_species_index('9999')
+            except SpeciesNotFound as e:
+                assert e.species_code == '9999'
+                assert e.available_species is not None
+                assert len(e.available_species) > 0
+
+    # Tests for get_species_layer() method
+
+    def test_get_species_layer_valid_code(self, zarr_store_path: Path):
+        """Test get_species_layer returns correct data for valid code."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        with ZarrStore.open(zarr_store_path) as store:
+            layer = store.get_species_layer('0202')
+
+            assert isinstance(layer, np.ndarray)
+            assert layer.shape == (100, 100)
+
+    def test_get_species_layer_total_biomass(self, zarr_store_path: Path):
+        """Test get_species_layer returns total biomass layer."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        with ZarrStore.open(zarr_store_path) as store:
+            layer = store.get_species_layer('0000')
+
+            assert layer.shape == (100, 100)
+            # Total biomass should have non-zero values
+            assert np.any(layer > 0)
+
+    def test_get_species_layer_invalid_code(self, zarr_store_path: Path):
+        """Test get_species_layer raises SpeciesNotFound for invalid code."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        with ZarrStore.open(zarr_store_path) as store:
+            with pytest.raises(SpeciesNotFound):
+                store.get_species_layer('INVALID')
+
+    def test_get_species_layer_data_values(self, zarr_store_path: Path):
+        """Test get_species_layer returns actual data values."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        with ZarrStore.open(zarr_store_path) as store:
+            # Douglas-fir was set with random values * 50
+            layer = store.get_species_layer('0202')
+
+            # Should have values in expected range
+            assert layer.min() >= 0
+            assert layer.max() <= 50
+
+    # Tests for get_species_info() method
+
+    def test_get_species_info_returns_list(self, zarr_store_path: Path):
+        """Test get_species_info returns list of species info dictionaries."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        with ZarrStore.open(zarr_store_path) as store:
+            info = store.get_species_info()
+
+            assert isinstance(info, list)
+            assert len(info) == 4  # num_species
+
+    def test_get_species_info_dict_structure(self, zarr_store_path: Path):
+        """Test get_species_info dictionaries have correct keys."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        with ZarrStore.open(zarr_store_path) as store:
+            info = store.get_species_info()
+
+            for species_info in info:
+                assert 'index' in species_info
+                assert 'code' in species_info
+                assert 'name' in species_info
+
+    def test_get_species_info_content(self, zarr_store_path: Path):
+        """Test get_species_info returns correct content."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        with ZarrStore.open(zarr_store_path) as store:
+            info = store.get_species_info()
+
+            # Check first species (total biomass)
+            total_info = next(s for s in info if s['code'] == '0000')
+            assert total_info['index'] == 0
+            assert total_info['name'] == 'Total Biomass'
+
+            # Check Douglas-fir
+            df_info = next(s for s in info if s['code'] == '0202')
+            assert df_info['index'] == 1
+            assert df_info['name'] == 'Douglas-fir'
+
+    def test_get_species_info_closed_store(self, zarr_store_path: Path):
+        """Test get_species_info raises error on closed store."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        store = ZarrStore.from_path(zarr_store_path)
+        store.close()
+
+        with pytest.raises(InvalidZarrStructure, match="Cannot access closed"):
+            store.get_species_info()
+
+    # Tests for get_extent() method
+
+    def test_get_extent_returns_tuple(self, zarr_store_path: Path):
+        """Test get_extent returns tuple of 4 values."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        with ZarrStore.open(zarr_store_path) as store:
+            extent = store.get_extent()
+
+            assert isinstance(extent, tuple)
+            assert len(extent) == 4
+
+    def test_get_extent_format(self, zarr_store_path: Path):
+        """Test get_extent returns (left, right, bottom, top) format."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        with ZarrStore.open(zarr_store_path) as store:
+            left, right, bottom, top = store.get_extent()
+
+            # Left should be less than right
+            assert left < right
+            # For this CRS (transform.e is negative), bottom < top
+            # The transform has negative e, so bottom should be less than top
+            # Actually depends on the transform direction
+
+    def test_get_extent_uses_transform(self, zarr_store_path: Path):
+        """Test get_extent calculation uses transform correctly."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        with ZarrStore.open(zarr_store_path) as store:
+            extent = store.get_extent()
+            transform = store.transform
+            shape = store.shape
+
+            # Verify extent calculation
+            expected_left = transform.c
+            expected_right = transform.c + shape[2] * transform.a
+
+            assert extent[0] == expected_left
+            assert extent[1] == expected_right
+
+    def test_get_extent_closed_store(self, zarr_store_path: Path):
+        """Test get_extent raises error on closed store."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        store = ZarrStore.from_path(zarr_store_path)
+        store.close()
+
+        with pytest.raises(InvalidZarrStructure, match="Cannot access closed"):
+            store.get_extent()
+
+    # Tests for summary() method
+
+    def test_summary_returns_dict(self, zarr_store_path: Path):
+        """Test summary returns dictionary with expected keys."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        with ZarrStore.open(zarr_store_path) as store:
+            summary = store.summary()
+
+            assert isinstance(summary, dict)
+            assert 'path' in summary
+            assert 'shape' in summary
+            assert 'chunks' in summary
+            assert 'dtype' in summary
+            assert 'num_species' in summary
+            assert 'crs' in summary
+            assert 'bounds' in summary
+            assert 'transform' in summary
+            assert 'species_codes' in summary
+            assert 'species_names' in summary
+
+    def test_summary_content(self, zarr_store_path: Path):
+        """Test summary contains correct values."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        with ZarrStore.open(zarr_store_path) as store:
+            summary = store.summary()
+
+            assert summary['path'] == str(zarr_store_path)
+            assert summary['shape'] == (10, 100, 100)
+            assert summary['num_species'] == 4
+            assert len(summary['species_codes']) >= 4
+            assert len(summary['species_names']) >= 4
+
+    def test_summary_transform_format(self, zarr_store_path: Path):
+        """Test summary transform is a list of 6 values."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        with ZarrStore.open(zarr_store_path) as store:
+            summary = store.summary()
+
+            assert isinstance(summary['transform'], list)
+            assert len(summary['transform']) == 6
+
+    def test_summary_closed_store(self, zarr_store_path: Path):
+        """Test summary raises error on closed store."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        store = ZarrStore.from_path(zarr_store_path)
+        store.close()
+
+        with pytest.raises(InvalidZarrStructure, match="Cannot access closed"):
+            store.summary()
+
+    # Tests for close() method
+
+    def test_close_method(self, zarr_store_path: Path):
+        """Test close method marks store as closed."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        store = ZarrStore.from_path(zarr_store_path)
+        assert store._closed is False
+
+        store.close()
+        assert store._closed is True
+
+    def test_close_clears_caches(self, zarr_store_path: Path):
+        """Test close method clears cached values."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        store = ZarrStore.from_path(zarr_store_path)
+
+        # Access properties to populate cache
+        _ = store.species_codes
+        _ = store.species_names
+        _ = store.crs
+        _ = store.transform
+        _ = store.bounds
+
+        store.close()
+
+        # Verify caches are cleared
+        assert store._species_codes is None
+        assert store._species_names is None
+        assert store._crs is None
+        assert store._transform is None
+        assert store._bounds is None
+
+    def test_close_prevents_access(self, zarr_store_path: Path):
+        """Test close prevents further access to store."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        store = ZarrStore.from_path(zarr_store_path)
+        store.close()
+
+        with pytest.raises(InvalidZarrStructure, match="Cannot access closed"):
+            _ = store.biomass
+
+    def test_close_idempotent(self, zarr_store_path: Path):
+        """Test close can be called multiple times without error."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        store = ZarrStore.from_path(zarr_store_path)
+
+        # Calling close multiple times should not raise
+        store.close()
+        store.close()
+        store.close()
+
+    # Tests for additional properties
+
+    def test_chunks_property(self, zarr_store_path: Path):
+        """Test chunks property returns chunk dimensions."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        with ZarrStore.open(zarr_store_path) as store:
+            chunks = store.chunks
+
+            assert chunks is not None
+            assert isinstance(chunks, tuple)
+            assert len(chunks) == 3
+
+    def test_dtype_property(self, zarr_store_path: Path):
+        """Test dtype property returns numpy dtype."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        with ZarrStore.open(zarr_store_path) as store:
+            dtype = store.dtype
+
+            assert dtype is not None
+            assert dtype == np.float32
+
+    def test_attrs_property(self, zarr_store_path: Path):
+        """Test attrs property returns dictionary of attributes."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        with ZarrStore.open(zarr_store_path) as store:
+            attrs = store.attrs
+
+            assert isinstance(attrs, dict)
+            assert 'crs' in attrs
+            assert 'transform' in attrs
+            assert 'bounds' in attrs
+            assert 'num_species' in attrs
+
+    def test_path_property(self, zarr_store_path: Path):
+        """Test path property returns the store path."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        with ZarrStore.open(zarr_store_path) as store:
+            path = store.path
+
+            assert path == zarr_store_path
+
+    # Tests for __repr__ method
+
+    def test_repr_open_store(self, zarr_store_path: Path):
+        """Test __repr__ for open store."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        with ZarrStore.open(zarr_store_path) as store:
+            repr_str = repr(store)
+
+            assert 'ZarrStore' in repr_str
+            assert str(zarr_store_path) in repr_str
+            assert 'shape=' in repr_str
+            assert 'species=' in repr_str
+
+    def test_repr_closed_store(self, zarr_store_path: Path):
+        """Test __repr__ for closed store."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        store = ZarrStore.from_path(zarr_store_path)
+        store.close()
+
+        repr_str = repr(store)
+        assert 'ZarrStore(closed)' in repr_str
+
+    # Tests for __enter__ and __exit__ methods (context manager protocol)
+
+    def test_enter_returns_self(self, zarr_store_path: Path):
+        """Test __enter__ returns the store instance."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        store = ZarrStore.from_path(zarr_store_path)
+
+        result = store.__enter__()
+        assert result is store
+
+        store.__exit__(None, None, None)
+
+    def test_exit_closes_store(self, zarr_store_path: Path):
+        """Test __exit__ closes the store."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        store = ZarrStore.from_path(zarr_store_path)
+        store.__enter__()
+        store.__exit__(None, None, None)
+
+        assert store._closed is True
+
+    # Edge case tests
+
+    def test_store_without_species_arrays(self, temp_dir: Path):
+        """Test ZarrStore handles store without species_codes/species_names arrays."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        zarr_path = temp_dir / "no_species_arrays.zarr"
+        store = zarr.storage.LocalStore(zarr_path)
+        root = zarr.open_group(store=store, mode='w')
+        root.create_array('biomass', shape=(3, 50, 50), dtype='f4')
+        root.attrs['num_species'] = 3
+        root.attrs['crs'] = 'EPSG:4326'
+        root.attrs['transform'] = [1, 0, 0, 0, -1, 0]
+        root.attrs['bounds'] = [0, 0, 50, 50]
+
+        with ZarrStore.open(zarr_path) as zarr_store:
+            # Should handle missing species arrays gracefully
+            codes = zarr_store.species_codes
+            names = zarr_store.species_names
+
+            assert isinstance(codes, list)
+            assert isinstance(names, list)
+
+    def test_store_with_default_crs(self, temp_dir: Path):
+        """Test ZarrStore uses default CRS when not specified."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        zarr_path = temp_dir / "no_crs.zarr"
+        store = zarr.storage.LocalStore(zarr_path)
+        root = zarr.open_group(store=store, mode='w')
+        root.create_array('biomass', shape=(3, 50, 50), dtype='f4')
+        # No crs attribute set
+
+        with ZarrStore.open(zarr_path) as zarr_store:
+            crs = zarr_store.crs
+
+            # Should default to EPSG:3857
+            assert crs is not None
+            assert '3857' in crs.to_string()
+
+    def test_store_with_default_transform(self, temp_dir: Path):
+        """Test ZarrStore uses default transform when not specified."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        zarr_path = temp_dir / "no_transform.zarr"
+        store = zarr.storage.LocalStore(zarr_path)
+        root = zarr.open_group(store=store, mode='w')
+        root.create_array('biomass', shape=(3, 50, 50), dtype='f4')
+        # No transform attribute set
+
+        with ZarrStore.open(zarr_path) as zarr_store:
+            transform = zarr_store.transform
+
+            # Should return identity or default transform
+            assert transform is not None
+            assert isinstance(transform, Affine)
+
+    def test_store_bounds_calculated_from_transform(self, temp_dir: Path):
+        """Test ZarrStore calculates bounds from transform when not stored."""
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        zarr_path = temp_dir / "no_bounds.zarr"
+        store = zarr.storage.LocalStore(zarr_path)
+        root = zarr.open_group(store=store, mode='w')
+        root.create_array('biomass', shape=(3, 50, 50), dtype='f4')
+        root.attrs['transform'] = [30, 0, -2000000, 0, -30, -900000]
+        # No bounds attribute set
+
+        with ZarrStore.open(zarr_path) as zarr_store:
+            bounds = zarr_store.bounds
+
+            # Should calculate bounds from transform
+            assert bounds is not None
+            assert isinstance(bounds, tuple)
+            assert len(bounds) == 4
