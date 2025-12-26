@@ -1,8 +1,14 @@
 """
-Comprehensive tests for GridFIA class.
+Unit tests for GridFIA class.
 
-This module provides comprehensive test coverage for the GridFIA class,
-testing all public methods, error conditions, and integration points.
+This module provides unit test coverage for the GridFIA class,
+testing individual methods with targeted mocking where necessary.
+
+For real API integration tests, see: tests/integration/test_real_api.py
+
+Per project guidelines: "Always use real API calls for tests."
+Unit tests here mock only when testing specific error conditions
+or when real API calls would be impractical for the specific test case.
 """
 
 import tempfile
@@ -1007,62 +1013,43 @@ class TestGridFIAEdgeCasesAndMissingCoverage:
 
 
 class TestGridFIAIntegration:
-    """Integration tests combining multiple API methods."""
+    """Unit tests for API integration points.
 
-    def test_full_workflow_mock(self, temp_dir):
-        """Test a complete workflow with mocked components."""
+    NOTE: For complete workflow tests with real API calls,
+    see: tests/integration/test_real_api.py
+    """
+
+    def test_api_components_initialized_correctly(self):
+        """Test that API components are properly initialized."""
         api = GridFIA()
 
-        # Mock components
-        mock_species_data = [
-            {
-                'species_code': '0131',
-                'common_name': 'Balsam fir',
-                'scientific_name': 'Abies balsamea'
-            }
-        ]
+        # Lazy-loaded components should start as None
+        assert api._rest_client is None
+        assert api._processor is None
 
-        download_files = [temp_dir / "montana_0131_balsam_fir.tif"]
-        zarr_path = temp_dir / "montana.zarr"
+        # Accessing properties should create the components
+        client = api.rest_client
+        processor = api.processor
 
-        with patch.object(api.rest_client, 'list_available_species', return_value=mock_species_data):
-            with patch.object(api.rest_client, 'batch_export_location_species', return_value=download_files):
-                with patch('gridfia.api.LocationConfig') as mock_location_config:
-                    with patch('gridfia.api.create_zarr_from_geotiffs'):
-                        with patch('gridfia.api.validate_zarr_store', return_value={'shape': (2, 100, 100), 'num_species': 2}):
+        assert client is not None
+        assert processor is not None
 
-                            # Mock location config
-                            mock_config = MagicMock()
-                            mock_config.location_name = "Montana"
-                            mock_config.web_mercator_bbox = (-12000000, 5000000, -11000000, 6000000)
-                            mock_location_config.from_state.return_value = mock_config
+        # Same instance should be returned on subsequent access
+        assert api.rest_client is client
+        assert api.processor is processor
 
-                            # Create fake downloads directory and GeoTIFF file
-                            downloads_dir = temp_dir / "downloads"
-                            downloads_dir.mkdir(parents=True, exist_ok=True)
+    def test_api_with_custom_settings(self, temp_dir):
+        """Test API initialization with custom settings."""
+        custom_settings = GridFIASettings(
+            data_dir=temp_dir / "data",
+            output_dir=temp_dir / "output",
+            cache_dir=temp_dir / "cache"
+        )
 
-                            # Create a real .tif file instead of using touch()
-                            fake_tif = downloads_dir / "montana_0131_balsam_fir.tif"
-                            fake_tif.write_bytes(b"fake tiff content")  # Minimal fake content
+        api = GridFIA(config=custom_settings)
 
-                            # 1. List species
-                            species = api.list_species()
-                            assert len(species) == 1
-
-                            # 2. Download species data
-                            files = api.download_species(
-                                output_dir=downloads_dir,
-                                species_codes=['0131'],
-                                state="Montana"
-                            )
-                            assert len(files) == 1
-
-                            # 3. Create Zarr
-                            zarr_result = api.create_zarr(
-                                downloads_dir,
-                                zarr_path
-                            )
-                            assert zarr_result == zarr_path
+        assert api.settings is custom_settings
+        assert api.settings.data_dir == temp_dir / "data"
 
     def test_error_propagation(self, temp_dir):
         """Test that errors from underlying components are properly propagated."""

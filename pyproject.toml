@@ -138,6 +138,10 @@ addopts = [
     "--cov-report=html",
     "--cov-fail-under=80",
 ]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests requiring network access",
+]
 
 [tool.coverage.run]
 source = ["gridfia"]
