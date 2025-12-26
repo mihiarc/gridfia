@@ -18,6 +18,7 @@ import threading
 import numpy as np
 import xarray as xr
 from pydantic import BaseModel, Field
+from pyproj import Transformer
 
 from .config import GridFIASettings, CalculationConfig, load_settings
 from .core.processors.forest_metrics import ForestMetricsProcessor
@@ -236,8 +237,27 @@ class GridFIA:
             logger.info(f"Using {config.location_name} boundaries")
             
         elif bbox:
-            location_bbox = bbox
-            
+            # Transform bbox to Web Mercator if a different CRS is specified
+            crs_normalized = str(crs).upper().replace("EPSG:", "")
+            if crs_normalized not in ("102100", "3857"):
+                # Need to transform from input CRS to Web Mercator
+                try:
+                    source_crs = f"EPSG:{crs_normalized}" if crs_normalized.isdigit() else crs
+                    transformer = Transformer.from_crs(source_crs, "EPSG:3857", always_xy=True)
+                    xmin, ymin = transformer.transform(bbox[0], bbox[1])
+                    xmax, ymax = transformer.transform(bbox[2], bbox[3])
+                    location_bbox = (xmin, ymin, xmax, ymax)
+                    logger.info(f"Transformed bbox from {crs} to Web Mercator: {location_bbox}")
+                except Exception as e:
+                    raise InvalidLocationConfig(
+                        f"Failed to transform bbox from CRS {crs} to Web Mercator: {e}",
+                        location_type="bbox"
+                    )
+                # Always use Web Mercator for API calls
+                bbox_crs = "102100"
+            else:
+                location_bbox = bbox
+
         else:
             raise InvalidLocationConfig(
                 "Must specify state, bbox, or location_config",

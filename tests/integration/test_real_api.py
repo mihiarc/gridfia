@@ -256,22 +256,45 @@ class TestRealDownloadWorkflow:
         with tempfile.TemporaryDirectory() as tmp_dir:
             yield Path(tmp_dir)
 
-    def test_real_download_single_species(self, api, temp_dir):
-        """Test downloading a single species for a small area."""
-        # Use a small bbox for faster download
-        bbox = (-79.1, 35.7, -79.0, 35.8)  # Small area in NC (WGS84)
+    def test_real_download_with_wgs84_bbox(self, api, temp_dir):
+        """Test downloading with WGS84 coordinates (automatic transformation)."""
+        # WGS84 bbox near Umstead State Park, NC
+        bbox_wgs84 = (-79.1, 35.75, -79.05, 35.8)
 
         files = api.download_species(
             output_dir=temp_dir,
             species_codes=["0316"],  # Red maple
-            bbox=bbox,
-            crs="EPSG:4326"
+            bbox=bbox_wgs84,
+            crs="EPSG:4326"  # WGS84 - should be auto-transformed to Web Mercator
         )
 
         assert isinstance(files, list)
-        if len(files) > 0:  # May be empty if area has no data
-            assert files[0].exists()
-            assert files[0].suffix in [".tif", ".tiff"]
+        assert len(files) >= 1, "Should download at least one species"
+        assert files[0].exists()
+        assert files[0].stat().st_size > 0
+
+        # Verify it's a valid raster
+        import rasterio
+        with rasterio.open(files[0]) as src:
+            assert src.width > 0
+            assert src.height > 0
+
+    def test_real_download_with_web_mercator_bbox(self, api, temp_dir):
+        """Test downloading with Web Mercator coordinates (no transformation)."""
+        # Web Mercator bbox (same area as WGS84 test above)
+        bbox_wm = (-8805372, 4266276, -8799806, 4273136)
+
+        files = api.download_species(
+            output_dir=temp_dir,
+            species_codes=["0316"],  # Red maple
+            bbox=bbox_wm,
+            crs="102100"  # Web Mercator - no transformation needed
+        )
+
+        assert isinstance(files, list)
+        assert len(files) >= 1, "Should download at least one species"
+        assert files[0].exists()
+        assert files[0].stat().st_size > 0
 
 
 @pytest.mark.slow
