@@ -11,6 +11,8 @@ from shapely.geometry import box
 from rasterio.crs import CRS
 from rasterio.warp import transform_bounds
 
+from ..exceptions import InvalidLocationConfig
+
 console = Console()
 
 
@@ -182,18 +184,24 @@ class LocationConfig:
                     break
         
         if not state_name:
-            raise ValueError(f"Unknown state: {state}")
-        
+            raise InvalidLocationConfig(
+                f"Unknown state: {state}",
+                location_type="state",
+                state=state
+            )
+
         self._config['location']['name'] = state_name
         self._config['location']['abbreviation'] = state_abbr
-        
+
         try:
             gdf = load_state_boundary(state)
             self._setup_bounding_boxes(gdf)
             self._detect_state_plane_crs(state_abbr)
+        except InvalidLocationConfig:
+            raise
         except Exception as e:
             console.print(f"[yellow]Warning: Could not load boundaries for {state_name}: {e}[/yellow]")
-    
+
     def _setup_county_config(self, county: str, state: str):
         """Setup configuration for a county."""
         from gridfia.visualization.boundaries import load_counties_for_state, STATE_ABBR
@@ -210,21 +218,33 @@ class LocationConfig:
                     break
         
         if not state_name:
-            raise ValueError(f"Unknown state: {state}")
-        
+            raise InvalidLocationConfig(
+                f"Unknown state: {state}",
+                location_type="county",
+                state=state,
+                county=county
+            )
+
         self._config['location']['name'] = f"{county} County, {state_name}"
         self._config['location']['state'] = state_name
         self._config['location']['county'] = county
-        
+
         try:
             counties_gdf = load_counties_for_state(state)
             county_gdf = counties_gdf[counties_gdf['NAME'].str.lower() == county.lower()]
-            
+
             if county_gdf.empty:
-                raise ValueError(f"County {county} not found in {state_name}")
-            
+                raise InvalidLocationConfig(
+                    f"County {county} not found in {state_name}",
+                    location_type="county",
+                    state=state_name,
+                    county=county
+                )
+
             self._setup_bounding_boxes(county_gdf)
             self._detect_state_plane_crs(state.upper() if len(state) == 2 else STATE_ABBR.get(state.lower()))
+        except InvalidLocationConfig:
+            raise
         except Exception as e:
             console.print(f"[yellow]Warning: Could not load boundaries for {county}, {state_name}: {e}[/yellow]")
     

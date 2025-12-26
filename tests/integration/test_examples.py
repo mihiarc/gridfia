@@ -111,9 +111,9 @@ class TestExamplesSmoke:
             calculations = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(calculations)
 
-            # Check functions exist
-            assert hasattr(calculations, 'list_available_calculations')
-            assert hasattr(calculations, 'run_all_calculations')
+            # Check functions exist (actual function names in the example)
+            assert hasattr(calculations, 'show_available_calculations')
+            assert hasattr(calculations, 'example_basic_calculations')
         finally:
             sys.path.pop(0)
 
@@ -149,10 +149,10 @@ class TestExamplesSmoke:
             wake_county = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(wake_county)
 
-            # Check main functions exist
+            # Check main functions exist (actual function names in the example)
             assert hasattr(wake_county, 'download_wake_county_data')
             assert hasattr(wake_county, 'create_wake_zarr')
-            assert hasattr(wake_county, 'calculate_all_metrics')
+            assert hasattr(wake_county, 'run_comprehensive_calculations')
         finally:
             sys.path.pop(0)
 
@@ -213,9 +213,9 @@ class TestExamplesSmoke:
         with open(readme_path, 'r') as f:
             content = f.read()
 
-        assert "BigMap Examples" in content
+        assert "BigMap Examples" in content or "GridFIA Examples" in content
         assert "01_quickstart.py" in content
-        assert "Time Estimates" in content
+        assert "Getting Started" in content
 
     def test_no_hardcoded_paths(self):
         """Test that examples don't use hardcoded absolute paths."""

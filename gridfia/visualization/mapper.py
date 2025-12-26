@@ -94,12 +94,18 @@ class ZarrMapper:
         
         return (left, right, bottom, top)
     
-    def _normalize_data(self, data: np.ndarray, vmin: Optional[float] = None, 
+    def _normalize_data(self, data: np.ndarray, vmin: Optional[float] = None,
                        vmax: Optional[float] = None, percentile: Tuple[float, float] = (2, 98)) -> np.ndarray:
-        """Normalize data for visualization."""
-        # Handle NaN and infinite values
+        """
+        Normalize data for visualization.
+
+        NaN values in the input data (which indicate failed calculations) are
+        preserved in the output. They will render as blank/transparent areas
+        in the visualization, making failed calculations visible to users.
+        """
+        # Handle NaN and infinite values - these indicate failed calculations
         valid_mask = np.isfinite(data)
-        
+
         if vmin is None or vmax is None:
             valid_data = data[valid_mask]
             if len(valid_data) > 0:
@@ -109,14 +115,15 @@ class ZarrMapper:
                     vmax = np.percentile(valid_data, percentile[1])
             else:
                 vmin, vmax = 0, 1
-        
-        # Clip and normalize
+
+        # Clip and normalize, preserving NaN values
         normalized = np.clip(data, vmin, vmax)
         if vmax > vmin:
             normalized = (normalized - vmin) / (vmax - vmin)
         else:
-            normalized = np.zeros_like(data)
-        
+            # When vmax == vmin, set valid values to 0 but preserve NaN
+            normalized = np.where(valid_mask, 0.0, np.nan)
+
         return normalized
     
     def create_species_map(self, 

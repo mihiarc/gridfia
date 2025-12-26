@@ -4,6 +4,18 @@ Forest Metrics Processor
 Processor for running forest metric calculations from zarr data arrays.
 This module integrates with the calculation registry to run various
 forest metrics on large-scale biomass data efficiently.
+
+NaN Convention for Failed Calculations
+--------------------------------------
+When calculations fail (due to validation errors, exceptions, or invalid data),
+the processor returns np.nan values instead of zeros. This is intentional to
+distinguish between:
+
+1. Actual zero values (e.g., zero biomass in a pixel)
+2. Failed calculations (e.g., invalid data, processing errors)
+
+Downstream code should use np.isnan() to detect failed calculations and
+np.nansum(), np.nanmean(), etc. for statistics that ignore NaN values.
 """
 
 import logging
@@ -21,6 +33,7 @@ from tqdm import tqdm
 from ...config import GridFIASettings, load_settings, CalculationConfig
 from ..calculations import registry
 from ..calculations.base import ForestCalculation
+from ...exceptions import InvalidZarrStructure, CalculationFailed
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +83,10 @@ class ForestMetricsProcessor:
         # Get enabled calculations
         enabled_calcs = self._get_enabled_calculations()
         if not enabled_calcs:
-            raise ValueError("No calculations enabled in configuration")
+            raise CalculationFailed(
+                "No calculations enabled in configuration",
+                available_calculations=registry.list_calculations()
+            )
         
         # Load and validate zarr array
         zarr_array, zarr_group = self._load_zarr_array(zarr_path)
@@ -157,15 +173,24 @@ class ForestMetricsProcessor:
                         combined_attrs.update(root.attrs)
                     return ArrayWrapper(array, combined_attrs), root
                     
-            raise ValueError(f"No biomass/data array found in zarr group at {zarr_path}")
-                    
+            raise InvalidZarrStructure(
+                f"No biomass/data array found in zarr group",
+                zarr_path=zarr_path
+            )
+
+        except InvalidZarrStructure:
+            # Re-raise our own exceptions
+            raise
         except Exception as e:
             # Try as standalone array (legacy support)
             try:
                 array = zarr.open_array(zarr_path, mode='r')
                 return array, None
-            except:
-                raise ValueError(f"Cannot open {zarr_path} as Zarr group or array: {e}")
+            except Exception:
+                raise InvalidZarrStructure(
+                    f"Cannot open as Zarr group or array",
+                    zarr_path=zarr_path
+                ) from e
     
     def _validate_zarr_array(self, zarr_array: zarr.Array) -> None:
         """
@@ -178,26 +203,35 @@ class ForestMetricsProcessor:
             
         Raises
         ------
-        ValueError
+        InvalidZarrStructure
             If array is invalid
         """
         # Check dimensions
         if zarr_array.ndim != 3:
-            raise ValueError(f"Expected 3D array (species, y, x), got {zarr_array.ndim}D")
-        
+            raise InvalidZarrStructure(
+                f"Expected 3D array (species, y, x), got {zarr_array.ndim}D",
+                expected_shape=(None, None, None),
+                actual_shape=zarr_array.shape
+            )
+
         # Check required attributes
         required_attrs = ['species_codes', 'crs']
         missing_attrs = [attr for attr in required_attrs if attr not in zarr_array.attrs]
         if missing_attrs:
-            raise ValueError(f"Missing required attributes: {missing_attrs}")
-        
+            raise InvalidZarrStructure(
+                f"Missing required attributes: {missing_attrs}",
+                missing_attrs=missing_attrs
+            )
+
         # Check species dimension matches metadata
         n_species = zarr_array.shape[0]
         species_codes = zarr_array.attrs.get('species_codes', [])
         if len(species_codes) != n_species:
-            raise ValueError(
+            raise InvalidZarrStructure(
                 f"Species dimension ({n_species}) doesn't match "
-                f"species_codes length ({len(species_codes)})"
+                f"species_codes length ({len(species_codes)})",
+                expected_shape=(len(species_codes), None, None),
+                actual_shape=zarr_array.shape
             )
         
         logger.info(f"Validated zarr array: {n_species} species, shape {zarr_array.shape}")
@@ -296,12 +330,22 @@ class ForestMetricsProcessor:
         Dict[str, np.ndarray]
             Results for each calculation
         """
-        # Initialize result arrays
+        # Initialize result arrays with NaN for float types, zeros for integer types
+        # NaN values indicate that a calculation has not yet been performed or failed
+        # This allows distinguishing between actual zero values and missing/failed data
         height, width = zarr_array.shape[1:]
         results = {}
         for calc in calculations:
             dtype = calc.get_output_dtype()
-            results[calc.name] = np.zeros((height, width), dtype=dtype)
+            if np.issubdtype(dtype, np.floating):
+                # Use NaN for float types to indicate unprocessed/failed chunks
+                results[calc.name] = np.full((height, width), np.nan, dtype=dtype)
+            else:
+                # Integer types cannot hold NaN, use zeros as default
+                # Note: For integer results (like species_richness), zero is a valid value
+                # indicating no species present, which is distinguishable from failed calculations
+                # by checking if all neighboring pixels are also zero (unlikely for real failures)
+                results[calc.name] = np.zeros((height, width), dtype=dtype)
         
         # Calculate chunk parameters
         chunk_height, chunk_width = self.chunk_size[1:]
@@ -336,52 +380,104 @@ class ForestMetricsProcessor:
         return results
     
     def _process_chunk(
-        self, 
-        chunk_data: np.ndarray, 
+        self,
+        chunk_data: np.ndarray,
         calculations: List[ForestCalculation]
     ) -> Dict[str, np.ndarray]:
         """
         Process a single chunk of data.
-        
+
         Parameters
         ----------
         chunk_data : np.ndarray
             Chunk of biomass data (species, y, x)
         calculations : List[ForestCalculation]
             Calculations to run
-            
+
         Returns
         -------
         Dict[str, np.ndarray]
-            Results for each calculation
+            Results for each calculation. Failed calculations return NaN values
+            for floating-point types to distinguish from actual zero biomass values.
+            For integer types (e.g., species count), -1 is used as a sentinel value
+            where the dtype supports it, otherwise zeros are used with a warning.
         """
         chunk_results = {}
-        
+
         for calc in calculations:
             try:
                 # Validate data for this calculation
                 if calc.validate_data(chunk_data):
                     # Preprocess if needed
                     processed_data = calc.preprocess_data(chunk_data)
-                    
+
                     # Run calculation
                     result = calc.calculate(processed_data)
-                    
+
                     # Postprocess if needed
                     result = calc.postprocess_result(result)
-                    
+
                     chunk_results[calc.name] = result
                 else:
-                    # Return zeros if validation fails
+                    # Return NaN/sentinel if validation fails to indicate failure
                     logger.warning(f"Validation failed for {calc.name} on chunk")
-                    chunk_results[calc.name] = np.zeros(chunk_data.shape[1:], dtype=calc.get_output_dtype())
-                    
+                    chunk_results[calc.name] = self._create_failure_array(
+                        chunk_data.shape[1:], calc.get_output_dtype(), calc.name
+                    )
+
             except Exception as e:
                 logger.error(f"Error in calculation {calc.name}: {e}")
-                # Return zeros on error
-                chunk_results[calc.name] = np.zeros(chunk_data.shape[1:], dtype=calc.get_output_dtype())
-        
+                # Return NaN/sentinel on error to indicate failure
+                chunk_results[calc.name] = self._create_failure_array(
+                    chunk_data.shape[1:], calc.get_output_dtype(), calc.name
+                )
+
         return chunk_results
+
+    def _create_failure_array(
+        self,
+        shape: tuple,
+        dtype: np.dtype,
+        calc_name: str
+    ) -> np.ndarray:
+        """
+        Create an array indicating calculation failure.
+
+        For floating-point types, returns NaN values which can be detected
+        with np.isnan(). For integer types, the behavior depends on the dtype:
+        - Signed integers: returns -1 as a sentinel value (impossible for counts)
+        - Unsigned integers: returns maximum value as sentinel, with a warning
+
+        Parameters
+        ----------
+        shape : tuple
+            Shape of the output array
+        dtype : np.dtype
+            Data type of the output array
+        calc_name : str
+            Name of the calculation (for logging)
+
+        Returns
+        -------
+        np.ndarray
+            Array filled with failure indicator values
+        """
+        if np.issubdtype(dtype, np.floating):
+            # Use NaN for float types - easily detectable with np.isnan()
+            return np.full(shape, np.nan, dtype=dtype)
+        elif np.issubdtype(dtype, np.signedinteger):
+            # Use -1 for signed integers - impossible value for counts/indices
+            return np.full(shape, -1, dtype=dtype)
+        else:
+            # Unsigned integers cannot hold -1 or NaN
+            # Use max value as sentinel and log a warning
+            max_val = np.iinfo(dtype).max
+            logger.warning(
+                f"Calculation '{calc_name}' failed with unsigned integer dtype {dtype}. "
+                f"Using max value ({max_val}) as failure sentinel. Consider using signed "
+                f"integer or float dtype for better failure detection."
+            )
+            return np.full(shape, max_val, dtype=dtype)
     
     def _save_results(
         self, 

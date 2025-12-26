@@ -9,9 +9,20 @@ import rasterio
 import xarray as xr
 from pathlib import Path
 
+# Check if netCDF4 is available
+try:
+    import netCDF4
+    HAS_NETCDF4 = True
+except ImportError:
+    HAS_NETCDF4 = False
+
 from gridfia.core.processors.forest_metrics import ForestMetricsProcessor, run_forest_analysis
 from gridfia.config import GridFIASettings, CalculationConfig
 from gridfia.core.calculations import registry
+from gridfia.exceptions import (
+    InvalidZarrStructure, SpeciesNotFound, CalculationFailed,
+    APIConnectionError, InvalidLocationConfig, DownloadError
+)
 
 
 def get_zarr_path(zarr_array):
@@ -68,10 +79,11 @@ class TestForestMetricsPipeline:
                 data = src.read(1)
                 assert data.shape == (100, 100)  # Same as input
     
+    @pytest.mark.skipif(not HAS_NETCDF4, reason="netCDF4 not installed")
     def test_pipeline_with_different_output_formats(self, sample_zarr_array, temp_dir):
         """Test saving results in different formats."""
         zarr_path = get_zarr_path(sample_zarr_array)
-        
+
         # Configure different output formats
         settings = GridFIASettings(
             output_dir=temp_dir / "multi_format_output",
@@ -273,47 +285,47 @@ calculations:
 
 class TestErrorConditions:
     """Test error handling in the pipeline."""
-    
+
     def test_no_enabled_calculations(self, sample_zarr_array, test_settings):
         """Test error when no calculations are enabled."""
         zarr_path = get_zarr_path(sample_zarr_array)
-        
+
         # Disable all calculations
         for calc in test_settings.calculations:
             calc.enabled = False
-        
+
         processor = ForestMetricsProcessor(test_settings)
-        
-        with pytest.raises(ValueError, match="No calculations enabled"):
+
+        with pytest.raises(CalculationFailed, match="No calculations enabled"):
             processor.run_calculations(zarr_path)
-    
+
     def test_invalid_zarr_path(self, test_settings):
         """Test error handling for invalid zarr path."""
         processor = ForestMetricsProcessor(test_settings)
-        
-        with pytest.raises(ValueError, match="Cannot open"):
+
+        with pytest.raises(InvalidZarrStructure, match="Cannot open"):
             processor.run_calculations("/path/does/not/exist.zarr")
-    
+
     def test_missing_required_attributes(self, temp_dir, test_settings):
         """Test error when zarr is missing required attributes."""
         # Create zarr without required attributes
         zarr_path = temp_dir / "invalid.zarr"
         z = zarr.open_array(str(zarr_path), mode='w', shape=(2, 10, 10))
         # No species_codes or crs attributes
-        
+
         processor = ForestMetricsProcessor(test_settings)
-        
-        with pytest.raises(ValueError, match="Missing required attributes"):
+
+        with pytest.raises(InvalidZarrStructure, match="Missing required attributes"):
             processor.run_calculations(str(zarr_path))
-    
+
     def test_dimension_mismatch(self, temp_dir, test_settings):
         """Test error when species dimension doesn't match metadata."""
         zarr_path = temp_dir / "mismatch.zarr"
         z = zarr.open_array(str(zarr_path), mode='w', shape=(3, 10, 10))
         z.attrs['species_codes'] = ['SP1', 'SP2']  # Only 2 codes for 3 layers
         z.attrs['crs'] = 'ESRI:102039'
-        
+
         processor = ForestMetricsProcessor(test_settings)
-        
-        with pytest.raises(ValueError, match="doesn't match"):
+
+        with pytest.raises(InvalidZarrStructure, match="doesn't match"):
             processor.run_calculations(str(zarr_path))

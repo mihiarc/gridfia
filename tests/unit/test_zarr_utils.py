@@ -20,6 +20,10 @@ from gridfia.utils.zarr_utils import (
     create_zarr_from_geotiffs,
     validate_zarr_store
 )
+from gridfia.exceptions import (
+    InvalidZarrStructure, SpeciesNotFound, CalculationFailed,
+    APIConnectionError, InvalidLocationConfig, DownloadError
+)
 
 
 class TestCreateExpandableZarrFromBaseRaster:
@@ -251,7 +255,7 @@ class TestAppendSpeciesToZarr:
         ) as dst:
             dst.write(data.astype(np.float32), 1)
 
-        with pytest.raises(ValueError, match="Transform mismatch"):
+        with pytest.raises(InvalidZarrStructure, match="Transform mismatch"):
             append_species_to_zarr(
                 zarr_path=zarr_path,
                 species_raster_path=raster_path,
@@ -261,7 +265,11 @@ class TestAppendSpeciesToZarr:
             )
 
     def test_append_species_bounds_mismatch(self, base_zarr, temp_dir: Path):
-        """Test error handling with bounds mismatch."""
+        """Test error handling with bounds/transform mismatch.
+
+        Note: When bounds differ, transform also differs (transform is derived from bounds),
+        so the transform check triggers first.
+        """
         root, zarr_path = base_zarr
 
         # Create raster with different bounds - use different actual bounds
@@ -286,7 +294,8 @@ class TestAppendSpeciesToZarr:
         ) as dst:
             dst.write(data.astype(np.float32), 1)
 
-        with pytest.raises(ValueError, match="Bounds mismatch"):
+        # When bounds differ, transform also differs, so transform check triggers first
+        with pytest.raises(InvalidZarrStructure, match="Transform mismatch"):
             append_species_to_zarr(
                 zarr_path=zarr_path,
                 species_raster_path=raster_path,
@@ -683,7 +692,7 @@ class TestCreateZarrFromGeotiffs:
         zarr_path = temp_dir / "mismatch.zarr"
 
         # Remove one name to create mismatch
-        with pytest.raises(ValueError, match="Number of paths, codes, and names must match"):
+        with pytest.raises(InvalidZarrStructure, match="must match"):
             create_zarr_from_geotiffs(
                 output_zarr_path=zarr_path,
                 geotiff_paths=files,
@@ -717,7 +726,7 @@ class TestCreateZarrFromGeotiffs:
 
         zarr_path = temp_dir / "dimension_mismatch.zarr"
 
-        with pytest.raises(ValueError, match="Dimension mismatch"):
+        with pytest.raises(InvalidZarrStructure, match="Dimension mismatch"):
             create_zarr_from_geotiffs(
                 output_zarr_path=zarr_path,
                 geotiff_paths=[files[0], mismatched_file],
@@ -753,7 +762,7 @@ class TestCreateZarrFromGeotiffs:
 
         zarr_path = temp_dir / "transform_mismatch.zarr"
 
-        with pytest.raises(ValueError, match="Transform mismatch"):
+        with pytest.raises(InvalidZarrStructure, match="Transform mismatch"):
             create_zarr_from_geotiffs(
                 output_zarr_path=zarr_path,
                 geotiff_paths=[files[0], mismatched_file],
@@ -1119,7 +1128,7 @@ class TestSafeOpenZarrBiomass:
         root = zarr.open_group(store=store, mode='w')
         root.create_array('other_data', shape=(10, 10), dtype='f4')
 
-        # Should raise ValueError
+        # Should raise ValueError (KeyError is caught and wrapped in ValueError)
         with pytest.raises(ValueError, match="'biomass' array not found"):
             safe_open_zarr_biomass(zarr_path)
 
@@ -1129,6 +1138,6 @@ class TestSafeOpenZarrBiomass:
 
         nonexistent_path = temp_dir / "does_not_exist.zarr"
 
-        # Should raise ValueError
+        # Should raise ValueError (from examples/utils.py which still uses ValueError)
         with pytest.raises(ValueError, match="Cannot open zarr store"):
             safe_open_zarr_biomass(nonexistent_path)

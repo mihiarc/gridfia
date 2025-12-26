@@ -18,7 +18,7 @@ from gridfia.core.analysis.statistical_analysis import (
     StatisticalConfig,
     DiversityAnalyzer,
     StatisticalTester,
-    test_spatial_autocorrelation
+    compute_spatial_autocorrelation
 )
 
 
@@ -505,17 +505,17 @@ class TestStatisticalTester:
 
     def test_permutation_test_parallel_fallback(self, tester):
         """Test permutation test fallback to sequential when parallel fails."""
-        # Mock the parallel import to simulate ImportError (common case)
-        with patch('builtins.__import__', side_effect=ImportError):
-            np.random.seed(42)
-            group1 = pd.Series([1, 2, 3, 4, 5])
-            group2 = pd.Series([6, 7, 8, 9, 10])
+        np.random.seed(42)
+        group1 = pd.Series([1, 2, 3, 4, 5])
+        group2 = pd.Series([6, 7, 8, 9, 10])
 
+        # Mock the parallel_processing module import to fail within the method
+        with patch.dict('sys.modules', {'gridfia.core.analysis.parallel_processing': None}):
             result = tester._permutation_test(group1, group2, n_permutations=6000)
 
-            # Should fall back to sequential implementation
-            assert 'error' not in result
-            assert result['test_type'] == 'permutation'
+        # Should fall back to sequential implementation
+        assert 'error' not in result
+        assert result['test_type'] == 'permutation'
 
     def test_bootstrap_test_basic(self, tester):
         """Test bootstrap test with basic data."""
@@ -549,18 +549,19 @@ class TestStatisticalTester:
 
     def test_bootstrap_test_parallel_fallback(self, tester):
         """Test bootstrap test fallback to sequential when parallel fails."""
-        # Mock the parallel import to simulate ImportError (common case)
-        with patch('builtins.__import__', side_effect=ImportError):
-            np.random.seed(42)
-            group1 = pd.Series([1, 2, 3, 4, 5])
-            group2 = pd.Series([6, 7, 8, 9, 10])
+        np.random.seed(42)
+        group1 = pd.Series([1, 2, 3, 4, 5])
+        group2 = pd.Series([6, 7, 8, 9, 10])
 
-            tester.config.bootstrap_iterations = 6000
+        tester.config.bootstrap_iterations = 6000
+
+        # Mock the parallel_processing module import to fail within the method
+        with patch.dict('sys.modules', {'gridfia.core.analysis.parallel_processing': None}):
             result = tester._bootstrap_test(group1, group2)
 
-            # Should fall back to sequential implementation
-            assert 'error' not in result
-            assert result['test_type'] == 'bootstrap'
+        # Should fall back to sequential implementation
+        assert 'error' not in result
+        assert result['test_type'] == 'bootstrap'
 
     def test_calculate_effect_sizes(self, tester):
         """Test effect size calculations."""
@@ -703,22 +704,46 @@ class TestSpatialAutocorrelation:
 
     def test_spatial_autocorrelation_missing_dependency(self):
         """Test spatial autocorrelation with missing libpysal dependency."""
-        # Mock ImportError when trying to import libpysal
-        with patch('builtins.__import__', side_effect=ImportError):
-            result = test_spatial_autocorrelation(
-                data=pd.DataFrame({'geometry': [1, 2], 'value': [1, 2]})
-            )
+        # Create test data before mocking imports
+        test_data = pd.DataFrame({'geometry': [1, 2], 'value': [1, 2]})
+
+        # Remove libpysal and esda from sys.modules to simulate missing dependency
+        import sys
+        original_modules = {}
+        modules_to_remove = ['libpysal', 'esda', 'esda.moran']
+        for mod in modules_to_remove:
+            if mod in sys.modules:
+                original_modules[mod] = sys.modules.pop(mod)
+
+        # Also patch the import to raise ImportError for libpysal
+        original_import = __builtins__['__import__'] if isinstance(__builtins__, dict) else __builtins__.__import__
+
+        def mock_import(name, *args, **kwargs):
+            if name in ('libpysal', 'esda', 'esda.moran') or name.startswith('libpysal.') or name.startswith('esda.'):
+                raise ImportError(f"No module named '{name}'")
+            return original_import(name, *args, **kwargs)
+
+        try:
+            with patch('builtins.__import__', side_effect=mock_import):
+                result = compute_spatial_autocorrelation(data=test_data)
 
             assert 'error' in result
             assert result['error'] == 'libpysal not available'
+        finally:
+            # Restore original modules
+            for mod, module in original_modules.items():
+                sys.modules[mod] = module
 
-    @patch('gridfia.core.analysis.statistical_analysis.libpysal.weights.Queen.from_dataframe')
-    @patch('gridfia.core.analysis.statistical_analysis.Moran')
-    def test_spatial_autocorrelation_success(self, mock_moran, mock_weights):
+    def test_spatial_autocorrelation_success(self):
         """Test successful spatial autocorrelation calculation."""
-        # Mock the spatial weights
+        # Create mock libpysal module structure
+        mock_libpysal = MagicMock()
         mock_weights_obj = Mock()
-        mock_weights.return_value = mock_weights_obj
+        mock_libpysal.weights.Queen.from_dataframe.return_value = mock_weights_obj
+
+        # Create mock esda.moran module
+        mock_esda = MagicMock()
+        mock_esda_moran = MagicMock()
 
         # Mock Moran's I results
         mock_moran_obj = Mock()
@@ -727,7 +752,7 @@ class TestSpatialAutocorrelation:
         mock_moran_obj.VI_norm = 0.05
         mock_moran_obj.z_norm = 2.5
         mock_moran_obj.p_norm = 0.012
-        mock_moran.return_value = mock_moran_obj
+        mock_esda_moran.Moran.return_value = mock_moran_obj
 
         # Create test data
         test_data = pd.DataFrame({
@@ -735,7 +760,13 @@ class TestSpatialAutocorrelation:
             'value': [1.5, 2.3, 1.8, 2.1, 1.9]
         })
 
-        result = test_spatial_autocorrelation(test_data)
+        # Patch sys.modules to inject mock modules
+        with patch.dict('sys.modules', {
+            'libpysal': mock_libpysal,
+            'esda': mock_esda,
+            'esda.moran': mock_esda_moran
+        }):
+            result = compute_spatial_autocorrelation(test_data)
 
         assert result['morans_i'] == 0.25
         assert result['expected_i'] == -0.1
@@ -744,49 +775,70 @@ class TestSpatialAutocorrelation:
         assert result['p_value'] == 0.012
         assert result['significant'] is True
 
-    @patch('gridfia.core.analysis.statistical_analysis.libpysal.weights.Queen.from_dataframe')
-    def test_spatial_autocorrelation_calculation_error(self, mock_weights):
+    def test_spatial_autocorrelation_calculation_error(self):
         """Test spatial autocorrelation with calculation error."""
-        # Mock weights to raise exception
-        mock_weights.side_effect = Exception("Calculation failed")
+        # Create mock libpysal module that raises exception
+        mock_libpysal = MagicMock()
+        mock_libpysal.weights.Queen.from_dataframe.side_effect = Exception("Calculation failed")
+
+        # Create mock esda.moran module
+        mock_esda = MagicMock()
+        mock_esda_moran = MagicMock()
 
         test_data = pd.DataFrame({
             'geometry': [1, 2, 3],
             'value': [1, 2, 3]
         })
 
-        result = test_spatial_autocorrelation(test_data)
+        # Patch sys.modules to inject mock modules
+        with patch.dict('sys.modules', {
+            'libpysal': mock_libpysal,
+            'esda': mock_esda,
+            'esda.moran': mock_esda_moran
+        }):
+            result = compute_spatial_autocorrelation(test_data)
 
         assert 'error' in result
         assert 'Calculation failed' in result['error']
 
     def test_spatial_autocorrelation_custom_columns(self):
         """Test spatial autocorrelation with custom column names."""
-        with patch('gridfia.core.analysis.statistical_analysis.libpysal.weights.Queen.from_dataframe') as mock_weights, \
-             patch('gridfia.core.analysis.statistical_analysis.Moran') as mock_moran:
+        # Create mock libpysal module structure
+        mock_libpysal = MagicMock()
+        mock_weights_obj = Mock()
+        mock_libpysal.weights.Queen.from_dataframe.return_value = mock_weights_obj
 
-            # Setup mocks
-            mock_weights.return_value = Mock()
-            mock_moran_obj = Mock()
-            mock_moran_obj.I = 0.15
-            mock_moran_obj.EI = -0.05
-            mock_moran_obj.VI_norm = 0.03
-            mock_moran_obj.z_norm = 1.8
-            mock_moran_obj.p_norm = 0.072
-            mock_moran.return_value = mock_moran_obj
+        # Create mock esda.moran module
+        mock_esda = MagicMock()
+        mock_esda_moran = MagicMock()
 
-            test_data = pd.DataFrame({
-                'geom': [1, 2, 3, 4],
-                'diversity': [1.2, 2.1, 1.8, 2.3]
-            })
+        # Mock Moran's I results
+        mock_moran_obj = Mock()
+        mock_moran_obj.I = 0.15
+        mock_moran_obj.EI = -0.05
+        mock_moran_obj.VI_norm = 0.03
+        mock_moran_obj.z_norm = 1.8
+        mock_moran_obj.p_norm = 0.072
+        mock_esda_moran.Moran.return_value = mock_moran_obj
 
-            result = test_spatial_autocorrelation(
+        test_data = pd.DataFrame({
+            'geom': [1, 2, 3, 4],
+            'diversity': [1.2, 2.1, 1.8, 2.3]
+        })
+
+        # Patch sys.modules to inject mock modules
+        with patch.dict('sys.modules', {
+            'libpysal': mock_libpysal,
+            'esda': mock_esda,
+            'esda.moran': mock_esda_moran
+        }):
+            result = compute_spatial_autocorrelation(
                 test_data,
                 geometry_column='geom',
                 value_column='diversity'
             )
 
-            assert result['significant'] is False  # p > 0.05
+        assert result['significant'] is False  # p > 0.05
 
 
 class TestIntegrationScenarios:

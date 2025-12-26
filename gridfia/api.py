@@ -13,6 +13,7 @@ This module provides the primary API for GridFIA functionality.
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union, Any
 import logging
+import threading
 
 import numpy as np
 import xarray as xr
@@ -25,6 +26,13 @@ from .utils.location_config import LocationConfig
 from .utils.zarr_utils import create_zarr_from_geotiffs, validate_zarr_store
 from .visualization.mapper import ZarrMapper
 from .core.calculations import registry
+from .exceptions import (
+    InvalidZarrStructure,
+    SpeciesNotFound,
+    CalculationFailed,
+    InvalidLocationConfig,
+    DownloadError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -39,9 +47,9 @@ class CalculationResult(BaseModel):
 
 class SpeciesInfo(BaseModel):
     """Information about a tree species."""
-    species_code: str
-    common_name: str
-    scientific_name: str
+    species_code: str = Field(pattern=r'^\d{4}$', description="4-digit FIA species code")
+    common_name: str = Field(min_length=1, description="Common name of the species")
+    scientific_name: str = Field(min_length=1, description="Scientific name of the species")
     function_name: Optional[str] = None
 
 
@@ -92,22 +100,32 @@ class GridFIA:
             self.settings = load_settings(Path(config))
         else:
             self.settings = config
-            
+
+        # Lock for thread-safe lazy initialization of components
+        self._init_lock = threading.Lock()
         self._rest_client = None
         self._processor = None
         
     @property
     def rest_client(self) -> BigMapRestClient:
-        """Lazy-load REST client for FIA BIGMAP service."""
+        """Lazy-load REST client for FIA BIGMAP service (thread-safe)."""
+        # Double-checked locking pattern for thread-safe lazy initialization
         if self._rest_client is None:
-            self._rest_client = BigMapRestClient()
+            with self._init_lock:
+                # Check again after acquiring lock (another thread may have initialized)
+                if self._rest_client is None:
+                    self._rest_client = BigMapRestClient()
         return self._rest_client
     
     @property
     def processor(self) -> ForestMetricsProcessor:
-        """Lazy-load forest metrics processor."""
+        """Lazy-load forest metrics processor (thread-safe)."""
+        # Double-checked locking pattern for thread-safe lazy initialization
         if self._processor is None:
-            self._processor = ForestMetricsProcessor(self.settings)
+            with self._init_lock:
+                # Check again after acquiring lock (another thread may have initialized)
+                if self._processor is None:
+                    self._processor = ForestMetricsProcessor(self.settings)
         return self._processor
     
     def list_species(self) -> List[SpeciesInfo]:
@@ -221,10 +239,16 @@ class GridFIA:
             location_bbox = bbox
             
         else:
-            raise ValueError("Must specify state, bbox, or location_config")
-        
+            raise InvalidLocationConfig(
+                "Must specify state, bbox, or location_config",
+                location_type="unknown"
+            )
+
         if not location_bbox:
-            raise ValueError("Could not determine bounding box for location")
+            raise InvalidLocationConfig(
+                "Could not determine bounding box for location",
+                location_name=location_name
+            )
         
         # Download species data
         exported_files = self.rest_client.batch_export_location_species(
@@ -287,13 +311,19 @@ class GridFIA:
         output_path = Path(output_path)
         
         if not input_dir.exists():
-            raise ValueError(f"Input directory does not exist: {input_dir}")
+            raise DownloadError(
+                f"Input directory does not exist: {input_dir}",
+                output_path=str(input_dir)
+            )
         
         # Find GeoTIFF files
         tiff_files = list(input_dir.glob("*.tif")) + list(input_dir.glob("*.tiff"))
         
         if not tiff_files:
-            raise ValueError(f"No GeoTIFF files found in {input_dir}")
+            raise DownloadError(
+                f"No GeoTIFF files found in {input_dir}",
+                output_path=str(input_dir)
+            )
         
         logger.info(f"Found {len(tiff_files)} GeoTIFF files")
         
@@ -308,7 +338,10 @@ class GridFIA:
             tiff_files = filtered_files
             
             if not tiff_files:
-                raise ValueError(f"No files found for species codes: {species_codes}")
+                raise SpeciesNotFound(
+                    f"No files found for species codes: {species_codes}",
+                    available_species=species_codes
+                )
         
         # Sort files for consistent ordering
         tiff_files.sort()
@@ -393,8 +426,11 @@ class GridFIA:
         zarr_path = Path(zarr_path)
         
         if not zarr_path.exists():
-            raise ValueError(f"Zarr store not found: {zarr_path}")
-        
+            raise InvalidZarrStructure(
+                f"Zarr store not found: {zarr_path}",
+                zarr_path=str(zarr_path)
+            )
+
         # Load configuration if provided
         if config:
             if isinstance(config, (str, Path)):
@@ -414,7 +450,11 @@ class GridFIA:
             all_registered = registry.list_calculations()
             invalid_calcs = [c for c in calculations if c not in all_registered]
             if invalid_calcs:
-                raise ValueError(f"Unknown calculations: {invalid_calcs}. Available: {all_registered}")
+                raise CalculationFailed(
+                    f"Unknown calculations: {invalid_calcs}",
+                    calculation_name=invalid_calcs[0] if len(invalid_calcs) == 1 else str(invalid_calcs),
+                    available_calculations=all_registered
+                )
             
             # Create calculation configs
             settings.calculations = [
@@ -512,8 +552,11 @@ class GridFIA:
         output_dir = Path(output_dir)
         
         if not zarr_path.exists():
-            raise ValueError(f"Zarr store not found: {zarr_path}")
-        
+            raise InvalidZarrStructure(
+                f"Zarr store not found: {zarr_path}",
+                zarr_path=str(zarr_path)
+            )
+
         output_dir.mkdir(parents=True, exist_ok=True)
         
         # Initialize mapper
@@ -570,7 +613,9 @@ class GridFIA:
                     import matplotlib.pyplot as plt
                     plt.close(fig)
             else:
-                raise ValueError("Please specify species codes or use show_all=True")
+                raise SpeciesNotFound(
+                    "Please specify species codes or use show_all=True"
+                )
         
         elif map_type == "diversity":
             # Create diversity maps
@@ -609,7 +654,10 @@ class GridFIA:
         elif map_type == "comparison":
             # Create comparison map
             if not species or len(species) < 2:
-                raise ValueError("Comparison maps require at least 2 species")
+                raise SpeciesNotFound(
+                    "Comparison maps require at least 2 species",
+                    available_species=species
+                )
             
             fig = mapper.create_comparison_map(
                 species_list=species,
@@ -625,7 +673,11 @@ class GridFIA:
             plt.close(fig)
         
         else:
-            raise ValueError(f"Unknown map type: {map_type}. Valid types: species, diversity, richness, comparison")
+            raise CalculationFailed(
+                f"Unknown map type: {map_type}. Valid types: species, diversity, richness, comparison",
+                calculation_name=map_type,
+                available_calculations=["species", "diversity", "richness", "comparison"]
+            )
         
         logger.info(f"Created {len(created_maps)} maps in {output_dir}")
         return created_maps
@@ -676,7 +728,11 @@ class GridFIA:
         ... )
         """
         if county and not state:
-            raise ValueError("County requires state to be specified")
+            raise InvalidLocationConfig(
+                "County requires state to be specified",
+                location_type="county",
+                county=county
+            )
         
         if bbox:
             config = LocationConfig.from_bbox(
@@ -694,8 +750,11 @@ class GridFIA:
                 state, output_path=output_path
             )
         else:
-            raise ValueError("Must specify state, county, or bbox")
-        
+            raise InvalidLocationConfig(
+                "Must specify state, county, or bbox",
+                location_type="unknown"
+            )
+
         return config
     
     def list_calculations(self) -> List[str]:

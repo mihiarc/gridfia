@@ -20,6 +20,10 @@ from requests.exceptions import ConnectionError, Timeout, RequestException
 from urllib3.util.retry import Retry
 
 from gridfia.external.fia_client import BigMapRestClient
+from gridfia.exceptions import (
+    InvalidZarrStructure, SpeciesNotFound, CalculationFailed,
+    APIConnectionError, InvalidLocationConfig, DownloadError
+)
 
 
 class TestBigMapRestClientInitialization:
@@ -198,7 +202,7 @@ class TestBigMapRestClientRateLimitedRequest:
         with patch.object(client.session, 'request') as mock_request:
             mock_request.side_effect = ConnectionError("Connection failed")
 
-            with pytest.raises(ConnectionError, match="Connection failed"):
+            with pytest.raises(APIConnectionError):
                 client._rate_limited_request('GET', 'http://test.com')
 
     def test_timeout_error_handling(self):
@@ -208,7 +212,7 @@ class TestBigMapRestClientRateLimitedRequest:
         with patch.object(client.session, 'request') as mock_request:
             mock_request.side_effect = Timeout("Request timed out")
 
-            with pytest.raises(Timeout, match="Request timed out"):
+            with pytest.raises(APIConnectionError):
                 client._rate_limited_request('GET', 'http://test.com')
 
     def test_general_request_error_handling(self):
@@ -218,7 +222,7 @@ class TestBigMapRestClientRateLimitedRequest:
         with patch.object(client.session, 'request') as mock_request:
             mock_request.side_effect = RequestException("Request failed")
 
-            with pytest.raises(RequestException, match="Request failed"):
+            with pytest.raises(APIConnectionError):
                 client._rate_limited_request('GET', 'http://test.com')
 
 
@@ -255,9 +259,8 @@ class TestBigMapRestClientServiceInfo:
             mock_response.raise_for_status.side_effect = requests.HTTPError("404 Not Found")
             mock_request.return_value = mock_response
 
-            result = client.get_service_info()
-
-            assert result == {}
+            with pytest.raises(APIConnectionError):
+                client.get_service_info()
 
     def test_get_service_info_request_exception(self):
         """Test handling of request exceptions in service info retrieval."""
@@ -266,9 +269,8 @@ class TestBigMapRestClientServiceInfo:
         with patch.object(client, '_rate_limited_request') as mock_request:
             mock_request.side_effect = RequestException("Network error")
 
-            result = client.get_service_info()
-
-            assert result == {}
+            with pytest.raises(APIConnectionError):
+                client.get_service_info()
 
 
 class TestBigMapRestClientSpeciesFunctions:
@@ -528,12 +530,11 @@ class TestBigMapRestClientExportSpeciesRaster:
         client = BigMapRestClient()
 
         with patch.object(client, '_get_function_name', return_value=None):
-            result = client.export_species_raster(
-                species_code='9999',
-                bbox=(-12000000, 5000000, -11000000, 6000000)
-            )
-
-            assert result is None
+            with pytest.raises(SpeciesNotFound):
+                client.export_species_raster(
+                    species_code='9999',
+                    bbox=(-12000000, 5000000, -11000000, 6000000)
+                )
 
     def test_export_species_raster_export_request_fails(self):
         """Test handling of export request failure."""
@@ -543,12 +544,11 @@ class TestBigMapRestClientExportSpeciesRaster:
             with patch.object(client, '_rate_limited_request') as mock_request:
                 mock_request.side_effect = RequestException("Export failed")
 
-                result = client.export_species_raster(
-                    species_code='0131',
-                    bbox=(-12000000, 5000000, -11000000, 6000000)
-                )
-
-                assert result is None
+                with pytest.raises(DownloadError):
+                    client.export_species_raster(
+                        species_code='0131',
+                        bbox=(-12000000, 5000000, -11000000, 6000000)
+                    )
 
     def test_export_species_raster_no_href_in_response(self):
         """Test handling when export response has no href."""
@@ -561,12 +561,11 @@ class TestBigMapRestClientExportSpeciesRaster:
                 export_response.json.return_value = {'error': 'Export failed'}
                 mock_request.return_value = export_response
 
-                result = client.export_species_raster(
-                    species_code='0131',
-                    bbox=(-12000000, 5000000, -11000000, 6000000)
-                )
-
-                assert result is None
+                with pytest.raises(DownloadError):
+                    client.export_species_raster(
+                        species_code='0131',
+                        bbox=(-12000000, 5000000, -11000000, 6000000)
+                    )
 
     def test_export_species_raster_raster_download_fails(self):
         """Test handling when raster download fails."""
@@ -581,12 +580,11 @@ class TestBigMapRestClientExportSpeciesRaster:
                 # Second request (raster download) fails
                 mock_request.side_effect = [export_response, RequestException("Download failed")]
 
-                result = client.export_species_raster(
-                    species_code='0131',
-                    bbox=(-12000000, 5000000, -11000000, 6000000)
-                )
-
-                assert result is None
+                with pytest.raises(DownloadError):
+                    client.export_species_raster(
+                        species_code='0131',
+                        bbox=(-12000000, 5000000, -11000000, 6000000)
+                    )
 
 
 class TestBigMapRestClientGetSpeciesStatistics:
@@ -629,9 +627,8 @@ class TestBigMapRestClientGetSpeciesStatistics:
         client = BigMapRestClient()
 
         with patch.object(client, '_get_function_name', return_value=None):
-            result = client.get_species_statistics('9999')
-
-            assert result == {}
+            with pytest.raises(SpeciesNotFound):
+                client.get_species_statistics('9999')
 
     def test_get_species_statistics_request_fails(self):
         """Test handling when statistics request fails."""
@@ -641,9 +638,8 @@ class TestBigMapRestClientGetSpeciesStatistics:
             with patch.object(client, '_rate_limited_request') as mock_request:
                 mock_request.side_effect = RequestException("Stats failed")
 
-                result = client.get_species_statistics('0131')
-
-                assert result == {}
+                with pytest.raises(APIConnectionError):
+                    client.get_species_statistics('0131')
 
 
 class TestBigMapRestClientIdentifyPixelValue:
@@ -742,9 +738,8 @@ class TestBigMapRestClientIdentifyPixelValue:
         client = BigMapRestClient()
 
         with patch.object(client, '_get_function_name', return_value=None):
-            result = client.identify_pixel_value('9999', -11500000, 5500000)
-
-            assert result is None
+            with pytest.raises(SpeciesNotFound):
+                client.identify_pixel_value('9999', -11500000, 5500000)
 
     def test_identify_pixel_value_request_fails(self):
         """Test handling when identify request fails."""
@@ -754,9 +749,8 @@ class TestBigMapRestClientIdentifyPixelValue:
             with patch.object(client, '_rate_limited_request') as mock_request:
                 mock_request.side_effect = RequestException("Identify failed")
 
-                result = client.identify_pixel_value('0131', -11500000, 5500000)
-
-                assert result is None
+                with pytest.raises(APIConnectionError):
+                    client.identify_pixel_value('0131', -11500000, 5500000)
 
 
 class TestBigMapRestClientExportTotalBiomassRaster:
@@ -877,11 +871,10 @@ class TestBigMapRestClientExportTotalBiomassRaster:
                 export_response.json.return_value = {'error': 'Export failed'}
                 mock_request.return_value = export_response
 
-                result = client.export_total_biomass_raster(
-                    bbox=(-12000000, 5000000, -11000000, 6000000)
-                )
-
-                assert result is None
+                with pytest.raises(DownloadError):
+                    client.export_total_biomass_raster(
+                        bbox=(-12000000, 5000000, -11000000, 6000000)
+                    )
 
     def test_export_total_biomass_request_fails(self):
         """Test handling when total biomass export request fails."""
@@ -891,11 +884,10 @@ class TestBigMapRestClientExportTotalBiomassRaster:
             with patch.object(client, '_rate_limited_request') as mock_request:
                 mock_request.side_effect = RequestException("Export failed")
 
-                result = client.export_total_biomass_raster(
-                    bbox=(-12000000, 5000000, -11000000, 6000000)
-                )
-
-                assert result is None
+                with pytest.raises(DownloadError):
+                    client.export_total_biomass_raster(
+                        bbox=(-12000000, 5000000, -11000000, 6000000)
+                    )
 
 
 class TestBigMapRestClientBatchExport:
@@ -1249,9 +1241,8 @@ class TestBigMapRestClientErrorHandlingAndEdgeCases:
                 mock_response.raise_for_status.side_effect = requests.HTTPError(f"{code} Error")
                 mock_request.return_value = mock_response
 
-                result = client.get_service_info()
-
-                assert result == {}
+                with pytest.raises(APIConnectionError):
+                    client.get_service_info()
 
     def test_very_large_bbox(self):
         """Test handling of very large bounding boxes."""
