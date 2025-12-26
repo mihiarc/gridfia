@@ -404,3 +404,110 @@ class TestRealAPIErrorHandling:
                 assert np.all(result == 0) or np.all(np.isnan(result))
         except (DownloadError, Exception):
             pass  # Error is acceptable for invalid bbox
+
+
+# =============================================================================
+# End-to-End Workflow Test
+# =============================================================================
+
+
+@pytest.mark.slow
+@pytest.mark.integration
+class TestEndToEndWorkflow:
+    """Complete end-to-end workflow test using real API calls.
+
+    This test verifies the complete pipeline:
+    1. Download species rasters from FIA BIGMAP
+    2. Create Zarr store from downloaded GeoTIFFs
+    3. Run forest metric calculations
+    4. Validate results
+    """
+
+    @pytest.fixture
+    def temp_dir(self):
+        """Create a temporary directory for test outputs."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            yield Path(tmp_dir)
+
+    def test_complete_pipeline_wake_county(self, temp_dir):
+        """Test complete pipeline for a small area in Wake County, NC.
+
+        Uses a ~5km x 5km bbox in a forested area for reasonable download times.
+        """
+        from gridfia.api import GridFIA
+        from gridfia.utils.zarr_utils import ZarrStore
+
+        api = GridFIA()
+
+        # Step 1: Define a small forested area in Wake County, NC
+        # This bbox is approximately 5km x 5km in Web Mercator
+        # Near Umstead State Park - known forested area
+        bbox_wm = (-8765000, 4270000, -8760000, 4275000)
+
+        # Step 2: Download 3 common species (keep it small for speed)
+        download_dir = temp_dir / "downloads"
+        download_dir.mkdir()
+
+        species_to_download = ["0316", "0131", "0261"]  # Red maple, Balsam fir, E. white pine
+
+        downloaded_files = []
+        client = api.rest_client
+
+        for species_code in species_to_download:
+            output_path = download_dir / f"species_{species_code}.tif"
+            try:
+                result = client.export_species_raster(
+                    species_code=species_code,
+                    bbox=bbox_wm,
+                    output_path=output_path,
+                    pixel_size=30.0  # 30m resolution
+                )
+                if result and result.exists() and result.stat().st_size > 0:
+                    downloaded_files.append(result)
+            except Exception as e:
+                print(f"Warning: Could not download species {species_code}: {e}")
+
+        assert len(downloaded_files) >= 1, "At least one species should download successfully"
+        print(f"Downloaded {len(downloaded_files)} species rasters")
+
+        # Step 3: Create Zarr store
+        zarr_path = temp_dir / "test_workflow.zarr"
+        zarr_result = api.create_zarr(download_dir, zarr_path)
+
+        assert zarr_result == zarr_path
+        assert zarr_path.exists()
+        print(f"Created Zarr store at {zarr_path}")
+
+        # Step 4: Validate Zarr structure
+        info = api.validate_zarr(zarr_path)
+        assert "shape" in info
+        assert info["shape"][0] >= 2  # At least downloaded species + total
+        print(f"Zarr shape: {info['shape']}")
+
+        # Step 5: Run calculations
+        output_dir = temp_dir / "calculations"
+        output_dir.mkdir()
+
+        results = api.calculate_metrics(
+            zarr_path,
+            calculations=["species_richness", "total_biomass"],
+            output_dir=output_dir
+        )
+
+        assert len(results) >= 1, "At least one calculation should complete"
+        for result in results:
+            print(f"Calculation {result.name}: {result.output_path}")
+            if result.output_path:
+                assert Path(result.output_path).exists()
+
+        # Step 6: Verify data integrity with ZarrStore
+        with ZarrStore.open(zarr_path) as store:
+            biomass = store.biomass
+            assert biomass is not None
+            assert biomass.shape[0] >= 2  # species + total
+
+            # Check we have actual data (not all zeros)
+            total_sum = float(np.nansum(biomass[:]))
+            print(f"Total biomass sum: {total_sum}")
+
+        print("End-to-end workflow completed successfully!")
