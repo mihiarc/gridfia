@@ -5,93 +5,124 @@ Core mapping functionality for visualizing forest data from Zarr stores.
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union, Any
 import numpy as np
-import zarr
-import zarr.storage
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 from matplotlib.figure import Figure
 from matplotlib.axes import Axes
-import rasterio
 from rasterio.transform import Affine
 from rasterio.crs import CRS
-from rasterio.warp import calculate_default_transform, reproject, Resampling
 from rich.console import Console
 import warnings
 from .boundaries import (
     load_state_boundary, plot_boundaries, add_basemap,
     get_basemap_zoom_level, clip_boundaries_to_extent
 )
+from ..utils.zarr_utils import ZarrStore
 
 console = Console()
 
 
 class ZarrMapper:
-    """Main class for creating maps from Zarr stores."""
-    
-    def __init__(self, zarr_path: Union[str, Path]):
+    """
+    Main class for creating maps from Zarr stores.
+
+    This class uses the unified ZarrStore interface for accessing Zarr data,
+    providing consistent handling of both Zarr v2 and v3 formats.
+    """
+
+    def __init__(self, zarr_path: Union[str, Path, ZarrStore]):
         """
         Initialize the mapper with a Zarr store.
-        
+
         Args:
-            zarr_path: Path to the Zarr store
+            zarr_path: Path to the Zarr store or an existing ZarrStore instance
         """
-        self.zarr_path = Path(zarr_path)
-        if not self.zarr_path.exists():
-            raise FileNotFoundError(f"Zarr store not found: {zarr_path}")
-        
-        # Open the Zarr store
-        self.store = zarr.storage.LocalStore(self.zarr_path)
-        self.root = zarr.open_group(store=self.store, mode='r')
-        
-        # Get data arrays
-        self.biomass = self.root['biomass']
-        self.species_codes = self.root.get('species_codes', [])
-        self.species_names = self.root.get('species_names', [])
-        
-        # Get metadata
-        self.crs = CRS.from_string(self.root.attrs.get('crs', 'EPSG:3857'))
-        self.transform = Affine(*self.root.attrs.get('transform', [1, 0, 0, 0, -1, 0]))
-        self.bounds = self.root.attrs.get('bounds', [0, 0, 1, 1])
-        self.num_species = self.root.attrs.get('num_species', self.biomass.shape[0])
-        
+        # Accept either a path or an existing ZarrStore
+        if isinstance(zarr_path, ZarrStore):
+            self._store = zarr_path
+            self.zarr_path = zarr_path.path or Path("unknown")
+            self._owns_store = False  # Don't close a store we didn't create
+        else:
+            self.zarr_path = Path(zarr_path)
+            self._store = ZarrStore.from_path(self.zarr_path)
+            self._owns_store = True  # We created this store, so we manage it
+
         # Cache for computed indices
         self._diversity_cache = {}
-        
+
         console.print(f"[green]Loaded Zarr store:[/green] {self.zarr_path}")
-        console.print(f"  Shape: {self.biomass.shape}")
-        console.print(f"  CRS: {self.crs}")
-        console.print(f"  Species: {self.num_species}")
-    
+        console.print(f"  Shape: {self._store.shape}")
+        console.print(f"  CRS: {self._store.crs}")
+        console.print(f"  Species: {self._store.num_species}")
+
+    def close(self) -> None:
+        """Close the underlying Zarr store if we own it."""
+        if self._owns_store and hasattr(self, '_store'):
+            self._store.close()
+
+    def __enter__(self) -> 'ZarrMapper':
+        """Support for context manager protocol."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        """Close store when exiting context."""
+        self.close()
+
+    # Property accessors that delegate to ZarrStore
+    @property
+    def biomass(self):
+        """The main biomass array (3D: species x height x width)."""
+        return self._store.biomass
+
+    @property
+    def species_codes(self) -> List[str]:
+        """List of species codes."""
+        return self._store.species_codes
+
+    @property
+    def species_names(self) -> List[str]:
+        """List of species names."""
+        return self._store.species_names
+
+    @property
+    def crs(self) -> CRS:
+        """Coordinate reference system."""
+        return self._store.crs
+
+    @property
+    def transform(self) -> Affine:
+        """Affine transform for georeferencing."""
+        return self._store.transform
+
+    @property
+    def bounds(self) -> Tuple[float, float, float, float]:
+        """Geographic bounds."""
+        return self._store.bounds
+
+    @property
+    def num_species(self) -> int:
+        """Number of species in the store."""
+        return self._store.num_species
+
     def get_species_info(self) -> List[Dict[str, Any]]:
         """Get information about all species in the store."""
-        species_info = []
-        for i in range(self.num_species):
-            try:
-                code = str(self.species_codes[i])
-                name = str(self.species_names[i])
-            except (IndexError, KeyError):
-                code = f"{i:04d}"
-                name = f"Species {i}"
-            species_info.append({
-                'index': i,
-                'code': code,
-                'name': name
-            })
-        return species_info
-    
+        return self._store.get_species_info()
+
     def _get_extent(self, transform: Optional[Affine] = None) -> Tuple[float, float, float, float]:
         """Get the extent for matplotlib plotting."""
         if transform is None:
-            transform = self.transform
-        
+            # Use the ZarrStore's get_extent method for default transform
+            return self._store.get_extent()
+
+        # If a custom transform is provided, calculate manually
         height, width = self.biomass.shape[1], self.biomass.shape[2]
-        
+
         # Calculate corners
         left = transform.c
         right = transform.c + width * transform.a
         top = transform.f
         bottom = transform.f + height * transform.e
-        
+
         return (left, right, bottom, top)
     
     def _normalize_data(self, data: np.ndarray, vmin: Optional[float] = None,

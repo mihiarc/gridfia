@@ -7,6 +7,8 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 import time
+import threading
+from enum import Enum
 from typing import Dict, List, Optional, Tuple, Union
 from pathlib import Path
 import rasterio
@@ -16,29 +18,284 @@ from rich.console import Console
 from rich.progress import Progress, track
 
 from ..console import print_info, print_success, print_error, print_warning
-from ..exceptions import APIConnectionError, SpeciesNotFound, DownloadError
+from ..exceptions import APIConnectionError, SpeciesNotFound, DownloadError, CircuitBreakerOpen
 
 console = Console()
 
 
-class BigMapRestClient:
-    """Client for accessing FIA BIGMAP ImageServer REST API with proper retry and rate limiting."""
-    
-    def __init__(self, max_retries: int = 3, backoff_factor: float = 1.0, 
-                 timeout: int = 30, rate_limit_delay: float = 0.5):
+class CircuitBreakerState(Enum):
+    """States for the circuit breaker pattern."""
+    CLOSED = "closed"      # Normal operation, requests allowed
+    OPEN = "open"          # Failing, requests blocked
+    HALF_OPEN = "half_open"  # Testing recovery, limited requests allowed
+
+
+class CircuitBreaker:
+    """
+    Thread-safe circuit breaker implementation for protecting against cascading failures.
+
+    The circuit breaker has three states:
+    - CLOSED: Normal operation. All requests pass through. Failures are counted.
+    - OPEN: Failure threshold exceeded. All requests are blocked immediately.
+    - HALF_OPEN: After recovery timeout, one test request is allowed to check recovery.
+
+    State transitions:
+    - CLOSED -> OPEN: When failure_count >= failure_threshold
+    - OPEN -> HALF_OPEN: When recovery_timeout has elapsed since last failure
+    - HALF_OPEN -> CLOSED: When a test request succeeds
+    - HALF_OPEN -> OPEN: When a test request fails
+
+    Examples
+    --------
+    >>> breaker = CircuitBreaker(failure_threshold=5, recovery_timeout=60.0)
+    >>> if breaker.can_execute():
+    ...     try:
+    ...         result = make_request()
+    ...         breaker.record_success()
+    ...     except Exception:
+    ...         breaker.record_failure()
+    """
+
+    def __init__(
+        self,
+        failure_threshold: int = 5,
+        recovery_timeout: float = 60.0,
+        name: str = "default"
+    ):
         """
-        Initialize the REST client with retry and rate limiting configuration.
-        
+        Initialize the circuit breaker.
+
+        Parameters
+        ----------
+        failure_threshold : int
+            Number of consecutive failures before opening the circuit.
+            Default is 5.
+        recovery_timeout : float
+            Time in seconds to wait before attempting recovery (HALF_OPEN state).
+            Default is 60.0 seconds.
+        name : str
+            Name for this circuit breaker instance (used in logging).
+        """
+        self._failure_threshold = failure_threshold
+        self._recovery_timeout = recovery_timeout
+        self._name = name
+
+        # State management
+        self._state = CircuitBreakerState.CLOSED
+        self._failure_count = 0
+        self._last_failure_time: Optional[float] = None
+        self._last_state_change_time = time.time()
+
+        # Thread safety
+        self._lock = threading.RLock()
+
+    @property
+    def state(self) -> CircuitBreakerState:
+        """Get the current circuit breaker state."""
+        with self._lock:
+            self._check_state_transition()
+            return self._state
+
+    @property
+    def failure_count(self) -> int:
+        """Get the current failure count."""
+        with self._lock:
+            return self._failure_count
+
+    @property
+    def failure_threshold(self) -> int:
+        """Get the failure threshold."""
+        return self._failure_threshold
+
+    @property
+    def recovery_timeout(self) -> float:
+        """Get the recovery timeout in seconds."""
+        return self._recovery_timeout
+
+    @property
+    def time_until_recovery(self) -> Optional[float]:
+        """Get the time remaining until recovery attempt, or None if not in OPEN state."""
+        with self._lock:
+            if self._state != CircuitBreakerState.OPEN or self._last_failure_time is None:
+                return None
+            elapsed = time.time() - self._last_failure_time
+            remaining = self._recovery_timeout - elapsed
+            return max(0.0, remaining)
+
+    def _check_state_transition(self) -> None:
+        """
+        Check if state should transition (must be called while holding lock).
+
+        Handles automatic transition from OPEN to HALF_OPEN when recovery timeout elapses.
+        """
+        if self._state == CircuitBreakerState.OPEN and self._last_failure_time is not None:
+            elapsed = time.time() - self._last_failure_time
+            if elapsed >= self._recovery_timeout:
+                self._transition_to(CircuitBreakerState.HALF_OPEN)
+
+    def _transition_to(self, new_state: CircuitBreakerState) -> None:
+        """
+        Transition to a new state (must be called while holding lock).
+
+        Parameters
+        ----------
+        new_state : CircuitBreakerState
+            The state to transition to.
+        """
+        old_state = self._state
+        self._state = new_state
+        self._last_state_change_time = time.time()
+
+        print_info(
+            f"Circuit breaker '{self._name}' state transition: "
+            f"{old_state.value} -> {new_state.value}"
+        )
+
+    def can_execute(self) -> bool:
+        """
+        Check if a request can be executed.
+
+        Returns
+        -------
+        bool
+            True if the request is allowed, False otherwise.
+
+        Notes
+        -----
+        In CLOSED state, always returns True.
+        In OPEN state, returns False until recovery timeout elapses.
+        In HALF_OPEN state, returns True to allow a test request.
+        """
+        with self._lock:
+            self._check_state_transition()
+
+            if self._state == CircuitBreakerState.CLOSED:
+                return True
+            elif self._state == CircuitBreakerState.OPEN:
+                return False
+            else:  # HALF_OPEN
+                return True
+
+    def record_success(self) -> None:
+        """
+        Record a successful request.
+
+        In CLOSED state: resets failure count.
+        In HALF_OPEN state: transitions to CLOSED.
+        """
+        with self._lock:
+            if self._state == CircuitBreakerState.HALF_OPEN:
+                print_success(
+                    f"Circuit breaker '{self._name}' recovery successful, closing circuit"
+                )
+                self._transition_to(CircuitBreakerState.CLOSED)
+
+            self._failure_count = 0
+
+    def record_failure(self) -> None:
+        """
+        Record a failed request.
+
+        In CLOSED state: increments failure count, may transition to OPEN.
+        In HALF_OPEN state: transitions back to OPEN.
+        """
+        with self._lock:
+            self._failure_count += 1
+            self._last_failure_time = time.time()
+
+            if self._state == CircuitBreakerState.HALF_OPEN:
+                print_warning(
+                    f"Circuit breaker '{self._name}' recovery failed, reopening circuit"
+                )
+                self._transition_to(CircuitBreakerState.OPEN)
+            elif self._state == CircuitBreakerState.CLOSED:
+                if self._failure_count >= self._failure_threshold:
+                    print_error(
+                        f"Circuit breaker '{self._name}' opened after "
+                        f"{self._failure_count} consecutive failures"
+                    )
+                    self._transition_to(CircuitBreakerState.OPEN)
+
+    def reset(self) -> None:
+        """
+        Reset the circuit breaker to its initial CLOSED state.
+
+        This clears all failure counts and resets the state to CLOSED.
+        Useful for manual recovery or testing purposes.
+        """
+        with self._lock:
+            old_state = self._state
+            self._state = CircuitBreakerState.CLOSED
+            self._failure_count = 0
+            self._last_failure_time = None
+            self._last_state_change_time = time.time()
+
+            if old_state != CircuitBreakerState.CLOSED:
+                print_info(f"Circuit breaker '{self._name}' manually reset to CLOSED")
+
+    def get_status(self) -> Dict:
+        """
+        Get the current status of the circuit breaker.
+
+        Returns
+        -------
+        dict
+            A dictionary containing the current state, failure count,
+            threshold, and time until recovery (if applicable).
+        """
+        with self._lock:
+            self._check_state_transition()
+            return {
+                "name": self._name,
+                "state": self._state.value,
+                "failure_count": self._failure_count,
+                "failure_threshold": self._failure_threshold,
+                "recovery_timeout": self._recovery_timeout,
+                "time_until_recovery": self.time_until_recovery,
+                "last_failure_time": self._last_failure_time,
+                "last_state_change_time": self._last_state_change_time
+            }
+
+
+class BigMapRestClient:
+    """Client for accessing FIA BIGMAP ImageServer REST API with proper retry, rate limiting, and circuit breaker."""
+
+    def __init__(
+        self,
+        max_retries: int = 3,
+        backoff_factor: float = 1.0,
+        timeout: int = 30,
+        rate_limit_delay: float = 0.5,
+        circuit_breaker_threshold: int = 5,
+        circuit_breaker_timeout: float = 60.0,
+        circuit_breaker_enabled: bool = True
+    ):
+        """
+        Initialize the REST client with retry, rate limiting, and circuit breaker configuration.
+
         Args:
             max_retries: Maximum number of retries for failed requests
             backoff_factor: Backoff factor for retry delays
             timeout: Request timeout in seconds
             rate_limit_delay: Delay between requests in seconds
+            circuit_breaker_threshold: Number of consecutive failures before opening circuit
+            circuit_breaker_timeout: Time in seconds to wait before recovery attempt
+            circuit_breaker_enabled: Whether to enable circuit breaker protection
         """
         self.base_url = "https://di-usfsdata.img.arcgis.com/arcgis/rest/services/FIA_BIGMAP_2018_Tree_Species_Aboveground_Biomass/ImageServer"
         self.timeout = timeout
         self.rate_limit_delay = rate_limit_delay
         self._last_request_time = 0
+
+        # Circuit breaker configuration
+        self._circuit_breaker_enabled = circuit_breaker_enabled
+        self._circuit_breaker: Optional[CircuitBreaker] = None
+        if circuit_breaker_enabled:
+            self._circuit_breaker = CircuitBreaker(
+                failure_threshold=circuit_breaker_threshold,
+                recovery_timeout=circuit_breaker_timeout,
+                name="FIA_BIGMAP"
+            )
         
         # Configure session with retry strategy
         self.session = requests.Session()
@@ -64,9 +321,48 @@ class BigMapRestClient:
         })
         
         self._species_functions = None
-        
+
+    @property
+    def circuit_breaker(self) -> Optional[CircuitBreaker]:
+        """Get the circuit breaker instance, if enabled."""
+        return self._circuit_breaker
+
+    def get_circuit_breaker_status(self) -> Optional[Dict]:
+        """
+        Get the current status of the circuit breaker.
+
+        Returns
+        -------
+        dict or None
+            Circuit breaker status if enabled, None otherwise.
+        """
+        if self._circuit_breaker is not None:
+            return self._circuit_breaker.get_status()
+        return None
+
+    def reset_circuit_breaker(self) -> None:
+        """
+        Manually reset the circuit breaker to CLOSED state.
+
+        This can be used to force recovery after a service has been restored.
+        """
+        if self._circuit_breaker is not None:
+            self._circuit_breaker.reset()
+
     def _rate_limited_request(self, method: str, url: str, **kwargs) -> requests.Response:
-        """Make a rate-limited request with proper error handling."""
+        """Make a rate-limited request with circuit breaker protection and proper error handling."""
+        # Check circuit breaker first
+        if self._circuit_breaker_enabled and self._circuit_breaker is not None:
+            if not self._circuit_breaker.can_execute():
+                retry_after = self._circuit_breaker.time_until_recovery
+                raise CircuitBreakerOpen(
+                    "Circuit breaker is OPEN - FIA BIGMAP service is currently unavailable",
+                    failure_count=self._circuit_breaker.failure_count,
+                    failure_threshold=self._circuit_breaker.failure_threshold,
+                    retry_after=retry_after,
+                    last_failure_time=self._circuit_breaker._last_failure_time
+                )
+
         # Implement rate limiting
         current_time = time.time()
         time_since_last = current_time - self._last_request_time
@@ -74,15 +370,15 @@ class BigMapRestClient:
             sleep_time = self.rate_limit_delay - time_since_last
             print_info(f"Rate limiting: sleeping for {sleep_time:.2f}s")
             time.sleep(sleep_time)
-        
+
         # Set timeout if not provided
         if 'timeout' not in kwargs:
             kwargs['timeout'] = self.timeout
-            
+
         try:
             response = self.session.request(method, url, **kwargs)
             self._last_request_time = time.time()
-            
+
             # Handle rate limiting responses
             if response.status_code == 429:
                 retry_after = response.headers.get('Retry-After')
@@ -93,10 +389,22 @@ class BigMapRestClient:
                     # Retry once after rate limit
                     response = self.session.request(method, url, **kwargs)
                     self._last_request_time = time.time()
-            
+
+            # Check for server errors that should trigger circuit breaker
+            if response.status_code >= 500:
+                if self._circuit_breaker_enabled and self._circuit_breaker is not None:
+                    self._circuit_breaker.record_failure()
+            else:
+                # Record success for non-error responses
+                if self._circuit_breaker_enabled and self._circuit_breaker is not None:
+                    self._circuit_breaker.record_success()
+
             return response
-            
+
         except requests.exceptions.ConnectionError as e:
+            # Record failure in circuit breaker
+            if self._circuit_breaker_enabled and self._circuit_breaker is not None:
+                self._circuit_breaker.record_failure()
             print_error(f"Connection error: {e}")
             raise APIConnectionError(
                 f"Connection error to FIA BIGMAP service",
@@ -104,6 +412,9 @@ class BigMapRestClient:
                 original_error=e
             )
         except requests.exceptions.Timeout as e:
+            # Record failure in circuit breaker
+            if self._circuit_breaker_enabled and self._circuit_breaker is not None:
+                self._circuit_breaker.record_failure()
             print_error(f"Request timeout after {self.timeout}s: {e}")
             raise APIConnectionError(
                 f"Request timeout after {self.timeout}s",
@@ -111,6 +422,9 @@ class BigMapRestClient:
                 original_error=e
             )
         except requests.exceptions.RequestException as e:
+            # Record failure in circuit breaker
+            if self._circuit_breaker_enabled and self._circuit_breaker is not None:
+                self._circuit_breaker.record_failure()
             print_error(f"Request failed: {e}")
             raise APIConnectionError(
                 f"Request to FIA BIGMAP service failed",

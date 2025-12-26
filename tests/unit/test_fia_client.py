@@ -1368,3 +1368,990 @@ def temp_dir():
     """Create a temporary directory for test files."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         yield Path(tmp_dir)
+
+
+# =============================================================================
+# CircuitBreaker Tests
+# =============================================================================
+
+
+class TestCircuitBreakerInitialization:
+    """Test CircuitBreaker initialization and configuration."""
+
+    def test_init_default_config(self):
+        """Test initialization with default configuration."""
+        from gridfia.external.fia_client import CircuitBreaker, CircuitBreakerState
+
+        breaker = CircuitBreaker()
+
+        assert breaker.failure_threshold == 5
+        assert breaker.recovery_timeout == 60.0
+        assert breaker._name == "default"
+        assert breaker.state == CircuitBreakerState.CLOSED
+        assert breaker.failure_count == 0
+        assert breaker._last_failure_time is None
+
+    def test_init_custom_threshold(self):
+        """Test initialization with custom failure threshold."""
+        from gridfia.external.fia_client import CircuitBreaker
+
+        breaker = CircuitBreaker(failure_threshold=10)
+
+        assert breaker.failure_threshold == 10
+        assert breaker.recovery_timeout == 60.0
+
+    def test_init_custom_timeout(self):
+        """Test initialization with custom recovery timeout."""
+        from gridfia.external.fia_client import CircuitBreaker
+
+        breaker = CircuitBreaker(recovery_timeout=120.0)
+
+        assert breaker.failure_threshold == 5
+        assert breaker.recovery_timeout == 120.0
+
+    def test_init_custom_name(self):
+        """Test initialization with custom name."""
+        from gridfia.external.fia_client import CircuitBreaker
+
+        breaker = CircuitBreaker(name="test_breaker")
+
+        assert breaker._name == "test_breaker"
+
+    def test_init_all_custom_params(self):
+        """Test initialization with all custom parameters."""
+        from gridfia.external.fia_client import CircuitBreaker, CircuitBreakerState
+
+        breaker = CircuitBreaker(
+            failure_threshold=3,
+            recovery_timeout=30.0,
+            name="custom_breaker"
+        )
+
+        assert breaker.failure_threshold == 3
+        assert breaker.recovery_timeout == 30.0
+        assert breaker._name == "custom_breaker"
+        assert breaker.state == CircuitBreakerState.CLOSED
+
+    def test_init_thread_safety(self):
+        """Test that circuit breaker initializes with a lock for thread safety."""
+        from gridfia.external.fia_client import CircuitBreaker
+        import threading
+
+        breaker = CircuitBreaker()
+
+        assert breaker._lock is not None
+        assert isinstance(breaker._lock, type(threading.RLock()))
+
+
+class TestCircuitBreakerCanExecute:
+    """Test CircuitBreaker can_execute() method."""
+
+    def test_can_execute_closed_state(self):
+        """Test can_execute returns True when circuit is CLOSED."""
+        from gridfia.external.fia_client import CircuitBreaker
+
+        breaker = CircuitBreaker()
+
+        assert breaker.can_execute() is True
+
+    def test_can_execute_open_state(self):
+        """Test can_execute returns False when circuit is OPEN."""
+        from gridfia.external.fia_client import CircuitBreaker, CircuitBreakerState
+
+        breaker = CircuitBreaker(failure_threshold=2, recovery_timeout=60.0)
+
+        # Trigger enough failures to open the circuit
+        breaker.record_failure()
+        breaker.record_failure()
+
+        assert breaker.state == CircuitBreakerState.OPEN
+        assert breaker.can_execute() is False
+
+    def test_can_execute_half_open_state(self):
+        """Test can_execute returns True when circuit is HALF_OPEN."""
+        from gridfia.external.fia_client import CircuitBreaker, CircuitBreakerState
+
+        breaker = CircuitBreaker(failure_threshold=1, recovery_timeout=0.01)
+
+        # Open the circuit
+        breaker.record_failure()
+        assert breaker.state == CircuitBreakerState.OPEN
+
+        # Wait for recovery timeout
+        time.sleep(0.02)
+
+        # Should transition to HALF_OPEN and allow execution
+        assert breaker.can_execute() is True
+        assert breaker.state == CircuitBreakerState.HALF_OPEN
+
+    def test_can_execute_multiple_calls_closed(self):
+        """Test multiple can_execute calls in CLOSED state all return True."""
+        from gridfia.external.fia_client import CircuitBreaker
+
+        breaker = CircuitBreaker()
+
+        for _ in range(10):
+            assert breaker.can_execute() is True
+
+
+class TestCircuitBreakerRecordSuccess:
+    """Test CircuitBreaker record_success() method."""
+
+    def test_record_success_resets_failure_count(self):
+        """Test record_success resets failure count in CLOSED state."""
+        from gridfia.external.fia_client import CircuitBreaker
+
+        breaker = CircuitBreaker(failure_threshold=5)
+
+        # Record some failures
+        breaker.record_failure()
+        breaker.record_failure()
+        assert breaker.failure_count == 2
+
+        # Record success
+        breaker.record_success()
+
+        assert breaker.failure_count == 0
+
+    def test_record_success_closes_circuit_from_half_open(self):
+        """Test record_success closes circuit from HALF_OPEN state."""
+        from gridfia.external.fia_client import CircuitBreaker, CircuitBreakerState
+
+        breaker = CircuitBreaker(failure_threshold=1, recovery_timeout=0.01)
+
+        # Open the circuit
+        breaker.record_failure()
+        assert breaker.state == CircuitBreakerState.OPEN
+
+        # Wait for recovery timeout
+        time.sleep(0.02)
+
+        # Access state to transition to HALF_OPEN
+        assert breaker.can_execute() is True
+        assert breaker.state == CircuitBreakerState.HALF_OPEN
+
+        # Record success - should close the circuit
+        breaker.record_success()
+
+        assert breaker.state == CircuitBreakerState.CLOSED
+        assert breaker.failure_count == 0
+
+    def test_record_success_in_closed_state_keeps_closed(self):
+        """Test record_success in CLOSED state keeps circuit CLOSED."""
+        from gridfia.external.fia_client import CircuitBreaker, CircuitBreakerState
+
+        breaker = CircuitBreaker()
+
+        breaker.record_success()
+
+        assert breaker.state == CircuitBreakerState.CLOSED
+        assert breaker.failure_count == 0
+
+
+class TestCircuitBreakerRecordFailure:
+    """Test CircuitBreaker record_failure() method."""
+
+    def test_record_failure_increments_count(self):
+        """Test record_failure increments failure count."""
+        from gridfia.external.fia_client import CircuitBreaker
+
+        breaker = CircuitBreaker(failure_threshold=10)
+
+        assert breaker.failure_count == 0
+
+        breaker.record_failure()
+        assert breaker.failure_count == 1
+
+        breaker.record_failure()
+        assert breaker.failure_count == 2
+
+        breaker.record_failure()
+        assert breaker.failure_count == 3
+
+    def test_record_failure_opens_circuit_at_threshold(self):
+        """Test record_failure opens circuit when threshold is reached."""
+        from gridfia.external.fia_client import CircuitBreaker, CircuitBreakerState
+
+        breaker = CircuitBreaker(failure_threshold=3)
+
+        # Record failures up to threshold
+        breaker.record_failure()
+        assert breaker.state == CircuitBreakerState.CLOSED
+
+        breaker.record_failure()
+        assert breaker.state == CircuitBreakerState.CLOSED
+
+        breaker.record_failure()  # Third failure - hits threshold
+        assert breaker.state == CircuitBreakerState.OPEN
+
+    def test_record_failure_sets_last_failure_time(self):
+        """Test record_failure sets last failure time."""
+        from gridfia.external.fia_client import CircuitBreaker
+
+        breaker = CircuitBreaker()
+
+        assert breaker._last_failure_time is None
+
+        before_time = time.time()
+        breaker.record_failure()
+        after_time = time.time()
+
+        assert breaker._last_failure_time is not None
+        assert before_time <= breaker._last_failure_time <= after_time
+
+    def test_record_failure_reopens_circuit_from_half_open(self):
+        """Test record_failure reopens circuit from HALF_OPEN state."""
+        from gridfia.external.fia_client import CircuitBreaker, CircuitBreakerState
+
+        breaker = CircuitBreaker(failure_threshold=1, recovery_timeout=0.01)
+
+        # Open the circuit
+        breaker.record_failure()
+        assert breaker.state == CircuitBreakerState.OPEN
+
+        # Wait for recovery timeout
+        time.sleep(0.02)
+
+        # Access state to transition to HALF_OPEN
+        assert breaker.can_execute() is True
+        assert breaker.state == CircuitBreakerState.HALF_OPEN
+
+        # Record failure - should reopen the circuit
+        breaker.record_failure()
+
+        assert breaker.state == CircuitBreakerState.OPEN
+
+
+class TestCircuitBreakerReset:
+    """Test CircuitBreaker reset() method."""
+
+    def test_reset_from_closed_state(self):
+        """Test reset from CLOSED state with failures."""
+        from gridfia.external.fia_client import CircuitBreaker, CircuitBreakerState
+
+        breaker = CircuitBreaker(failure_threshold=5)
+
+        # Record some failures
+        breaker.record_failure()
+        breaker.record_failure()
+
+        assert breaker.failure_count == 2
+
+        breaker.reset()
+
+        assert breaker.state == CircuitBreakerState.CLOSED
+        assert breaker.failure_count == 0
+        assert breaker._last_failure_time is None
+
+    def test_reset_from_open_state(self):
+        """Test reset from OPEN state."""
+        from gridfia.external.fia_client import CircuitBreaker, CircuitBreakerState
+
+        breaker = CircuitBreaker(failure_threshold=1)
+
+        # Open the circuit
+        breaker.record_failure()
+        assert breaker.state == CircuitBreakerState.OPEN
+
+        breaker.reset()
+
+        assert breaker.state == CircuitBreakerState.CLOSED
+        assert breaker.failure_count == 0
+        assert breaker._last_failure_time is None
+
+    def test_reset_from_half_open_state(self):
+        """Test reset from HALF_OPEN state."""
+        from gridfia.external.fia_client import CircuitBreaker, CircuitBreakerState
+
+        breaker = CircuitBreaker(failure_threshold=1, recovery_timeout=0.01)
+
+        # Open the circuit
+        breaker.record_failure()
+
+        # Wait for recovery timeout to transition to HALF_OPEN
+        time.sleep(0.02)
+        assert breaker.can_execute() is True
+        assert breaker.state == CircuitBreakerState.HALF_OPEN
+
+        breaker.reset()
+
+        assert breaker.state == CircuitBreakerState.CLOSED
+        assert breaker.failure_count == 0
+        assert breaker._last_failure_time is None
+
+    def test_reset_updates_last_state_change_time(self):
+        """Test reset updates last state change time."""
+        from gridfia.external.fia_client import CircuitBreaker
+
+        breaker = CircuitBreaker(failure_threshold=1)
+
+        # Open the circuit
+        breaker.record_failure()
+        old_state_change_time = breaker._last_state_change_time
+
+        time.sleep(0.01)
+
+        breaker.reset()
+
+        assert breaker._last_state_change_time > old_state_change_time
+
+
+class TestCircuitBreakerGetStatus:
+    """Test CircuitBreaker get_status() method."""
+
+    def test_get_status_closed_state(self):
+        """Test get_status in CLOSED state."""
+        from gridfia.external.fia_client import CircuitBreaker
+
+        breaker = CircuitBreaker(
+            failure_threshold=5,
+            recovery_timeout=60.0,
+            name="test_breaker"
+        )
+
+        status = breaker.get_status()
+
+        assert status["name"] == "test_breaker"
+        assert status["state"] == "closed"
+        assert status["failure_count"] == 0
+        assert status["failure_threshold"] == 5
+        assert status["recovery_timeout"] == 60.0
+        assert status["time_until_recovery"] is None
+        assert status["last_failure_time"] is None
+        assert "last_state_change_time" in status
+
+    def test_get_status_with_failures(self):
+        """Test get_status with recorded failures."""
+        from gridfia.external.fia_client import CircuitBreaker
+
+        breaker = CircuitBreaker(failure_threshold=5)
+
+        breaker.record_failure()
+        breaker.record_failure()
+
+        status = breaker.get_status()
+
+        assert status["state"] == "closed"
+        assert status["failure_count"] == 2
+        assert status["last_failure_time"] is not None
+
+    def test_get_status_open_state(self):
+        """Test get_status in OPEN state with time_until_recovery."""
+        from gridfia.external.fia_client import CircuitBreaker
+
+        breaker = CircuitBreaker(failure_threshold=1, recovery_timeout=60.0)
+
+        breaker.record_failure()
+
+        status = breaker.get_status()
+
+        assert status["state"] == "open"
+        assert status["failure_count"] == 1
+        assert status["time_until_recovery"] is not None
+        assert 0 < status["time_until_recovery"] <= 60.0
+
+    def test_get_status_half_open_state(self):
+        """Test get_status in HALF_OPEN state."""
+        from gridfia.external.fia_client import CircuitBreaker
+
+        breaker = CircuitBreaker(failure_threshold=1, recovery_timeout=0.01)
+
+        breaker.record_failure()
+        time.sleep(0.02)
+
+        # Trigger transition to HALF_OPEN
+        breaker.can_execute()
+
+        status = breaker.get_status()
+
+        assert status["state"] == "half_open"
+        assert status["time_until_recovery"] is None
+
+
+class TestCircuitBreakerStateTransitions:
+    """Test CircuitBreaker state transitions."""
+
+    def test_transition_closed_to_open(self):
+        """Test state transition from CLOSED to OPEN."""
+        from gridfia.external.fia_client import CircuitBreaker, CircuitBreakerState
+
+        breaker = CircuitBreaker(failure_threshold=2)
+
+        assert breaker.state == CircuitBreakerState.CLOSED
+
+        breaker.record_failure()
+        assert breaker.state == CircuitBreakerState.CLOSED
+
+        breaker.record_failure()
+        assert breaker.state == CircuitBreakerState.OPEN
+
+    def test_transition_open_to_half_open(self):
+        """Test state transition from OPEN to HALF_OPEN after timeout."""
+        from gridfia.external.fia_client import CircuitBreaker, CircuitBreakerState
+
+        breaker = CircuitBreaker(failure_threshold=1, recovery_timeout=0.01)
+
+        # Open the circuit
+        breaker.record_failure()
+        assert breaker.state == CircuitBreakerState.OPEN
+
+        # Wait for recovery timeout
+        time.sleep(0.02)
+
+        # Access state to trigger transition check
+        state = breaker.state
+        assert state == CircuitBreakerState.HALF_OPEN
+
+    def test_transition_half_open_to_closed_on_success(self):
+        """Test state transition from HALF_OPEN to CLOSED on success."""
+        from gridfia.external.fia_client import CircuitBreaker, CircuitBreakerState
+
+        breaker = CircuitBreaker(failure_threshold=1, recovery_timeout=0.01)
+
+        # Open the circuit
+        breaker.record_failure()
+        time.sleep(0.02)
+
+        # Transition to HALF_OPEN
+        breaker.can_execute()
+        assert breaker.state == CircuitBreakerState.HALF_OPEN
+
+        # Record success
+        breaker.record_success()
+        assert breaker.state == CircuitBreakerState.CLOSED
+
+    def test_transition_half_open_to_open_on_failure(self):
+        """Test state transition from HALF_OPEN to OPEN on failure."""
+        from gridfia.external.fia_client import CircuitBreaker, CircuitBreakerState
+
+        breaker = CircuitBreaker(failure_threshold=1, recovery_timeout=0.01)
+
+        # Open the circuit
+        breaker.record_failure()
+        time.sleep(0.02)
+
+        # Transition to HALF_OPEN
+        breaker.can_execute()
+        assert breaker.state == CircuitBreakerState.HALF_OPEN
+
+        # Record failure
+        breaker.record_failure()
+        assert breaker.state == CircuitBreakerState.OPEN
+
+    def test_full_recovery_cycle(self):
+        """Test complete recovery cycle: CLOSED -> OPEN -> HALF_OPEN -> CLOSED."""
+        from gridfia.external.fia_client import CircuitBreaker, CircuitBreakerState
+
+        breaker = CircuitBreaker(failure_threshold=2, recovery_timeout=0.01)
+
+        # Start in CLOSED
+        assert breaker.state == CircuitBreakerState.CLOSED
+
+        # Failures open the circuit
+        breaker.record_failure()
+        breaker.record_failure()
+        assert breaker.state == CircuitBreakerState.OPEN
+
+        # Wait for recovery timeout
+        time.sleep(0.02)
+
+        # Attempt request - transitions to HALF_OPEN
+        assert breaker.can_execute() is True
+        assert breaker.state == CircuitBreakerState.HALF_OPEN
+
+        # Success closes the circuit
+        breaker.record_success()
+        assert breaker.state == CircuitBreakerState.CLOSED
+
+
+class TestCircuitBreakerTimeUntilRecovery:
+    """Test CircuitBreaker time_until_recovery property."""
+
+    def test_time_until_recovery_closed_state(self):
+        """Test time_until_recovery is None in CLOSED state."""
+        from gridfia.external.fia_client import CircuitBreaker
+
+        breaker = CircuitBreaker()
+
+        assert breaker.time_until_recovery is None
+
+    def test_time_until_recovery_open_state(self):
+        """Test time_until_recovery in OPEN state."""
+        from gridfia.external.fia_client import CircuitBreaker
+
+        breaker = CircuitBreaker(failure_threshold=1, recovery_timeout=60.0)
+
+        breaker.record_failure()
+
+        time_until = breaker.time_until_recovery
+
+        assert time_until is not None
+        assert 0 < time_until <= 60.0
+
+    def test_time_until_recovery_decreases_over_time(self):
+        """Test time_until_recovery decreases as time passes."""
+        from gridfia.external.fia_client import CircuitBreaker
+
+        breaker = CircuitBreaker(failure_threshold=1, recovery_timeout=60.0)
+
+        breaker.record_failure()
+
+        first_time = breaker.time_until_recovery
+        time.sleep(0.1)
+        second_time = breaker.time_until_recovery
+
+        assert second_time < first_time
+
+    def test_time_until_recovery_half_open_state(self):
+        """Test time_until_recovery is None in HALF_OPEN state."""
+        from gridfia.external.fia_client import CircuitBreaker
+
+        breaker = CircuitBreaker(failure_threshold=1, recovery_timeout=0.01)
+
+        breaker.record_failure()
+        time.sleep(0.02)
+
+        # Transition to HALF_OPEN
+        breaker.can_execute()
+
+        assert breaker.time_until_recovery is None
+
+
+class TestCircuitBreakerThreadSafety:
+    """Test CircuitBreaker thread safety."""
+
+    def test_concurrent_failure_recording(self):
+        """Test concurrent record_failure calls are thread-safe."""
+        from gridfia.external.fia_client import CircuitBreaker
+        import concurrent.futures
+
+        breaker = CircuitBreaker(failure_threshold=100)
+
+        def record_failures():
+            for _ in range(10):
+                breaker.record_failure()
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            futures = [executor.submit(record_failures) for _ in range(5)]
+            concurrent.futures.wait(futures)
+
+        # All 50 failures should be recorded
+        assert breaker.failure_count == 50
+
+    def test_concurrent_can_execute_calls(self):
+        """Test concurrent can_execute calls are thread-safe."""
+        from gridfia.external.fia_client import CircuitBreaker
+        import concurrent.futures
+
+        breaker = CircuitBreaker(failure_threshold=100)
+        results = []
+
+        def check_execute():
+            return breaker.can_execute()
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            futures = [executor.submit(check_execute) for _ in range(100)]
+            results = [f.result() for f in futures]
+
+        # All calls should return True (circuit is CLOSED)
+        assert all(results)
+
+    def test_concurrent_state_transitions(self):
+        """Test concurrent state transitions are handled correctly."""
+        from gridfia.external.fia_client import CircuitBreaker, CircuitBreakerState
+        import concurrent.futures
+
+        breaker = CircuitBreaker(failure_threshold=5, recovery_timeout=0.01)
+
+        def mixed_operations(operation_type):
+            if operation_type == "fail":
+                breaker.record_failure()
+            elif operation_type == "success":
+                breaker.record_success()
+            elif operation_type == "check":
+                breaker.can_execute()
+
+        operations = ["fail"] * 10 + ["success"] * 5 + ["check"] * 10
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            futures = [executor.submit(mixed_operations, op) for op in operations]
+            concurrent.futures.wait(futures)
+
+        # Should not raise any exceptions and should be in a valid state
+        assert breaker.state in [
+            CircuitBreakerState.CLOSED,
+            CircuitBreakerState.OPEN,
+            CircuitBreakerState.HALF_OPEN
+        ]
+
+
+# =============================================================================
+# BigMapRestClient Circuit Breaker Integration Tests
+# =============================================================================
+
+
+class TestBigMapRestClientCircuitBreakerEnabled:
+    """Test BigMapRestClient with circuit breaker enabled."""
+
+    def test_client_with_circuit_breaker_enabled_default(self):
+        """Test client initializes with circuit breaker enabled by default."""
+        client = BigMapRestClient()
+
+        assert client._circuit_breaker_enabled is True
+        assert client._circuit_breaker is not None
+
+    def test_client_with_circuit_breaker_enabled_explicit(self):
+        """Test client initializes with circuit breaker explicitly enabled."""
+        client = BigMapRestClient(circuit_breaker_enabled=True)
+
+        assert client._circuit_breaker_enabled is True
+        assert client._circuit_breaker is not None
+
+    def test_client_circuit_breaker_configuration(self):
+        """Test circuit breaker is configured with client parameters."""
+        from gridfia.external.fia_client import CircuitBreakerState
+
+        client = BigMapRestClient(
+            circuit_breaker_threshold=10,
+            circuit_breaker_timeout=120.0,
+            circuit_breaker_enabled=True
+        )
+
+        assert client._circuit_breaker.failure_threshold == 10
+        assert client._circuit_breaker.recovery_timeout == 120.0
+        assert client._circuit_breaker._name == "FIA_BIGMAP"
+        assert client._circuit_breaker.state == CircuitBreakerState.CLOSED
+
+
+class TestBigMapRestClientCircuitBreakerDisabled:
+    """Test BigMapRestClient with circuit breaker disabled."""
+
+    def test_client_with_circuit_breaker_disabled(self):
+        """Test client initializes with circuit breaker disabled."""
+        client = BigMapRestClient(circuit_breaker_enabled=False)
+
+        assert client._circuit_breaker_enabled is False
+        assert client._circuit_breaker is None
+
+    def test_circuit_breaker_property_returns_none_when_disabled(self):
+        """Test circuit_breaker property returns None when disabled."""
+        client = BigMapRestClient(circuit_breaker_enabled=False)
+
+        assert client.circuit_breaker is None
+
+    def test_get_circuit_breaker_status_returns_none_when_disabled(self):
+        """Test get_circuit_breaker_status returns None when disabled."""
+        client = BigMapRestClient(circuit_breaker_enabled=False)
+
+        assert client.get_circuit_breaker_status() is None
+
+    def test_reset_circuit_breaker_no_op_when_disabled(self):
+        """Test reset_circuit_breaker does nothing when disabled."""
+        client = BigMapRestClient(circuit_breaker_enabled=False)
+
+        # Should not raise any exception
+        client.reset_circuit_breaker()
+
+        assert client._circuit_breaker is None
+
+    def test_requests_work_normally_when_disabled(self):
+        """Test requests work normally without circuit breaker."""
+        client = BigMapRestClient(circuit_breaker_enabled=False)
+
+        with patch.object(client.session, 'request') as mock_request:
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_request.return_value = mock_response
+
+            response = client._rate_limited_request('GET', 'http://test.com')
+
+            assert response == mock_response
+
+
+class TestBigMapRestClientCircuitBreakerProperty:
+    """Test BigMapRestClient circuit_breaker property."""
+
+    def test_circuit_breaker_property_returns_instance(self):
+        """Test circuit_breaker property returns CircuitBreaker instance."""
+        from gridfia.external.fia_client import CircuitBreaker
+
+        client = BigMapRestClient(circuit_breaker_enabled=True)
+
+        assert client.circuit_breaker is not None
+        assert isinstance(client.circuit_breaker, CircuitBreaker)
+
+    def test_circuit_breaker_property_returns_same_instance(self):
+        """Test circuit_breaker property returns the same instance."""
+        client = BigMapRestClient(circuit_breaker_enabled=True)
+
+        first_access = client.circuit_breaker
+        second_access = client.circuit_breaker
+
+        assert first_access is second_access
+
+
+class TestBigMapRestClientGetCircuitBreakerStatus:
+    """Test BigMapRestClient get_circuit_breaker_status method."""
+
+    def test_get_circuit_breaker_status_returns_dict(self):
+        """Test get_circuit_breaker_status returns status dictionary."""
+        client = BigMapRestClient(circuit_breaker_enabled=True)
+
+        status = client.get_circuit_breaker_status()
+
+        assert isinstance(status, dict)
+        assert "name" in status
+        assert "state" in status
+        assert "failure_count" in status
+        assert "failure_threshold" in status
+
+    def test_get_circuit_breaker_status_reflects_state(self):
+        """Test get_circuit_breaker_status reflects current state."""
+        client = BigMapRestClient(
+            circuit_breaker_threshold=2,
+            circuit_breaker_enabled=True
+        )
+
+        # Initial state
+        status = client.get_circuit_breaker_status()
+        assert status["state"] == "closed"
+        assert status["failure_count"] == 0
+
+        # After failures
+        client._circuit_breaker.record_failure()
+        client._circuit_breaker.record_failure()
+
+        status = client.get_circuit_breaker_status()
+        assert status["state"] == "open"
+        assert status["failure_count"] == 2
+
+
+class TestBigMapRestClientResetCircuitBreaker:
+    """Test BigMapRestClient reset_circuit_breaker method."""
+
+    def test_reset_circuit_breaker_resets_state(self):
+        """Test reset_circuit_breaker resets circuit to CLOSED."""
+        client = BigMapRestClient(
+            circuit_breaker_threshold=1,
+            circuit_breaker_enabled=True
+        )
+
+        # Open the circuit
+        client._circuit_breaker.record_failure()
+        assert client.get_circuit_breaker_status()["state"] == "open"
+
+        # Reset
+        client.reset_circuit_breaker()
+
+        status = client.get_circuit_breaker_status()
+        assert status["state"] == "closed"
+        assert status["failure_count"] == 0
+
+    def test_reset_circuit_breaker_clears_failures(self):
+        """Test reset_circuit_breaker clears failure count."""
+        client = BigMapRestClient(
+            circuit_breaker_threshold=5,
+            circuit_breaker_enabled=True
+        )
+
+        # Record failures
+        client._circuit_breaker.record_failure()
+        client._circuit_breaker.record_failure()
+        assert client.get_circuit_breaker_status()["failure_count"] == 2
+
+        # Reset
+        client.reset_circuit_breaker()
+
+        assert client.get_circuit_breaker_status()["failure_count"] == 0
+
+
+class TestBigMapRestClientCircuitBreakerRequestIntegration:
+    """Test circuit breaker integration with request handling."""
+
+    def test_circuit_breaker_blocks_requests_when_open(self):
+        """Test requests are blocked when circuit breaker is OPEN."""
+        from gridfia.exceptions import CircuitBreakerOpen
+
+        client = BigMapRestClient(
+            circuit_breaker_threshold=1,
+            circuit_breaker_enabled=True
+        )
+
+        # Open the circuit
+        client._circuit_breaker.record_failure()
+
+        with pytest.raises(CircuitBreakerOpen):
+            client._rate_limited_request('GET', 'http://test.com')
+
+    def test_circuit_breaker_open_exception_contains_details(self):
+        """Test CircuitBreakerOpen exception contains relevant details."""
+        from gridfia.exceptions import CircuitBreakerOpen
+
+        client = BigMapRestClient(
+            circuit_breaker_threshold=2,
+            circuit_breaker_timeout=60.0,
+            circuit_breaker_enabled=True
+        )
+
+        # Open the circuit
+        client._circuit_breaker.record_failure()
+        client._circuit_breaker.record_failure()
+
+        with pytest.raises(CircuitBreakerOpen) as exc_info:
+            client._rate_limited_request('GET', 'http://test.com')
+
+        exception = exc_info.value
+        assert exception.failure_count == 2
+        assert exception.failure_threshold == 2
+        assert exception.retry_after is not None
+
+    def test_circuit_breaker_records_success_on_200(self):
+        """Test circuit breaker records success on successful response."""
+        client = BigMapRestClient(
+            circuit_breaker_threshold=5,
+            circuit_breaker_enabled=True
+        )
+
+        # Record some failures first
+        client._circuit_breaker.record_failure()
+        client._circuit_breaker.record_failure()
+        assert client._circuit_breaker.failure_count == 2
+
+        with patch.object(client.session, 'request') as mock_request:
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_request.return_value = mock_response
+
+            client._rate_limited_request('GET', 'http://test.com')
+
+        # Failure count should be reset
+        assert client._circuit_breaker.failure_count == 0
+
+    def test_circuit_breaker_records_failure_on_server_error(self):
+        """Test circuit breaker records failure on 5xx response."""
+        client = BigMapRestClient(
+            circuit_breaker_threshold=5,
+            circuit_breaker_enabled=True
+        )
+
+        with patch.object(client.session, 'request') as mock_request:
+            mock_response = Mock()
+            mock_response.status_code = 500
+            mock_request.return_value = mock_response
+
+            client._rate_limited_request('GET', 'http://test.com')
+
+        assert client._circuit_breaker.failure_count == 1
+
+    def test_circuit_breaker_records_failure_on_connection_error(self):
+        """Test circuit breaker records failure on connection error."""
+        client = BigMapRestClient(
+            circuit_breaker_threshold=5,
+            circuit_breaker_enabled=True
+        )
+
+        with patch.object(client.session, 'request') as mock_request:
+            mock_request.side_effect = ConnectionError("Connection failed")
+
+            with pytest.raises(APIConnectionError):
+                client._rate_limited_request('GET', 'http://test.com')
+
+        assert client._circuit_breaker.failure_count == 1
+
+    def test_circuit_breaker_records_failure_on_timeout(self):
+        """Test circuit breaker records failure on timeout."""
+        client = BigMapRestClient(
+            circuit_breaker_threshold=5,
+            circuit_breaker_enabled=True
+        )
+
+        with patch.object(client.session, 'request') as mock_request:
+            mock_request.side_effect = Timeout("Request timed out")
+
+            with pytest.raises(APIConnectionError):
+                client._rate_limited_request('GET', 'http://test.com')
+
+        assert client._circuit_breaker.failure_count == 1
+
+    def test_circuit_breaker_allows_request_after_recovery_timeout(self):
+        """Test circuit breaker allows request after recovery timeout."""
+        client = BigMapRestClient(
+            circuit_breaker_threshold=1,
+            circuit_breaker_timeout=0.01,
+            circuit_breaker_enabled=True
+        )
+
+        # Open the circuit
+        client._circuit_breaker.record_failure()
+        assert client._circuit_breaker.can_execute() is False
+
+        # Wait for recovery timeout
+        time.sleep(0.02)
+
+        # Circuit should be in HALF_OPEN and allow request
+        with patch.object(client.session, 'request') as mock_request:
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_request.return_value = mock_response
+
+            response = client._rate_limited_request('GET', 'http://test.com')
+
+            assert response == mock_response
+
+    def test_circuit_breaker_closes_on_successful_recovery(self):
+        """Test circuit breaker closes after successful recovery request."""
+        from gridfia.external.fia_client import CircuitBreakerState
+
+        client = BigMapRestClient(
+            circuit_breaker_threshold=1,
+            circuit_breaker_timeout=0.01,
+            circuit_breaker_enabled=True
+        )
+
+        # Open the circuit
+        client._circuit_breaker.record_failure()
+
+        # Wait for recovery timeout
+        time.sleep(0.02)
+
+        # Make successful request
+        with patch.object(client.session, 'request') as mock_request:
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_request.return_value = mock_response
+
+            client._rate_limited_request('GET', 'http://test.com')
+
+        # Circuit should be CLOSED
+        assert client._circuit_breaker.state == CircuitBreakerState.CLOSED
+
+    def test_circuit_breaker_reopens_on_failed_recovery(self):
+        """Test circuit breaker reopens on failed recovery request."""
+        from gridfia.external.fia_client import CircuitBreakerState
+
+        client = BigMapRestClient(
+            circuit_breaker_threshold=1,
+            circuit_breaker_timeout=0.01,
+            circuit_breaker_enabled=True
+        )
+
+        # Open the circuit
+        client._circuit_breaker.record_failure()
+
+        # Wait for recovery timeout
+        time.sleep(0.02)
+
+        # Force transition to HALF_OPEN
+        client._circuit_breaker.can_execute()
+        assert client._circuit_breaker.state == CircuitBreakerState.HALF_OPEN
+
+        # Make failed request (server error)
+        with patch.object(client.session, 'request') as mock_request:
+            mock_response = Mock()
+            mock_response.status_code = 500
+            mock_request.return_value = mock_response
+
+            client._rate_limited_request('GET', 'http://test.com')
+
+        # Circuit should be OPEN again
+        assert client._circuit_breaker.state == CircuitBreakerState.OPEN
