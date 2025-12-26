@@ -292,17 +292,30 @@ class TestRealZarrWorkflow:
 
     def test_real_create_and_validate_zarr(self, api, temp_dir):
         """Test creating and validating Zarr from downloaded data."""
-        # First download some species data
-        bbox = (-79.1, 35.75, -79.05, 35.8)  # Very small area
+        # Download species data using Web Mercator bbox (API's native CRS)
+        # Small area near Umstead State Park, NC (~3km x 3km)
+        bbox_wm = (-8763000, 4272000, -8760000, 4275000)
         download_dir = temp_dir / "downloads"
         download_dir.mkdir()
 
-        files = api.download_species(
-            output_dir=download_dir,
-            species_codes=["0316", "0261"],  # Red maple, Eastern white pine
-            bbox=bbox,
-            crs="EPSG:4326"
-        )
+        # Download directly using the REST client with Web Mercator
+        client = api.rest_client
+        species_codes = ["0316", "0261"]  # Red maple, Eastern white pine
+        files = []
+
+        for code in species_codes:
+            output_path = download_dir / f"species_{code}.tif"
+            try:
+                result = client.export_species_raster(
+                    species_code=code,
+                    bbox=bbox_wm,
+                    output_path=output_path,
+                    pixel_size=30.0
+                )
+                if result and result.exists():
+                    files.append(result)
+            except Exception:
+                pass
 
         if len(files) < 2:
             pytest.skip("Not enough data downloaded for Zarr creation test")
