@@ -19,6 +19,10 @@ from gridfia.utils.zarr_utils import (
     create_zarr_from_geotiffs,
     validate_zarr_store
 )
+from gridfia.exceptions import (
+    InvalidZarrStructure, SpeciesNotFound, CalculationFailed,
+    APIConnectionError, InvalidLocationConfig, DownloadError
+)
 
 
 @pytest.fixture
@@ -206,7 +210,7 @@ class TestAppendSpeciesToZarr:
         ) as dst:
             dst.write(data, 1)
 
-        with pytest.raises(ValueError, match="Transform mismatch"):
+        with pytest.raises(InvalidZarrStructure, match="Transform mismatch"):
             append_species_to_zarr(
                 zarr_path=zarr_path,
                 species_raster_path=bad_raster,
@@ -377,7 +381,7 @@ class TestCreateZarrFromGeotiffs:
         files, codes, names = geotiff_list
         zarr_path = temp_dir / "mismatch.zarr"
 
-        with pytest.raises(ValueError, match="Number of paths, codes, and names must match"):
+        with pytest.raises(InvalidZarrStructure, match="must match"):
             create_zarr_from_geotiffs(
                 output_zarr_path=zarr_path,
                 geotiff_paths=files,

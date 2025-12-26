@@ -5,11 +5,19 @@ This module defines configuration schemas and settings management
 for the GridFIA package, part of the FIA Python Ecosystem.
 """
 
+from enum import Enum
 from pathlib import Path
 from typing import List, Optional, Tuple, Dict, Any
 
-from pydantic import BaseModel, Field, field_validator, ConfigDict
+from pydantic import BaseModel, Field, field_validator, field_serializer, ConfigDict
 from pydantic_settings import BaseSettings
+
+
+class OutputFormat(str, Enum):
+    """Supported output formats for calculation results."""
+    GEOTIFF = "geotiff"
+    ZARR = "zarr"
+    NETCDF = "netcdf"
 
 
 # Removed RasterConfig - not needed for REST API approach
@@ -28,7 +36,7 @@ class VisualizationConfig(BaseModel):
         default=(16, 12),
         description="Default figure size in inches (width, height)"
     )
-    color_maps: dict = Field(
+    color_maps: Dict[str, str] = Field(
         default={
             "biomass": "viridis",
             "diversity": "plasma",
@@ -77,16 +85,16 @@ class ProcessingConfig(BaseModel):
 
 class CalculationConfig(BaseModel):
     """Configuration for forest metric calculations."""
-    
-    name: str = Field(description="Name of the calculation")
+
+    name: str = Field(min_length=1, description="Name of the calculation")
     enabled: bool = Field(default=True, description="Whether this calculation is enabled")
     parameters: Dict[str, Any] = Field(
         default_factory=dict,
         description="Calculation-specific parameters"
     )
-    output_format: str = Field(
-        default="geotiff",
-        description="Output format: 'geotiff', 'zarr', 'netcdf'"
+    output_format: OutputFormat = Field(
+        default=OutputFormat.GEOTIFF,
+        description="Output format for calculation results"
     )
     output_name: Optional[str] = Field(
         default=None,
@@ -138,7 +146,8 @@ class GridFIASettings(BaseSettings):
                 enabled=False
             )
         ],
-        description="List of calculations to perform"
+        min_length=1,
+        description="List of calculations to perform (must not be empty)"
     )
     
     # Data validation
@@ -161,7 +170,12 @@ class GridFIASettings(BaseSettings):
         v = Path(v)
         v.mkdir(parents=True, exist_ok=True)
         return v
-    
+
+    @field_serializer('data_dir', 'output_dir', 'cache_dir')
+    def serialize_path(self, v: Path) -> str:
+        """Serialize Path objects to strings for JSON compatibility."""
+        return str(v)
+
     def get_output_path(self, filename: str) -> Path:
         """Get full output path for a filename."""
         return self.output_dir / filename

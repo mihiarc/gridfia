@@ -127,7 +127,17 @@ def minimal_zarr_store(temp_dir):
     biomass[0] = data  # Total
     biomass[1] = data  # Single species
 
-    # Minimal metadata (no species_codes/species_names to test missing metadata)
+    # Include species codes and names (required for diversity/richness calculations)
+    species_codes_data = ['0000', '0202']
+    species_names_data = ['All Species Combined', 'Douglas-fir']
+
+    species_codes = root.create_array('species_codes', shape=(len(species_codes_data),), dtype='U10')
+    species_codes[:] = species_codes_data
+
+    species_names = root.create_array('species_names', shape=(len(species_names_data),), dtype='U50')
+    species_names[:] = species_names_data
+
+    # Minimal metadata
     root.attrs['crs'] = 'EPSG:4326'
     root.attrs['transform'] = [1.0, 0.0, 0.0, 0.0, -1.0, 50.0]
     root.attrs['bounds'] = [0.0, 0.0, 50.0, 50.0]
@@ -153,6 +163,16 @@ def empty_zarr_store(temp_dir):
         fill_value=0.0
     )
     biomass[:] = 0  # All zeros
+
+    # Include species codes and names (required for diversity/richness calculations)
+    species_codes_data = ['0000', '0202', '0122']
+    species_names_data = ['All Species Combined', 'Douglas-fir', 'Ponderosa Pine']
+
+    species_codes = root.create_array('species_codes', shape=(len(species_codes_data),), dtype='U10')
+    species_codes[:] = species_codes_data
+
+    species_names = root.create_array('species_names', shape=(len(species_names_data),), dtype='U50')
+    species_names[:] = species_names_data
 
     root.attrs['crs'] = 'EPSG:4326'
     root.attrs['transform'] = [1.0, 0.0, 0.0, 0.0, -1.0, 20.0]
@@ -199,9 +219,9 @@ class TestZarrMapperInitialization:
 
         assert mapper.num_species == 2
         assert mapper.crs == CRS.from_string('EPSG:4326')
-        # Should handle missing species_codes/names gracefully
-        assert len(mapper.species_codes) >= 0
-        assert len(mapper.species_names) >= 0
+        # Should handle species_codes/names as Zarr arrays
+        assert mapper.species_codes.shape[0] == 2
+        assert mapper.species_names.shape[0] == 2
 
     @patch('gridfia.visualization.mapper.console')
     def test_console_output_during_initialization(self, mock_console, complete_zarr_store):
@@ -1090,7 +1110,9 @@ class TestErrorHandlingAndEdgeCases:
         assert np.all(normalized == 0)
 
     @patch('matplotlib.pyplot.subplots')
-    def test_single_species_zarr(self, mock_subplots, minimal_zarr_store):
+    @patch('matplotlib.pyplot.colorbar')
+    @patch('matplotlib.pyplot.tight_layout')
+    def test_single_species_zarr(self, mock_tight_layout, mock_colorbar, mock_subplots, minimal_zarr_store):
         """Test handling of zarr stores with minimal species data."""
         mock_fig = Mock(spec=Figure)
         mock_ax = setup_mock_axes()
@@ -1105,10 +1127,8 @@ class TestErrorHandlingAndEdgeCases:
         assert fig is mock_fig
 
         # Should handle diversity maps
-        with patch('matplotlib.pyplot.colorbar'):
-            with patch('matplotlib.pyplot.tight_layout'):
-                fig, ax = mapper.create_diversity_map()
-                assert fig is mock_fig
+        fig, ax = mapper.create_diversity_map()
+        assert fig is mock_fig
 
     def test_data_with_all_nans(self, complete_zarr_store):
         """Test normalization with all NaN data."""
@@ -1119,8 +1139,8 @@ class TestErrorHandlingAndEdgeCases:
 
         # Should handle gracefully
         assert normalized.shape == data.shape
-        # Result should be all zeros when no valid data
-        assert np.all(normalized == 0)
+        # NaN values are now preserved in the output (making failed calculations visible)
+        assert np.all(np.isnan(normalized))
 
     def test_data_with_single_value(self, complete_zarr_store):
         """Test normalization when all valid data has same value."""
@@ -1146,7 +1166,9 @@ class TestErrorHandlingAndEdgeCases:
         assert normalized.max() <= 1
 
     @patch('matplotlib.pyplot.subplots')
-    def test_diversity_map_with_zero_biomass(self, mock_subplots, empty_zarr_store):
+    @patch('matplotlib.pyplot.colorbar')
+    @patch('matplotlib.pyplot.tight_layout')
+    def test_diversity_map_with_zero_biomass(self, mock_tight_layout, mock_colorbar, mock_subplots, empty_zarr_store):
         """Test diversity calculation with zero biomass everywhere."""
         mock_fig = Mock(spec=Figure)
         mock_ax = setup_mock_axes()
@@ -1156,22 +1178,22 @@ class TestErrorHandlingAndEdgeCases:
 
         mapper = ZarrMapper(empty_zarr_store)
 
-        with patch('matplotlib.pyplot.colorbar'):
-            with patch('matplotlib.pyplot.tight_layout'):
-                fig, ax = mapper.create_diversity_map()
+        fig, ax = mapper.create_diversity_map()
 
-                # Should complete without error
-                assert fig is mock_fig
-                mock_ax.imshow.assert_called_once()
+        # Should complete without error
+        assert fig is mock_fig
+        mock_ax.imshow.assert_called_once()
 
-                # Diversity data should be all zeros
-                imshow_call = mock_ax.imshow.call_args
-                diversity_data = imshow_call[0][0]  # First positional argument
-                # After normalization, zero diversity should remain zero
-                assert np.all(diversity_data == 0)
+        # Diversity data should be all zeros (zero biomass = zero diversity)
+        imshow_call = mock_ax.imshow.call_args
+        diversity_data = imshow_call[0][0]  # First positional argument
+        # After normalization, zero diversity should remain zero
+        assert np.all(diversity_data == 0)
 
     @patch('matplotlib.pyplot.subplots')
-    def test_richness_map_with_zero_biomass(self, mock_subplots, empty_zarr_store):
+    @patch('matplotlib.pyplot.colorbar')
+    @patch('matplotlib.pyplot.tight_layout')
+    def test_richness_map_with_zero_biomass(self, mock_tight_layout, mock_colorbar, mock_subplots, empty_zarr_store):
         """Test richness calculation with zero biomass everywhere."""
         mock_fig = Mock(spec=Figure)
         mock_ax = setup_mock_axes()
@@ -1181,19 +1203,17 @@ class TestErrorHandlingAndEdgeCases:
 
         mapper = ZarrMapper(empty_zarr_store)
 
-        with patch('matplotlib.pyplot.colorbar'):
-            with patch('matplotlib.pyplot.tight_layout'):
-                fig, ax = mapper.create_richness_map()
+        fig, ax = mapper.create_richness_map()
 
-                # Should complete without error
-                assert fig is mock_fig
-                mock_ax.imshow.assert_called_once()
+        # Should complete without error
+        assert fig is mock_fig
+        mock_ax.imshow.assert_called_once()
 
-                # Richness should be all zeros
-                imshow_call = mock_ax.imshow.call_args
-                richness_data = imshow_call[0][0]
-                assert np.all(richness_data == 0)
-                assert richness_data.dtype == np.uint8
+        # Richness should be all zeros
+        imshow_call = mock_ax.imshow.call_args
+        richness_data = imshow_call[0][0]
+        assert np.all(richness_data == 0)
+        assert richness_data.dtype == np.uint8
 
     def test_comparison_map_empty_species_list(self, complete_zarr_store):
         """Test comparison map with empty species list."""

@@ -3,6 +3,24 @@ Base classes for forest calculations.
 
 This module provides the abstract base class and common functionality
 for all forest metric calculations.
+
+NaN Convention for Failed Calculations
+--------------------------------------
+When calculations fail (due to validation errors, exceptions, or invalid data),
+the ForestMetricsProcessor returns NaN values for floating-point output types.
+This is intentional to distinguish between:
+
+1. Actual zero values (e.g., zero biomass in a pixel, zero diversity)
+2. Failed calculations (e.g., invalid data, processing errors)
+
+For integer output types (e.g., species_richness with uint8):
+- Signed integers: -1 is used as a sentinel value (impossible for counts)
+- Unsigned integers: max value (e.g., 255 for uint8) is used with a warning
+
+Downstream code should:
+- Use np.isnan() to detect failed calculations in float results
+- Use np.nansum(), np.nanmean(), etc. for statistics that ignore NaN values
+- Check for sentinel values (-1 or max) in integer results
 """
 
 from abc import ABC, abstractmethod
@@ -40,18 +58,28 @@ class ForestCalculation(ABC):
     def calculate(self, biomass_data: np.ndarray, **kwargs) -> np.ndarray:
         """
         Calculate metric from biomass data.
-        
+
         Parameters
         ----------
         biomass_data : np.ndarray
             3D array (species, height, width) of biomass values
         **kwargs : dict
             Additional calculation parameters
-            
+
         Returns
         -------
         np.ndarray
-            2D array of calculated metric values
+            2D array of calculated metric values. For areas with no valid data
+            (e.g., no forest), implementations should return appropriate values:
+            - Zero for counts/indices where absence is meaningful
+            - NaN for ratios/proportions where division would be undefined
+
+        Notes
+        -----
+        If the calculation fails entirely (e.g., due to invalid input data),
+        the ForestMetricsProcessor will return NaN-filled arrays for float types
+        or sentinel values for integer types. Individual pixels with valid but
+        zero-value results (e.g., no species present) should still return 0.
         """
         pass
     

@@ -17,6 +17,10 @@ from rasterio.transform import from_bounds
 from gridfia.api import GridFIA, CalculationResult, SpeciesInfo
 from gridfia.config import GridFIASettings, CalculationConfig
 from gridfia.utils.location_config import LocationConfig
+from gridfia.exceptions import (
+    InvalidZarrStructure, SpeciesNotFound, CalculationFailed,
+    APIConnectionError, InvalidLocationConfig, DownloadError
+)
 
 
 class TestGridFIAInitialization:
@@ -234,7 +238,7 @@ class TestGridFIADownloadSpecies:
         """Test error when no location parameters provided."""
         api = GridFIA()
 
-        with pytest.raises(ValueError, match="Must specify state, bbox, or location_config"):
+        with pytest.raises(InvalidLocationConfig, match="Must specify state, bbox, or location_config"):
             api.download_species(output_dir=temp_dir, species_codes=['0202'])
 
     def test_download_species_creates_output_directory(self, temp_dir):
@@ -389,7 +393,7 @@ class TestGridFIACreateZarr:
         nonexistent_dir = temp_dir / "nonexistent"
         output_path = temp_dir / "test.zarr"
 
-        with pytest.raises(ValueError, match="Input directory does not exist"):
+        with pytest.raises(DownloadError, match="Input directory does not exist"):
             api.create_zarr(nonexistent_dir, output_path)
 
     def test_create_zarr_no_tiff_files(self, temp_dir):
@@ -399,7 +403,7 @@ class TestGridFIACreateZarr:
         input_dir.mkdir()
         output_path = temp_dir / "test.zarr"
 
-        with pytest.raises(ValueError, match="No GeoTIFF files found"):
+        with pytest.raises(DownloadError, match="No GeoTIFF files found"):
             api.create_zarr(input_dir, output_path)
 
     def test_create_zarr_no_matching_species(self, temp_dir, sample_geotiff_files):
@@ -415,7 +419,7 @@ class TestGridFIACreateZarr:
         api = GridFIA()
         output_path = temp_dir / "test.zarr"
 
-        with pytest.raises(ValueError, match="No files found for species codes"):
+        with pytest.raises(SpeciesNotFound, match="No files found for species codes"):
             api.create_zarr(input_dir, output_path, species_codes=['9999'])
 
 
@@ -532,7 +536,7 @@ calculations:
         api = GridFIA()
         nonexistent_zarr = temp_dir / "nonexistent.zarr"
 
-        with pytest.raises(ValueError, match="Zarr store not found"):
+        with pytest.raises(InvalidZarrStructure, match="Zarr store not found"):
             api.calculate_metrics(nonexistent_zarr)
 
     def test_calculate_metrics_invalid_calculations(self, mock_zarr_path):
@@ -542,7 +546,7 @@ calculations:
         with patch('gridfia.api.registry') as mock_registry:
             mock_registry.list_calculations.return_value = ['species_richness', 'total_biomass']
 
-            with pytest.raises(ValueError, match="Unknown calculations"):
+            with pytest.raises(CalculationFailed, match="Unknown calculations"):
                 api.calculate_metrics(
                     mock_zarr_path,
                     calculations=['invalid_calculation']
@@ -725,21 +729,21 @@ class TestGridFIACreateMaps:
         api = GridFIA()
         nonexistent_zarr = temp_dir / "nonexistent.zarr"
 
-        with pytest.raises(ValueError, match="Zarr store not found"):
+        with pytest.raises(InvalidZarrStructure, match="Zarr store not found"):
             api.create_maps(nonexistent_zarr)
 
     def test_create_maps_species_no_codes_or_show_all(self, mock_zarr_path, temp_dir, mock_mapper):
         """Test error when species map requested but no species specified."""
         api = GridFIA()
 
-        with pytest.raises(ValueError, match="Please specify species codes or use show_all=True"):
+        with pytest.raises(SpeciesNotFound, match="Please specify species codes or use show_all=True"):
             api.create_maps(mock_zarr_path, map_type="species")
 
     def test_create_maps_comparison_insufficient_species(self, mock_zarr_path, temp_dir, mock_mapper):
         """Test error when comparison map requested with < 2 species."""
         api = GridFIA()
 
-        with pytest.raises(ValueError, match="Comparison maps require at least 2 species"):
+        with pytest.raises(SpeciesNotFound, match="Comparison maps require at least 2 species"):
             api.create_maps(
                 mock_zarr_path,
                 map_type="comparison",
@@ -750,7 +754,7 @@ class TestGridFIACreateMaps:
         """Test error with invalid map type."""
         api = GridFIA()
 
-        with pytest.raises(ValueError, match="Unknown map type"):
+        with pytest.raises(CalculationFailed, match="Unknown map type"):
             api.create_maps(mock_zarr_path, map_type="invalid_type")
 
 
@@ -820,14 +824,14 @@ class TestGridFIAGetLocationConfig:
         """Test error when county specified without state."""
         api = GridFIA()
 
-        with pytest.raises(ValueError, match="County requires state to be specified"):
+        with pytest.raises(InvalidLocationConfig, match="County requires state to be specified"):
             api.get_location_config(county="Harris")
 
     def test_get_location_config_no_parameters(self):
         """Test error when no location parameters provided."""
         api = GridFIA()
 
-        with pytest.raises(ValueError, match="Must specify state, county, or bbox"):
+        with pytest.raises(InvalidLocationConfig, match="Must specify state, county, or bbox"):
             api.get_location_config()
 
 
@@ -879,7 +883,7 @@ class TestGridFIAEdgeCasesAndMissingCoverage:
             mock_config.web_mercator_bbox = None  # No bbox returned
             mock_location_config.from_state.return_value = mock_config
 
-            with pytest.raises(ValueError, match="Could not determine bounding box for location"):
+            with pytest.raises(InvalidLocationConfig, match="Could not determine bounding box for location"):
                 api.download_species(output_dir=temp_dir, state="InvalidState")
 
     def test_create_zarr_filename_parsing_edge_cases(self, temp_dir):

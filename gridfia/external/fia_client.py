@@ -16,6 +16,7 @@ from rich.console import Console
 from rich.progress import Progress, track
 
 from ..console import print_info, print_success, print_error, print_warning
+from ..exceptions import APIConnectionError, SpeciesNotFound, DownloadError
 
 console = Console()
 
@@ -97,13 +98,25 @@ class BigMapRestClient:
             
         except requests.exceptions.ConnectionError as e:
             print_error(f"Connection error: {e}")
-            raise
+            raise APIConnectionError(
+                f"Connection error to FIA BIGMAP service",
+                url=url,
+                original_error=e
+            )
         except requests.exceptions.Timeout as e:
             print_error(f"Request timeout after {self.timeout}s: {e}")
-            raise
+            raise APIConnectionError(
+                f"Request timeout after {self.timeout}s",
+                url=url,
+                original_error=e
+            )
         except requests.exceptions.RequestException as e:
             print_error(f"Request failed: {e}")
-            raise
+            raise APIConnectionError(
+                f"Request to FIA BIGMAP service failed",
+                url=url,
+                original_error=e
+            )
         
     def get_service_info(self) -> Dict:
         """Get basic service information."""
@@ -116,7 +129,11 @@ class BigMapRestClient:
             return result
         except requests.RequestException as e:
             print_error(f"Failed to get service info: {e}")
-            return {}
+            raise APIConnectionError(
+                "Failed to get service info from FIA BIGMAP",
+                url=self.base_url,
+                original_error=e
+            )
     
     def get_species_functions(self) -> List[Dict]:
         """Get all available species raster functions."""
@@ -185,7 +202,10 @@ class BigMapRestClient:
         function_name = self._get_function_name(species_code)
         if not function_name:
             print_error(f"Species code {species_code} not found")
-            return None
+            raise SpeciesNotFound(
+                f"Species code {species_code} not found in FIA BIGMAP service",
+                species_code=species_code
+            )
         
         # Prepare export parameters
         params = {
@@ -228,17 +248,29 @@ class BigMapRestClient:
                             return dataset.read(1)
             else:
                 print_error(f"Export failed: {result}")
-                return None
-                
+                raise DownloadError(
+                    f"Export failed for species {species_code}: {result}",
+                    species_code=species_code,
+                    output_path=str(output_path) if output_path else None
+                )
+
         except requests.RequestException as e:
             print_error(f"Failed to export raster: {e}")
-            return None
+            raise DownloadError(
+                f"Failed to export raster for species {species_code}",
+                species_code=species_code,
+                output_path=str(output_path) if output_path else None,
+                original_error=e
+            )
     
     def get_species_statistics(self, species_code: str) -> Dict:
         """Get statistics for a species across the entire dataset."""
         function_name = self._get_function_name(species_code)
         if not function_name:
-            return {}
+            raise SpeciesNotFound(
+                f"Species code {species_code} not found",
+                species_code=species_code
+            )
         
         params = {
             'f': 'json',
@@ -253,7 +285,11 @@ class BigMapRestClient:
             return response.json()
         except requests.RequestException as e:
             print_error(f"Failed to get statistics: {e}")
-            return {}
+            raise APIConnectionError(
+                f"Failed to get statistics for species {species_code}",
+                url=f"{self.base_url}/computeStatistics",
+                original_error=e
+            )
     
     def identify_pixel_value(
         self, 
@@ -276,8 +312,11 @@ class BigMapRestClient:
         """
         function_name = self._get_function_name(species_code)
         if not function_name:
-            return None
-        
+            raise SpeciesNotFound(
+                f"Species code {species_code} not found",
+                species_code=species_code
+            )
+
         params = {
             'f': 'json',
             'geometry': f"{x},{y}",
@@ -302,7 +341,11 @@ class BigMapRestClient:
             
         except requests.RequestException as e:
             print_error(f"Failed to identify pixel: {e}")
-            return None
+            raise APIConnectionError(
+                f"Failed to identify pixel value for species {species_code}",
+                url=f"{self.base_url}/identify",
+                original_error=e
+            )
     
     def export_total_biomass_raster(
         self,
@@ -365,11 +408,18 @@ class BigMapRestClient:
                             return dataset.read(1)
             else:
                 print_error(f"Export failed: {result}")
-                return None
-                
+                raise DownloadError(
+                    f"Export failed for total biomass: {result}",
+                    output_path=str(output_path) if output_path else None
+                )
+
         except requests.RequestException as e:
             print_error(f"Failed to export total biomass: {e}")
-            return None
+            raise DownloadError(
+                "Failed to export total biomass raster",
+                output_path=str(output_path) if output_path else None,
+                original_error=e
+            )
     
     def batch_export_location_species(
         self, 

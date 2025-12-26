@@ -616,13 +616,13 @@ class StatisticalTester:
         return result.tolist()
 
 
-def test_spatial_autocorrelation(
+def compute_spatial_autocorrelation(
     data: pd.DataFrame,
     geometry_column: str = 'geometry',
     value_column: str = 'value'
 ) -> Dict[str, float]:
     """
-    Test for spatial autocorrelation using Moran's I.
+    Compute spatial autocorrelation using Moran's I.
     
     Parameters:
     -----------

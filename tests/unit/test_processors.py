@@ -11,6 +11,10 @@ from unittest.mock import Mock, patch, MagicMock
 from gridfia.core.processors.forest_metrics import ForestMetricsProcessor, run_forest_analysis
 from gridfia.config import GridFIASettings, CalculationConfig
 from gridfia.core.calculations import registry
+from gridfia.exceptions import (
+    InvalidZarrStructure, SpeciesNotFound, CalculationFailed,
+    APIConnectionError, InvalidLocationConfig, DownloadError
+)
 
 
 class TestForestMetricsProcessor:
@@ -38,9 +42,9 @@ class TestForestMetricsProcessor:
         # Create zarr without required attributes
         zarr_path = temp_dir / "invalid.zarr"
         z = zarr.open_array(str(zarr_path), mode='w', shape=(2, 10, 10))
-        
+
         processor = ForestMetricsProcessor()
-        with pytest.raises(ValueError, match="Missing required attributes"):
+        with pytest.raises(InvalidZarrStructure, match="Missing required attributes"):
             processor._validate_zarr_array(z)
     
     def test_validate_zarr_array_invalid_shape(self, temp_dir):
@@ -49,9 +53,9 @@ class TestForestMetricsProcessor:
         zarr_path = temp_dir / "invalid_shape.zarr"
         z = zarr.open_array(str(zarr_path), mode='w', shape=(10, 10))  # 2D instead of 3D
         z.attrs['species_codes'] = ['SP1']
-        
+
         processor = ForestMetricsProcessor()
-        with pytest.raises(ValueError, match="Expected 3D array"):
+        with pytest.raises(InvalidZarrStructure, match="Expected 3D array"):
             processor._validate_zarr_array(z)
     
     def test_get_enabled_calculations(self, test_settings):
@@ -159,10 +163,10 @@ class TestForestMetricsProcessor:
         # Disable all calculations
         for calc in test_settings.calculations:
             calc.enabled = False
-        
+
         processor = ForestMetricsProcessor(test_settings)
-        
-        with pytest.raises(ValueError, match="No calculations enabled"):
+
+        with pytest.raises(CalculationFailed, match="No calculations enabled"):
             processor.run_calculations("dummy_path.zarr")
     
     def test_chunked_processing_memory_efficiency(self, sample_zarr_array, test_settings):

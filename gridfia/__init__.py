@@ -22,6 +22,17 @@ from gridfia.api import GridFIA
 # Configuration management for advanced users
 from gridfia.config import GridFIASettings, load_settings, save_settings
 
+# Domain-specific exceptions
+from gridfia.exceptions import (
+    GridFIAException,
+    InvalidZarrStructure,
+    SpeciesNotFound,
+    CalculationFailed,
+    APIConnectionError,
+    InvalidLocationConfig,
+    DownloadError,
+)
+
 # Backwards compatibility aliases (deprecated, will be removed in v1.0)
 BigMapAPI = GridFIA
 BigMapSettings = GridFIASettings
@@ -35,6 +46,15 @@ __all__ = [
     "GridFIASettings",
     "load_settings",
     "save_settings",
+
+    # Exceptions
+    "GridFIAException",
+    "InvalidZarrStructure",
+    "SpeciesNotFound",
+    "CalculationFailed",
+    "APIConnectionError",
+    "InvalidLocationConfig",
+    "DownloadError",
 
     # Backwards compatibility (deprecated)
     "BigMapAPI",

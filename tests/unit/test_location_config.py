@@ -23,6 +23,10 @@ from gridfia.utils.location_config import (
     get_location_config,
     _location_config
 )
+from gridfia.exceptions import (
+    InvalidZarrStructure, SpeciesNotFound, CalculationFailed,
+    APIConnectionError, InvalidLocationConfig, DownloadError
+)
 
 
 # Test fixtures for geographic data
@@ -704,7 +708,7 @@ class TestMockedStateAndCountyOperations:
 
     def test_from_state_invalid_state(self):
         """Test creating config with invalid state name."""
-        with pytest.raises(ValueError, match="Unknown state: InvalidState"):
+        with pytest.raises(InvalidLocationConfig, match="Unknown state: InvalidState"):
             LocationConfig.from_state("InvalidState")
 
     def test_state_abbreviation_lookup(self):
@@ -727,7 +731,7 @@ class TestMockedStateAndCountyOperations:
 
     def test_from_county_invalid_state(self):
         """Test creating county config with invalid state."""
-        with pytest.raises(ValueError, match="Unknown state: InvalidState"):
+        with pytest.raises(InvalidLocationConfig, match="Unknown state: InvalidState"):
             LocationConfig.from_county("Wake", "InvalidState")
 
     def test_state_plane_crs_comprehensive_coverage(self):

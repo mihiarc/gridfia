@@ -74,8 +74,10 @@ class TotalBiomassComparison(ForestCalculation):
     def calculate(self, biomass_data: np.ndarray, **kwargs) -> np.ndarray:
         """Calculate absolute difference between totals."""
         if biomass_data.shape[0] <= 1:
-            logger.warning("Cannot compare totals with only one layer")
-            return np.zeros(biomass_data.shape[1:], dtype=np.float32)
+            logger.warning("Cannot compare totals with only one layer - returning NaN")
+            # Return NaN instead of zeros to indicate calculation failure
+            # This distinguishes from actual zero difference between totals
+            return np.full(biomass_data.shape[1:], np.nan, dtype=np.float32)
         
         pre_calculated_total = biomass_data[0]
         calculated_total = np.sum(biomass_data[1:], axis=0)

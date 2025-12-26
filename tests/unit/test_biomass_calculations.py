@@ -234,9 +234,10 @@ class TestTotalBiomassComparison:
         with caplog.at_level(logging.WARNING):
             result = calc.calculate(data)
 
-        # Should return zeros and log warning
-        expected = np.array([[0]], dtype=np.float32)
-        np.testing.assert_array_equal(result, expected)
+        # Should return NaN and log warning (NaN indicates calculation failure,
+        # distinguishing from actual zero difference between totals)
+        assert result.shape == (1, 1)
+        assert np.all(np.isnan(result)), "Failed calculation should return NaN, not zero"
         assert "Cannot compare totals with only one layer" in caplog.text
 
     def test_calculate_2d_spatial_data(self):

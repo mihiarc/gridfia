@@ -17,6 +17,8 @@ import xarray as xr
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeRemainingColumn
 
+from ..exceptions import InvalidZarrStructure, SpeciesNotFound
+
 console = Console()
 
 
@@ -154,10 +156,16 @@ def append_species_to_zarr(
             zarr_crs = CRS.from_string(root.attrs['crs'])
             
             if not np.allclose(src.transform, zarr_transform, rtol=1e-5):
-                raise ValueError(f"Transform mismatch for species {species_code}")
-            
+                raise InvalidZarrStructure(
+                    f"Transform mismatch for species {species_code}",
+                    zarr_path=str(zarr_path)
+                )
+
             if not np.allclose(src.bounds, zarr_bounds, rtol=1e-5):
-                raise ValueError(f"Bounds mismatch for species {species_code}")
+                raise InvalidZarrStructure(
+                    f"Bounds mismatch for species {species_code}",
+                    zarr_path=str(zarr_path)
+                )
             
             if src.crs != zarr_crs:
                 console.print(f"[yellow]Warning: CRS mismatch. Expected {zarr_crs}, got {src.crs}")
@@ -263,7 +271,11 @@ def create_zarr_from_geotiffs(
         include_total: Whether to calculate and include total biomass as first layer
     """
     if len(geotiff_paths) != len(species_codes) or len(geotiff_paths) != len(species_names):
-        raise ValueError("Number of paths, codes, and names must match")
+        raise InvalidZarrStructure(
+            f"Number of paths ({len(geotiff_paths)}), codes ({len(species_codes)}), "
+            f"and names ({len(species_names)}) must match",
+            zarr_path=str(output_zarr_path)
+        )
     
     console.print(f"[cyan]Creating Zarr store from {len(geotiff_paths)} GeoTIFF files")
     
@@ -340,9 +352,18 @@ def create_zarr_from_geotiffs(
                 
                 # Validate alignment
                 if src.height != height or src.width != width:
-                    raise ValueError(f"Dimension mismatch for {name}")
+                    raise InvalidZarrStructure(
+                        f"Dimension mismatch for {name}: expected ({height}, {width}), "
+                        f"got ({src.height}, {src.width})",
+                        zarr_path=str(output_zarr_path),
+                        expected_shape=(None, height, width),
+                        actual_shape=(None, src.height, src.width)
+                    )
                 if not np.allclose(src.transform, transform, rtol=1e-5):
-                    raise ValueError(f"Transform mismatch for {name}")
+                    raise InvalidZarrStructure(
+                        f"Transform mismatch for {name}",
+                        zarr_path=str(output_zarr_path)
+                    )
                 
                 # Add to zarr
                 idx = start_idx + i
