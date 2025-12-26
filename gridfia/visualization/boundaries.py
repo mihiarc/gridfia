@@ -29,13 +29,13 @@ BOUNDARY_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 # URLs for boundary data sources
 BOUNDARY_SOURCES = {
     'states': {
-        'url': 'https://www.naturalearthdata.com/http//www.naturalearthdata.com/download/50m/cultural/ne_50m_admin_1_states_provinces.zip',
+        'url': 'https://naciscdn.org/naturalearth/50m/cultural/ne_50m_admin_1_states_provinces.zip',
         'name_field': 'name',
         'abbr_field': 'postal',
         'cache_name': 'us_states_50m.gpkg'
     },
     'states_hires': {
-        'url': 'https://www.naturalearthdata.com/http//www.naturalearthdata.com/download/10m/cultural/ne_10m_admin_1_states_provinces.zip',
+        'url': 'https://naciscdn.org/naturalearth/10m/cultural/ne_10m_admin_1_states_provinces.zip',
         'name_field': 'name',
         'abbr_field': 'postal',
         'cache_name': 'us_states_10m.gpkg'
