@@ -1,7 +1,7 @@
 site_name: GridFIA - Spatial Forest Analysis
 site_description: Python API for USDA Forest Service BIGMAP spatial raster analysis
 site_author: Christopher Mihiar
-site_url: https://gridfia.readthedocs.io/
+site_url: https://mihiarc.github.io/gridfia/
 
 repo_name: gridfia
 repo_url: https://github.com/mihiarc/gridfia
