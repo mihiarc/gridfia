@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "gridfia"
-version = "0.3.1"
+version = "0.3.2"
 description = "Spatial raster analysis for USDA Forest Service BIGMAP data - Part of the FIA Python Ecosystem"
 readme = "README.md"
 license = {text = "MIT"}
