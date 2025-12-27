@@ -1,90 +1,134 @@
-# BigMap Documentation
+# GridFIA Documentation
 
-Welcome to BigMap - a modern Python framework for analyzing forest biomass and species diversity using BIGMAP 2018 data.
+Welcome to GridFIA - a Python API for spatial forest analysis using USDA Forest Service BIGMAP data.
 
-## Overview
+## What is GridFIA?
 
-BigMap provides tools for:
-- 🌲 Forest biomass analysis at 30m resolution
-- 📊 Species diversity calculations (richness, Shannon, Simpson)
-- 🗺️ Large-scale spatial data processing
-- 🔌 REST API integration with FIA BIGMAP ImageServer
-- 📈 Publication-ready visualizations
+GridFIA is a user-friendly wrapper that makes it easy to work with [BIGMAP 2018](https://data.fs.usda.gov/geodata/rastergateway/biomass/) forest biomass data. BIGMAP provides 30-meter resolution estimates of tree species biomass across the contiguous United States, and GridFIA gives you a clean Python API to:
 
-## Quick Links
+- Download species biomass rasters for any state, county, or custom region
+- Store data efficiently in cloud-optimized Zarr format
+- Calculate diversity metrics (Shannon, Simpson, richness, evenness)
+- Generate publication-ready maps and visualizations
 
-- [Getting Started](user-guide/getting-started.md) - Installation and first steps
-- [CLI Reference](cli-reference.md) - Command-line interface documentation
-- [API Reference](api/index.md) - Python API documentation
-- [Tutorials](tutorials/species-diversity-analysis.md) - Step-by-step guides
+**Part of the FIA Python Ecosystem:**
 
-## Installation
+| Package | Purpose |
+|---------|---------|
+| [PyFIA](https://github.com/mihiarc/pyfia) | Survey/plot data analysis |
+| **GridFIA** | Spatial raster analysis (this package) |
+| [PyFVS](https://github.com/mihiarc/pyfvs) | Growth/yield simulation |
+| [AskFIA](https://github.com/mihiarc/askfia) | AI conversational interface |
+
+## Quick Start
 
 ```bash
-# Using pip
-pip install bigmap
+# Install with uv (recommended)
+uv pip install gridfia
 
-# Using uv (recommended)
-uv pip install bigmap
-
-# Development installation
-git clone https://github.com/yourusername/bigmap.git
-cd bigmap
-uv pip install -e ".[dev,test,docs]"
+# Or with pip
+pip install gridfia
 ```
-
-## Quick Example
 
 ```python
-from bigmap.config import BigMapSettings, CalculationConfig
-from bigmap.core.processors.forest_metrics import ForestMetricsProcessor
+from gridfia import GridFIA
 
-# Configure calculations
-settings = BigMapSettings(
-    output_dir="results",
-    calculations=[
-        CalculationConfig(name="species_richness", enabled=True),
-        CalculationConfig(name="shannon_diversity", enabled=True)
-    ]
+api = GridFIA()
+
+# Download species data for Montana
+files = api.download_species(
+    state="Montana",
+    species_codes=["0202", "0122"],  # Douglas-fir, Ponderosa pine
+    output_dir="downloads/"
 )
 
-# Run analysis
-processor = ForestMetricsProcessor(settings)
-results = processor.run_calculations("data/nc_biomass.zarr")
+# Create Zarr store
+zarr_path = api.create_zarr("downloads/", "data/montana.zarr")
+
+# Calculate diversity metrics
+results = api.calculate_metrics(
+    zarr_path,
+    calculations=["species_richness", "shannon_diversity"]
+)
+
+# Create maps
+maps = api.create_maps(zarr_path, map_type="diversity", state="MT")
 ```
 
-## Features
+## Key Features
 
-### 🚀 Modern Architecture
-- Type-safe configuration with Pydantic v2
-- Plugin-based calculation framework
-- Memory-efficient chunked processing
-- Comprehensive error handling
+### Simple API
 
-### 📊 Built-in Calculations
-- Species richness and diversity indices
-- Biomass metrics and comparisons
-- Species dominance and presence
-- Custom calculation support
+One class, eight methods - that's all you need:
 
-### 🛠️ Developer Friendly
-- Full type hints and docstrings
-- Extensive test coverage
-- Clear API design
-- Rich CLI with progress tracking
+```python
+api = GridFIA()
+api.list_species()        # See available species
+api.download_species()    # Download raster data
+api.create_zarr()         # Convert to Zarr format
+api.calculate_metrics()   # Run forest calculations
+api.create_maps()         # Generate visualizations
+api.get_location_config() # Configure geographic extents
+api.list_calculations()   # See available metrics
+api.validate_zarr()       # Validate data stores
+```
 
-## Documentation Structure
+### 15+ Forest Metrics
 
-- **[User Guide](user-guide/getting-started.md)**: Installation, configuration, and usage
-- **[API Reference](api/index.md)**: Detailed API documentation
-- **[CLI Reference](cli-reference.md)**: Command-line interface guide
-- **[Tutorials](tutorials/species-diversity-analysis.md)**: Step-by-step tutorials
-- **[Architecture](architecture/system-design.md)**: System design and internals
+| Category | Metrics |
+|----------|---------|
+| Diversity | Species richness, Shannon index, Simpson index, Evenness |
+| Biomass | Total biomass, Species proportion, Threshold analysis |
+| Species | Dominant species, Presence/absence, Rare/common species |
+
+### Cloud-Optimized Storage
+
+GridFIA uses [Zarr](https://zarr.dev/) for efficient storage and processing of large raster datasets with configurable chunking and compression.
+
+### Any Geographic Extent
+
+Download data for any US location:
+
+```python
+# Entire state
+api.download_species(state="California")
+
+# Specific county
+api.download_species(state="Texas", county="Harris")
+
+# Custom bounding box
+api.download_species(bbox=(-123.5, 45.0, -122.0, 46.5), crs="EPSG:4326")
+```
+
+## Documentation
+
+- **[Getting Started](user-guide/getting-started.md)** - Installation and first steps
+- **[API Reference](api/index.md)** - Complete API documentation
+  - [GridFIA Class](api/gridfia.md) - Main API interface
+  - [Data Models](api/models.md) - SpeciesInfo, CalculationResult
+  - [Configuration](api/config.md) - Settings and options
+  - [Calculations](api/calculations.md) - Available metrics
+- **[Tutorials](tutorials/species-diversity-analysis.md)** - Step-by-step guides
+
+## About BIGMAP Data
+
+BIGMAP (Biomass and Carbon Mapping) provides modeled estimates of live tree biomass at 30-meter resolution. The data is derived from:
+
+- FIA plot measurements
+- Landsat imagery
+- Topographic variables
+- Climate data
+
+Species-level biomass estimates are available for 300+ tree species. See the [FIA BIGMAP documentation](https://data.fs.usda.gov/geodata/rastergateway/biomass/) for methodology details.
 
 ## Contributing
 
-We welcome contributions! Please see our [Contributing Guide](https://github.com/yourusername/bigmap/blob/main/CONTRIBUTING.md) for details.
+We welcome contributions! See our [GitHub repository](https://github.com/mihiarc/gridfia) to:
+
+- Report issues
+- Submit pull requests
+- Request features
 
 ## License
 
-BigMap is released under the MIT License. See [LICENSE](https://github.com/yourusername/bigmap/blob/main/LICENSE) for details.
+GridFIA is released under the MIT License.
