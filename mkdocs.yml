@@ -1,10 +1,10 @@
-site_name: BigMap - Forest Analysis Toolkit
-site_description: North Carolina Forest Biomass and Species Diversity Analysis Tools
+site_name: GridFIA - Spatial Forest Analysis
+site_description: Python API for USDA Forest Service BIGMAP spatial raster analysis
 site_author: Christopher Mihiar
-site_url: https://bigmap.readthedocs.io/
+site_url: https://gridfia.readthedocs.io/
 
-repo_name: bigmap
-repo_url: https://github.com/yourusername/bigmap
+repo_name: gridfia
+repo_url: https://github.com/mihiarc/gridfia
 edit_uri: edit/main/docs/
 
 nav:
@@ -12,23 +12,21 @@ nav:
   - Getting Started:
     - Quick Start: user-guide/getting-started.md
     - Installation: getting-started/installation.md
-    - Local Deployment: LOCAL_DEPLOYMENT.md
   - User Guide:
-    - CLI Reference: cli-reference.md
     - Configuration: api/config.md
   - API Reference:
     - Overview: api/index.md
-    - Processors: api/processors.md
-    - Calculations: api/calculations.md
+    - GridFIA Class: api/gridfia.md
+    - Data Models: api/models.md
     - Configuration: api/config.md
+    - Exceptions: api/exceptions.md
+    - Calculations: api/calculations.md
+    - Utilities: api/utilities.md
   - Tutorials:
     - Species Diversity Analysis: tutorials/species-diversity-analysis.md
   - Architecture:
     - System Design: architecture/system-design.md
     - Data Pipeline: data-pipeline/rest-api-download.md
-  - Development:
-    - Project Status: CURRENT_STATUS.md
-    - Contributing: RESTRUCTURING_GUIDE.md
 
 theme:
   name: material
@@ -79,13 +77,24 @@ plugins:
         theme: |
           ^(JSON.parse(__md_get("__palette").index == 1)) ? 'dark' : 'light'
   - mkdocstrings:
+      default_handler: python
       handlers:
         python:
+          paths: ["."]
           options:
             docstring_style: google
+            docstring_section_style: spacy
             members_order: source
             show_root_heading: true
             show_source: false
+            show_signature_annotations: true
+            separate_signature: true
+            signature_crossrefs: true
+            merge_init_into_class: true
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+            heading_level: 2
+            filters: ["!^_"]
 
 markdown_extensions:
   - abbr
@@ -114,8 +123,8 @@ markdown_extensions:
   - pymdownx.magiclink:
       normalize_issue_symbols: true
       repo_url_shorthand: true
-      user: yourusername
-      repo: bigmap
+      user: mihiarc
+      repo: gridfia
   - pymdownx.mark
   - pymdownx.smartsymbols
   - pymdownx.snippets:
@@ -141,12 +150,9 @@ extra:
     provider: mike
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/yourusername/bigmap
+      link: https://github.com/mihiarc/gridfia
     - icon: fontawesome/brands/python
-      link: https://pypi.org/project/bigmap/
-  analytics:
-    provider: google
-    property: G-XXXXXXXXXX
+      link: https://pypi.org/project/gridfia/
 
 extra_css:
   - stylesheets/extra.css
