@@ -1,169 +1,296 @@
 # API Reference
 
-The BigMap API provides a comprehensive set of tools for forest biomass and species diversity analysis.
+GridFIA provides a clean, Pythonic API for spatial forest analysis using USDA Forest Service
+BIGMAP data. This reference documents all public interfaces.
 
-## Core Modules
-
-### [Processors](processors.md)
-High-level interfaces for running forest calculations on large datasets.
-
-- `ForestMetricsProcessor`: Main processor for forest metric calculations
-- `run_forest_analysis`: Convenience function for quick analysis
-
-### [Calculations](calculations.md)
-Flexible framework for implementing forest metrics.
-
-- `ForestCalculation`: Abstract base class for all calculations
-- Registry system for managing available calculations
-- Built-in calculations for diversity, biomass, and species analysis
-
-### [Configuration](config.md)
-Type-safe configuration management using Pydantic v2.
-
-- `BigMapSettings`: Main settings class
-- `CalculationConfig`: Individual calculation configuration
-- Environment variable and file-based configuration
-
-## Quick Reference
-
-### Running Calculations
+## Quick Start
 
 ```python
-from bigmap.config import BigMapSettings, CalculationConfig
-from bigmap.core.processors.forest_metrics import ForestMetricsProcessor
+from gridfia import GridFIA
 
-# Configure
-settings = BigMapSettings(
-    output_dir="results",
-    calculations=[
-        CalculationConfig(name="species_richness", enabled=True),
-        CalculationConfig(name="shannon_diversity", enabled=True)
-    ]
+api = GridFIA()
+
+# Download species data
+files = api.download_species(state="Montana", species_codes=["0202"])
+
+# Create Zarr store
+zarr_path = api.create_zarr("downloads/", "data/montana.zarr")
+
+# Calculate metrics
+results = api.calculate_metrics(zarr_path, calculations=["species_richness"])
+
+# Create maps
+maps = api.create_maps(zarr_path, map_type="diversity")
+```
+
+## API Structure
+
+### Core API
+
+| Module | Description |
+|--------|-------------|
+| [GridFIA](gridfia.md) | Main API class - primary entry point for all functionality |
+| [Data Models](models.md) | Pydantic models for species info and calculation results |
+| [Configuration](config.md) | Settings management with Pydantic v2 |
+| [Exceptions](exceptions.md) | Domain-specific exception hierarchy |
+
+### Calculations
+
+| Module | Description |
+|--------|-------------|
+| [Calculations](calculations.md) | Forest metric calculations (diversity, biomass, species) |
+
+### Utilities
+
+| Module | Description |
+|--------|-------------|
+| [Utilities](utilities.md) | ZarrStore and LocationConfig classes |
+
+## Public Exports
+
+All public interfaces are accessible from the top-level package:
+
+```python
+from gridfia import (
+    # Main API
+    GridFIA,
+
+    # Configuration
+    GridFIASettings,
+    load_settings,
+    save_settings,
+
+    # Utilities
+    ZarrStore,
+
+    # Exceptions
+    GridFIAException,
+    InvalidZarrStructure,
+    SpeciesNotFound,
+    CalculationFailed,
+    APIConnectionError,
+    InvalidLocationConfig,
+    DownloadError,
+
+    # Package info
+    __version__,
 )
-
-# Process
-processor = ForestMetricsProcessor(settings)
-results = processor.run_calculations("data.zarr")
 ```
 
-### Using the Registry
+## Method Reference
 
-```python
-from bigmap.core.calculations import registry
+### GridFIA Class Methods
 
-# List available calculations
-calcs = registry.list_calculations()
+| Method | Description |
+|--------|-------------|
+| `list_species()` | List all available tree species from FIA BIGMAP |
+| `download_species()` | Download species biomass rasters |
+| `create_zarr()` | Convert GeoTIFFs to cloud-optimized Zarr |
+| `calculate_metrics()` | Run forest metric calculations |
+| `create_maps()` | Generate publication-ready visualizations |
+| `get_location_config()` | Create location configuration |
+| `list_calculations()` | List available calculations |
+| `validate_zarr()` | Validate Zarr store structure |
 
-# Get calculation instance
-calc = registry.get('species_richness', biomass_threshold=1.0)
+### Available Calculations
 
-# Run calculation
-result = calc.calculate(biomass_data)
+GridFIA provides 15+ forest metrics through the calculation registry:
+
+**Diversity Metrics**
+
+| Calculation | Description |
+|-------------|-------------|
+| `species_richness` | Count of species per pixel |
+| `shannon_diversity` | Shannon diversity index (H') |
+| `simpson_diversity` | Simpson diversity index (1-D) |
+| `evenness` | Pielou's evenness (J) |
+
+**Biomass Metrics**
+
+| Calculation | Description |
+|-------------|-------------|
+| `total_biomass` | Sum of biomass across all species |
+| `species_proportion` | Species as proportion of total |
+| `species_percentage` | Species as percentage of total |
+| `biomass_threshold` | Pixels exceeding threshold |
+
+**Species Analysis**
+
+| Calculation | Description |
+|-------------|-------------|
+| `dominant_species` | Most abundant species per pixel |
+| `species_presence` | Presence/absence mapping |
+| `species_dominance` | Dominance indices |
+| `rare_species` | Species with low biomass |
+| `common_species` | Widely distributed species |
+
+## Data Flow
+
+```mermaid
+graph LR
+    A[GridFIA API] --> B[BigMapRestClient]
+    B --> C[FIA BIGMAP Service]
+    C --> D[GeoTIFF Files]
+    D --> E[Zarr Store]
+    E --> F[ForestMetricsProcessor]
+    F --> G[Calculations]
+    G --> H[Output Rasters]
+    E --> I[ZarrMapper]
+    I --> J[Visualizations]
 ```
 
-### Custom Calculations
+## Configuration Options
 
-```python
-from bigmap.core.calculations import ForestCalculation, register_calculation
+GridFIA supports multiple configuration methods:
 
-class MyMetric(ForestCalculation):
-    def __init__(self):
-        super().__init__(
-            name="my_metric",
-            description="Custom forest metric",
-            units="custom"
-        )
-    
-    def calculate(self, biomass_data, **kwargs):
-        # Implementation
-        return result
-    
-    def validate_data(self, biomass_data):
-        return biomass_data.ndim == 3
+=== "Default Settings"
 
-# Register
-register_calculation("my_metric", MyMetric)
-```
+    ```python
+    from gridfia import GridFIA
 
-## Module Structure
+    # Use default configuration
+    api = GridFIA()
+    ```
 
-```
-bigmap/
-├── api/              # REST API client
-│   └── rest_client.py
-├── cli/              # Command-line interface
-│   └── main.py
-├── config.py         # Configuration management
-├── core/
-│   ├── calculations/ # Calculation framework
-│   │   ├── base.py
-│   │   ├── biomass.py
-│   │   ├── diversity.py
-│   │   ├── registry.py
-│   │   └── species.py
-│   └── processors/   # High-level processors
-│       └── forest_metrics.py
-└── utils/           # Utility functions
-```
+=== "From File"
 
-## Key Features
+    ```python
+    from gridfia import GridFIA
 
-### Memory Efficiency
-- Chunked processing for large datasets
-- Configurable chunk sizes
-- Progress tracking
+    # Load from YAML or JSON file
+    api = GridFIA(config="config/production.yaml")
+    ```
 
-### Flexibility
-- Plugin-based calculation system
-- Multiple output formats (GeoTIFF, NetCDF, Zarr)
-- Customizable parameters
+=== "Programmatic"
 
-### Type Safety
-- Full type hints throughout
-- Pydantic validation
-- Runtime type checking
+    ```python
+    from gridfia import GridFIA, GridFIASettings
+    from gridfia.config import CalculationConfig
 
-### Integration
-- REST API client for data access
-- CLI for scripting
-- Python API for programmatic use
+    settings = GridFIASettings(
+        output_dir="results",
+        calculations=[
+            CalculationConfig(name="species_richness", enabled=True),
+            CalculationConfig(name="shannon_diversity", enabled=True),
+        ]
+    )
+    api = GridFIA(config=settings)
+    ```
+
+=== "Environment Variables"
+
+    ```bash
+    export GRIDFIA_OUTPUT_DIR=/data/results
+    export GRIDFIA_DEBUG=true
+    ```
+
+    ```python
+    from gridfia import GridFIA
+
+    # Settings loaded from environment
+    api = GridFIA()
+    ```
 
 ## Error Handling
 
-All modules include comprehensive error handling:
+All operations raise domain-specific exceptions:
 
 ```python
+from gridfia import GridFIA, GridFIAException
+from gridfia.exceptions import SpeciesNotFound, InvalidZarrStructure
+
+api = GridFIA()
+
 try:
-    results = processor.run_calculations(zarr_path)
-except ValueError as e:
-    # Handle validation errors
-    print(f"Invalid input: {e}")
-except Exception as e:
-    # Handle other errors
-    print(f"Processing failed: {e}")
+    results = api.calculate_metrics("data.zarr")
+except SpeciesNotFound as e:
+    print(f"Species not found: {e.species_code}")
+except InvalidZarrStructure as e:
+    print(f"Invalid Zarr: {e.zarr_path}")
+except GridFIAException as e:
+    print(f"GridFIA error: {e.message}")
 ```
 
-## Performance Tips
+## Type Safety
 
-1. **Chunk Size**: Adjust based on available memory
-   ```python
-   processor.chunk_size = (1, 2000, 2000)  # Larger chunks
-   ```
+GridFIA is fully typed with Pydantic v2 models:
 
-2. **Parallel Processing**: Use multiple calculations
-   ```python
-   # Calculations run independently per chunk
-   settings.calculations = [multiple_calculations]
-   ```
+```python
+from gridfia import GridFIA
+from gridfia.api import SpeciesInfo, CalculationResult
+from typing import List
 
-3. **Output Format**: Choose based on use case
-   - GeoTIFF: Best for GIS integration
-   - NetCDF: Best for xarray workflows
-   - Zarr: Best for large outputs
+api = GridFIA()
+
+# Type hints work correctly
+species: List[SpeciesInfo] = api.list_species()
+results: List[CalculationResult] = api.calculate_metrics("data.zarr")
+```
+
+## Integration Examples
+
+### Jupyter Notebooks
+
+```python
+from gridfia import GridFIA
+import pandas as pd
+
+api = GridFIA()
+
+# Interactive species exploration
+species = api.list_species()
+df = pd.DataFrame([s.model_dump() for s in species])
+df.head()
+```
+
+### Data Pipelines
+
+```python
+from gridfia import GridFIA
+from pathlib import Path
+
+def process_state(state: str, output_dir: Path):
+    """Process a single state."""
+    api = GridFIA()
+
+    # Download
+    files = api.download_species(
+        state=state,
+        output_dir=output_dir / "downloads"
+    )
+
+    # Create Zarr
+    zarr_path = api.create_zarr(
+        output_dir / "downloads",
+        output_dir / f"{state.lower()}.zarr"
+    )
+
+    # Calculate metrics
+    results = api.calculate_metrics(
+        zarr_path,
+        output_dir=output_dir / "metrics"
+    )
+
+    return results
+```
+
+### Parallel Processing
+
+```python
+from concurrent.futures import ProcessPoolExecutor
+from gridfia import GridFIA
+
+def process_state(state: str):
+    api = GridFIA()
+    return api.download_species(state=state)
+
+states = ["MT", "WY", "ID", "WA"]
+with ProcessPoolExecutor(max_workers=4) as executor:
+    results = list(executor.map(process_state, states))
+```
 
 ## See Also
 
-- [User Guide](../user-guide/getting-started.md)
-- [CLI Reference](../cli-reference.md)
-- [Tutorials](../tutorials/index.md)
-- [Examples](https://github.com/yourusername/bigmap/tree/main/examples)
+- [Getting Started](../user-guide/getting-started.md) - Installation and first steps
+- [Tutorials](../tutorials/species-diversity-analysis.md) - Step-by-step guides
+- [Architecture](../architecture/system-design.md) - System design overview

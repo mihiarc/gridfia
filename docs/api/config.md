@@ -1,125 +1,341 @@
-# Configuration API Reference
+# Configuration
 
-The configuration system uses Pydantic v2 for type-safe settings management.
+GridFIA uses Pydantic v2 for type-safe configuration management. Settings can be
+loaded from files, environment variables, or created programmatically.
 
-## BigMapSettings
+## Overview
 
-Main settings class for BigMap application.
+| Class | Description |
+|-------|-------------|
+| [`GridFIASettings`](#gridfiasettings) | Main settings class |
+| [`CalculationConfig`](#calculationconfig) | Individual calculation configuration |
+| [`ProcessingConfig`](#processingconfig) | Processing parameters |
+| [`VisualizationConfig`](#visualizationconfig) | Visualization parameters |
+| [`OutputFormat`](#outputformat) | Supported output formats |
+
+## Quick Start
 
 ```python
-class BigMapSettings(BaseSettings):
-    """Main settings class for BigMap application."""
+from gridfia import GridFIA, GridFIASettings
+from gridfia.config import CalculationConfig
+
+# Use default settings
+api = GridFIA()
+
+# Load from file
+api = GridFIA(config="config/production.yaml")
+
+# Programmatic configuration
+settings = GridFIASettings(
+    output_dir="results",
+    calculations=[
+        CalculationConfig(name="species_richness", enabled=True),
+        CalculationConfig(name="shannon_diversity", enabled=True),
+    ]
+)
+api = GridFIA(config=settings)
 ```
+
+## GridFIASettings
+
+Main settings class for GridFIA application.
+
+::: gridfia.config.GridFIASettings
+    options:
+      show_root_heading: false
+      heading_level: 3
+      members:
+        - app_name
+        - debug
+        - verbose
+        - data_dir
+        - output_dir
+        - cache_dir
+        - visualization
+        - processing
+        - calculations
+        - species_codes
+        - get_output_path
+        - get_temp_path
 
 ### Attributes
 
-#### Application Settings
-- `app_name` (str): Application name (default: "BigMap")
-- `debug` (bool): Enable debug mode (default: False)
-- `verbose` (bool): Enable verbose output (default: False)
-
-#### Directory Settings
-- `data_dir` (Path): Base directory for data files (default: "data")
-- `output_dir` (Path): Base directory for output files (default: "output")
-- `cache_dir` (Path): Directory for caching intermediate results (default: ".cache")
-
-#### Processing Configuration
-- `visualization` (VisualizationConfig): Visualization parameters
-- `processing` (ProcessingConfig): Data processing parameters
-
-#### Calculation Configuration
-- `calculations` (List[CalculationConfig]): List of calculations to perform
-- `species_codes` (List[str]): List of valid species codes
+| Attribute | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `app_name` | `str` | `"GridFIA"` | Application name |
+| `debug` | `bool` | `False` | Enable debug mode |
+| `verbose` | `bool` | `False` | Enable verbose output |
+| `data_dir` | `Path` | `"data"` | Base directory for data files |
+| `output_dir` | `Path` | `"output"` | Base directory for output files |
+| `cache_dir` | `Path` | `".cache"` | Directory for caching |
+| `visualization` | `VisualizationConfig` | (defaults) | Visualization parameters |
+| `processing` | `ProcessingConfig` | (defaults) | Processing parameters |
+| `calculations` | `List[CalculationConfig]` | (defaults) | Calculations to perform |
+| `species_codes` | `List[str]` | `[]` | Valid species codes |
 
 ### Environment Variables
 
-Settings can be configured via environment variables with the `BIGMAP_` prefix:
+Settings can be configured via environment variables with the `GRIDFIA_` prefix:
 
 ```bash
-export BIGMAP_DEBUG=true
-export BIGMAP_OUTPUT_DIR=/path/to/output
-export BIGMAP_DATA_DIR=/path/to/data
+export GRIDFIA_DEBUG=true
+export GRIDFIA_VERBOSE=true
+export GRIDFIA_OUTPUT_DIR=/data/results
+export GRIDFIA_DATA_DIR=/data/input
+export GRIDFIA_CACHE_DIR=/tmp/gridfia_cache
 ```
-
-### Configuration File
-
-Settings can be loaded from JSON or YAML files:
-
-```yaml
-# config.yaml
-app_name: BigMap Analysis
-debug: false
-output_dir: results/
-calculations:
-  - name: species_richness
-    enabled: true
-    parameters:
-      biomass_threshold: 0.5
-  - name: shannon_diversity
-    enabled: true
-    output_format: netcdf
-```
-
-## Configuration Classes
-
-### CalculationConfig
-
-Configuration for individual calculations.
 
 ```python
-class CalculationConfig(BaseModel):
-    """Configuration for forest metric calculations."""
-    
-    name: str  # Name of the calculation
-    enabled: bool = True  # Whether this calculation is enabled
-    parameters: Dict[str, Any] = {}  # Calculation-specific parameters
-    output_format: str = "geotiff"  # Output format
-    output_name: Optional[str] = None  # Custom output filename
+from gridfia import GridFIA
+
+# Settings loaded from environment
+api = GridFIA()
+print(f"Debug: {api.settings.debug}")
+print(f"Output: {api.settings.output_dir}")
 ```
 
-### ProcessingConfig
+### Configuration Files
 
-Configuration for data processing.
+Settings can be loaded from YAML or JSON files:
+
+=== "YAML Configuration"
+
+    ```yaml
+    # config.yaml
+    app_name: GridFIA Analysis
+    debug: false
+    verbose: true
+    output_dir: results/
+    data_dir: data/
+
+    visualization:
+      default_dpi: 300
+      default_figure_size: [16, 12]
+      color_maps:
+        biomass: viridis
+        diversity: plasma
+        richness: Spectral_r
+
+    processing:
+      max_workers: 4
+      memory_limit_gb: 16.0
+
+    calculations:
+      - name: species_richness
+        enabled: true
+        parameters:
+          biomass_threshold: 0.5
+      - name: shannon_diversity
+        enabled: true
+        output_format: geotiff
+      - name: total_biomass
+        enabled: true
+    ```
+
+=== "JSON Configuration"
+
+    ```json
+    {
+      "app_name": "GridFIA Analysis",
+      "debug": false,
+      "verbose": true,
+      "output_dir": "results/",
+      "calculations": [
+        {
+          "name": "species_richness",
+          "enabled": true,
+          "parameters": {"biomass_threshold": 0.5}
+        },
+        {
+          "name": "shannon_diversity",
+          "enabled": true
+        }
+      ]
+    }
+    ```
+
+## CalculationConfig
+
+Configuration for individual forest metric calculations.
+
+::: gridfia.config.CalculationConfig
+    options:
+      show_root_heading: false
+      heading_level: 3
+
+### Attributes
+
+| Attribute | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `name` | `str` | (required) | Name of the calculation |
+| `enabled` | `bool` | `True` | Whether calculation is enabled |
+| `parameters` | `Dict[str, Any]` | `{}` | Calculation-specific parameters |
+| `output_format` | `OutputFormat` | `GEOTIFF` | Output format for results |
+| `output_name` | `Optional[str]` | `None` | Custom output filename |
+
+### Example
 
 ```python
-class ProcessingConfig(BaseModel):
-    """Configuration for data processing parameters."""
-    
-    max_workers: Optional[int] = None  # Max worker processes
-    memory_limit_gb: float = 8.0  # Memory limit in GB
-    temp_dir: Optional[Path] = None  # Temporary directory
+from gridfia.config import CalculationConfig, OutputFormat
+
+# Basic calculation
+calc = CalculationConfig(name="species_richness")
+
+# With parameters
+calc = CalculationConfig(
+    name="species_richness",
+    enabled=True,
+    parameters={"biomass_threshold": 1.0},
+    output_format=OutputFormat.GEOTIFF,
+    output_name="richness_map"
+)
+
+# Disabled calculation
+calc = CalculationConfig(
+    name="total_biomass",
+    enabled=False
+)
 ```
 
-### VisualizationConfig
+## ProcessingConfig
 
-Configuration for visualization.
+Configuration for data processing parameters.
+
+::: gridfia.config.ProcessingConfig
+    options:
+      show_root_heading: false
+      heading_level: 3
+
+### Attributes
+
+| Attribute | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `max_workers` | `Optional[int]` | `None` | Max worker processes (auto-detect) |
+| `memory_limit_gb` | `float` | `8.0` | Memory limit in GB |
+| `temp_dir` | `Optional[Path]` | `None` | Temporary directory |
+
+### Example
 
 ```python
-class VisualizationConfig(BaseModel):
-    """Configuration for visualization parameters."""
-    
-    default_dpi: int = 300  # Default DPI for output images
-    default_figure_size: Tuple[float, float] = (16, 12)  # Figure size
-    color_maps: dict = {...}  # Default color maps
-    font_size: int = 12  # Default font size
+from gridfia.config import ProcessingConfig
+from pathlib import Path
+
+# Default processing
+config = ProcessingConfig()
+
+# High-performance configuration
+config = ProcessingConfig(
+    max_workers=8,
+    memory_limit_gb=32.0,
+    temp_dir=Path("/fast_ssd/tmp")
+)
+```
+
+## VisualizationConfig
+
+Configuration for visualization parameters.
+
+::: gridfia.config.VisualizationConfig
+    options:
+      show_root_heading: false
+      heading_level: 3
+
+### Attributes
+
+| Attribute | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `default_dpi` | `int` | `300` | Default DPI for images (72-600) |
+| `default_figure_size` | `Tuple[float, float]` | `(16, 12)` | Figure size in inches |
+| `color_maps` | `Dict[str, str]` | (see below) | Default colormaps |
+| `font_size` | `int` | `12` | Default font size (8-24) |
+
+Default color maps:
+
+```python
+{
+    "biomass": "viridis",
+    "diversity": "plasma",
+    "richness": "Spectral_r"
+}
+```
+
+### Example
+
+```python
+from gridfia.config import VisualizationConfig
+
+# Publication-quality settings
+config = VisualizationConfig(
+    default_dpi=600,
+    default_figure_size=(12, 10),
+    font_size=14,
+    color_maps={
+        "biomass": "YlGn",
+        "diversity": "RdYlBu",
+        "richness": "Spectral"
+    }
+)
+```
+
+## OutputFormat
+
+Enum for supported output formats.
+
+::: gridfia.config.OutputFormat
+    options:
+      show_root_heading: false
+      heading_level: 3
+
+### Values
+
+| Value | String | Description |
+|-------|--------|-------------|
+| `GEOTIFF` | `"geotiff"` | GeoTIFF format (best for GIS) |
+| `ZARR` | `"zarr"` | Zarr format (best for large outputs) |
+| `NETCDF` | `"netcdf"` | NetCDF format (best for xarray) |
+
+### Example
+
+```python
+from gridfia.config import CalculationConfig, OutputFormat
+
+# GeoTIFF output (default)
+calc = CalculationConfig(
+    name="species_richness",
+    output_format=OutputFormat.GEOTIFF
+)
+
+# Zarr output for large datasets
+calc = CalculationConfig(
+    name="total_biomass",
+    output_format=OutputFormat.ZARR
+)
+
+# NetCDF for xarray workflows
+calc = CalculationConfig(
+    name="shannon_diversity",
+    output_format=OutputFormat.NETCDF
+)
 ```
 
 ## Helper Functions
 
 ### load_settings
 
+::: gridfia.config.load_settings
+    options:
+      show_root_heading: false
+      heading_level: 4
+
 ```python
-load_settings(config_file: Optional[Path] = None) -> BigMapSettings
-```
+from gridfia.config import load_settings
+from pathlib import Path
 
-Load settings from file or environment.
+# Load from YAML file
+settings = load_settings(Path("config/production.yaml"))
 
-**Example:**
-```python
-from bigmap.config import load_settings
-
-# Load from file
-settings = load_settings("config.yaml")
+# Load from JSON file
+settings = load_settings(Path("config/settings.json"))
 
 # Load from environment/defaults
 settings = load_settings()
@@ -127,96 +343,153 @@ settings = load_settings()
 
 ### save_settings
 
+::: gridfia.config.save_settings
+    options:
+      show_root_heading: false
+      heading_level: 4
+
 ```python
-save_settings(settings_obj: BigMapSettings, config_file: Path) -> None
-```
+from gridfia.config import GridFIASettings, save_settings, CalculationConfig
+from pathlib import Path
 
-Save settings to file.
-
-**Example:**
-```python
-from bigmap.config import BigMapSettings, save_settings
-
-settings = BigMapSettings(
+settings = GridFIASettings(
     output_dir="results/",
-    calculations=[...]
+    calculations=[
+        CalculationConfig(name="species_richness", enabled=True),
+        CalculationConfig(name="shannon_diversity", enabled=True),
+    ]
 )
-save_settings(settings, "my_config.json")
+
+# Save to JSON file
+save_settings(settings, Path("config/my_settings.json"))
 ```
 
-## Usage Examples
+## Usage Patterns
 
-### Basic Configuration
+### Complete Configuration Example
 
 ```python
-from bigmap.config import BigMapSettings, CalculationConfig
+from gridfia import GridFIA, GridFIASettings
+from gridfia.config import (
+    CalculationConfig,
+    ProcessingConfig,
+    VisualizationConfig,
+    OutputFormat
+)
+from pathlib import Path
 
-settings = BigMapSettings(
-    output_dir="analysis_results",
+# Create comprehensive settings
+settings = GridFIASettings(
+    app_name="Forest Diversity Analysis",
+    debug=False,
+    verbose=True,
+    data_dir=Path("data"),
+    output_dir=Path("results"),
+    cache_dir=Path(".cache"),
+
+    processing=ProcessingConfig(
+        max_workers=4,
+        memory_limit_gb=16.0
+    ),
+
+    visualization=VisualizationConfig(
+        default_dpi=300,
+        default_figure_size=(16, 12),
+        font_size=12
+    ),
+
     calculations=[
         CalculationConfig(
             name="species_richness",
             enabled=True,
-            parameters={"biomass_threshold": 1.0}
+            parameters={"biomass_threshold": 0.5},
+            output_format=OutputFormat.GEOTIFF,
+            output_name="richness"
+        ),
+        CalculationConfig(
+            name="shannon_diversity",
+            enabled=True,
+            output_format=OutputFormat.GEOTIFF
+        ),
+        CalculationConfig(
+            name="simpson_diversity",
+            enabled=True
         ),
         CalculationConfig(
             name="total_biomass",
             enabled=True,
-            output_format="zarr"
-        )
+            output_format=OutputFormat.ZARR
+        ),
     ]
 )
+
+# Use with GridFIA
+api = GridFIA(config=settings)
+results = api.calculate_metrics("data/forest.zarr")
 ```
 
-### Loading from YAML
+### Dynamic Configuration
 
 ```python
-from pathlib import Path
-from bigmap.config import load_settings
+from gridfia import GridFIASettings
+from gridfia.config import CalculationConfig
 
-# Create config file
-config_yaml = """
-output_dir: results/diversity_analysis
-calculations:
-  - name: species_richness
-    enabled: true
-  - name: shannon_diversity
-    enabled: true
-    output_format: netcdf
-"""
+# Start with defaults
+settings = GridFIASettings()
 
-Path("config.yaml").write_text(config_yaml)
-
-# Load settings
-settings = load_settings("config.yaml")
-```
-
-### Programmatic Configuration
-
-```python
-from bigmap.config import BigMapSettings, CalculationConfig
-
-# Create settings programmatically
-settings = BigMapSettings()
+# Modify settings
+settings.output_dir = Path("new_results")
+settings.processing.memory_limit_gb = 32.0
 
 # Add calculations dynamically
-settings.calculations.append(
-    CalculationConfig(
-        name="dominant_species",
-        enabled=True,
-        output_name="dominant_species_map"
-    )
-)
-
-# Update processing configuration
-settings.processing.memory_limit_gb = 16.0
-settings.processing.max_workers = 8
+available_calcs = ["species_richness", "shannon_diversity", "evenness"]
+settings.calculations = [
+    CalculationConfig(name=calc, enabled=True)
+    for calc in available_calcs
+]
 ```
 
-## Best Practices
+### Environment-Based Configuration
 
-1. **Use Configuration Files**: Store complex configurations in YAML/JSON files
-2. **Environment Variables**: Use for deployment-specific settings (paths, debug flags)
-3. **Validation**: Pydantic automatically validates all settings
-4. **Type Safety**: Use type hints for all configuration parameters
-5. **Defaults**: Provide sensible defaults for all optional parameters
+```python
+import os
+from gridfia import GridFIA, GridFIASettings
+
+# Set environment variables for different environments
+if os.getenv("ENVIRONMENT") == "production":
+    os.environ["GRIDFIA_OUTPUT_DIR"] = "/data/production/results"
+    os.environ["GRIDFIA_DEBUG"] = "false"
+else:
+    os.environ["GRIDFIA_OUTPUT_DIR"] = "./dev_results"
+    os.environ["GRIDFIA_DEBUG"] = "true"
+
+# Settings automatically loaded from environment
+api = GridFIA()
+```
+
+## Validation
+
+Pydantic automatically validates all configuration values:
+
+```python
+from gridfia.config import GridFIASettings, VisualizationConfig
+from pydantic import ValidationError
+
+# Invalid DPI (must be 72-600)
+try:
+    config = VisualizationConfig(default_dpi=1000)
+except ValidationError as e:
+    print(f"Validation error: {e}")
+
+# Empty calculations list (must have at least 1)
+try:
+    settings = GridFIASettings(calculations=[])
+except ValidationError as e:
+    print(f"Validation error: {e}")
+```
+
+## See Also
+
+- [GridFIA Class](gridfia.md) - Main API using configuration
+- [Data Models](models.md) - Related Pydantic models
+- [Calculations](calculations.md) - Available calculation names
