@@ -1,9 +1,12 @@
 <div align="center">
-  <img src="https://fiatools.org/logos/gridfia_logo.png" alt="gridFIA" width="140">
-
-  <h1>GridFIA</h1>
+  <a href="https://github.com/mihiarc/gridfia"><img src="https://fiatools.org/logos/gridfia_logo.png" alt="gridFIA" width="400"></a>
 
   <p><strong>Spatial raster analysis for USDA Forest Service BIGMAP data</strong></p>
+
+  <p>
+    <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-006D6D" alt="License: MIT"></a>
+    <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.9+-006D6D" alt="Python 3.9+"></a>
+  </p>
 
   <p>
     <sub>Part of the <a href="https://fiatools.org"><strong>FIAtools</strong></a> ecosystem:
@@ -16,28 +19,32 @@
 
 ---
 
-**GridFIA** provides efficient Zarr-based storage and processing for localized forest biomass analysis.
+GridFIA provides efficient Zarr-based storage and processing for localized forest biomass analysis using USDA Forest Service BIGMAP data.
 
 ## About BIGMAP
 
-The USDA Forest Service's BIGMAP project provides tree species aboveground biomass estimates at 30-meter resolution across the continental United States. This data, derived from Landsat 8 imagery (2014-2018) and 212,978 FIA plots, represents biomass for 327 individual tree species in tons per acre.
+[BIGMAP](https://data.fs.usda.gov/geodata/rastergateway/bigmap/index.php) (FIA Tree Species Aboveground Biomass Layers) provides tree species biomass estimates at 30-meter resolution across the continental United States.
 
-## What This Project Does
+| Attribute | Value |
+|-----------|-------|
+| **Resolution** | 30 meters |
+| **Species** | 327 individual tree species + total biomass |
+| **Coverage** | Coterminous United States (CONUS) |
+| **Data Year** | 2018 |
+| **Units** | Tons per acre |
+| **Source Data** | Landsat 8 OLI (2014-2018) + 212,978 FIA plots |
 
-GridFIA bridges the gap between the BIGMAP REST API and local analysis by:
-- **Converting** raster data from the FIA BIGMAP ImageServer into efficient Zarr stores
-- **Enabling** localized analysis for any US state, county, or custom region
-- **Providing** ready-to-use tools for calculating forest diversity metrics
-- **Optimizing** data access patterns for scientific computing workflows
+The methodology uses harmonic regression to characterize vegetation phenology from Landsat time series imagery, then K-nearest neighbors imputation to associate pixels with similar FIA plots based on ecological gradients across 36 ecological provinces.
 
-## Key Features
+> Wilson, B.T., Knight, J.F., and McRoberts, R.E., 2018. "Harmonic regression of Landsat time series for modeling attributes from national forest inventory data." *ISPRS Journal of Photogrammetry and Remote Sensing*, 137: 29-46.
 
-- **Zarr Storage**: Converts BIGMAP GeoTIFF data into cloud-optimized Zarr arrays for fast local analysis
-- **REST API Integration**: Direct access to FIA BIGMAP ImageServer (327 tree species, 30m resolution)
-- **Location Flexibility**: Analyze any US state, county, or custom geographic region
-- **Analysis Ready**: Pre-configured calculations for diversity indices, biomass totals, and species distributions
-- **Performance**: Chunked storage with compression for efficient data access patterns
-- **Visualization**: Create publication-ready maps with automatic boundary detection
+## What GridFIA Does
+
+- **Converts** BIGMAP GeoTIFF data into cloud-optimized Zarr arrays
+- **Enables** localized analysis for any US state, county, or custom region
+- **Calculates** forest diversity metrics (Shannon, Simpson, richness)
+- **Optimizes** data access patterns for scientific computing workflows
+- **Visualizes** publication-ready maps with automatic boundary detection
 
 ## Installation
 
@@ -51,8 +58,6 @@ pip install -e ".[dev]"
 ```
 
 ## Quick Start
-
-### Python API
 
 ```python
 from gridfia import GridFIA
@@ -109,11 +114,10 @@ files = api.download_species(
 
 ## Supported Locations
 
-GridFIA supports analysis for:
-- **All 50 US States**: Automatic State Plane CRS detection
-- **Counties**: Any US county within a state
-- **Custom Regions**: Define your own bounding box
-- **Multi-State Regions**: Combine multiple states
+- **All 50 US States** with automatic State Plane CRS detection
+- **Any US County** within a state
+- **Custom Regions** via bounding box
+- **Multi-State Regions** by combining multiple states
 
 ## Available Calculations
 
@@ -130,8 +134,6 @@ GridFIA supports analysis for:
 ## API Reference
 
 ### GridFIA Class
-
-The main API interface for all GridFIA functionality:
 
 ```python
 from gridfia import GridFIA
@@ -153,32 +155,31 @@ api = GridFIA(config=settings)
 
 ### Methods
 
-- `list_species()` - List available species from BIGMAP
-- `download_species()` - Download species data for a location
-- `create_zarr()` - Create Zarr store from GeoTIFF files
-- `calculate_metrics()` - Run forest metric calculations
-- `create_maps()` - Create visualization maps
-- `validate_zarr()` - Validate a Zarr store
-- `get_location_config()` - Get location configuration
+| Method | Description |
+|--------|-------------|
+| `list_species()` | List available species from BIGMAP |
+| `download_species()` | Download species data for a location |
+| `create_zarr()` | Create Zarr store from GeoTIFF files |
+| `calculate_metrics()` | Run forest metric calculations |
+| `create_maps()` | Create visualization maps |
+| `validate_zarr()` | Validate a Zarr store |
+| `get_location_config()` | Get location configuration |
 
-## Integration with FIA Ecosystem
-
-GridFIA works seamlessly with other FIA Python tools:
+## Integration with pyFIA
 
 ```python
-# Use with PyFIA for survey data
-from pyfia import FIAData
+from pyfia import FIA
 from gridfia import GridFIA
 
-# Get species information from PyFIA
-fia_data = FIAData()
-species_info = fia_data.query_species()
+# Get species information from pyFIA
+with FIA() as fia:
+    species_info = fia.species()
 
 # Use species codes with GridFIA
 api = GridFIA()
 files = api.download_species(
     state="Oregon",
-    species_codes=species_info["species_code"].tolist()
+    species_codes=species_info["spcd"].tolist()
 )
 ```
 
@@ -199,38 +200,19 @@ uv run mypy gridfia/
 uv run mkdocs serve
 ```
 
-## Data Sources
-
-### FIA BIGMAP (2018)
-This project accesses the USDA Forest Service FIA BIGMAP Tree Species Aboveground Biomass layers:
-- **Resolution**: 30 meters
-- **Species**: 327 individual tree species
-- **Coverage**: Continental United States
-- **Units**: Tons per acre (converted to Mg/ha in processing)
-- **Source**: Landsat 8 OLI (2014-2018) + 212,978 FIA plots
-- **REST API**: `https://di-usfsdata.img.arcgis.com/arcgis/rest/services/FIA_BIGMAP_2018_Tree_Species_Aboveground_Biomass/ImageServer`
-
 ## Citation
-
-If you use GridFIA in your research, please cite:
 
 ```bibtex
 @software{gridfia2025,
   title = {GridFIA: Spatial Raster Analysis for USDA Forest Service BIGMAP Data},
+  author = {Mihiar, Christopher},
   year = {2025},
   url = {https://github.com/mihiarc/gridfia}
 }
 ```
 
-## License
+---
 
-MIT License - See LICENSE file for details
-
-## Contributing
-
-Contributions are welcome! Please see CONTRIBUTING.md for guidelines.
-
-## Support
-
-- [Issue Tracker](https://github.com/mihiarc/gridfia/issues)
-- [Discussions](https://github.com/mihiarc/gridfia/discussions)
+<div align="center">
+  <sub>Built by <a href="https://github.com/mihiarc">Chris Mihiar</a> · USDA Forest Service Southern Research Station</sub>
+</div>
