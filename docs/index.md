@@ -1,6 +1,14 @@
+---
+title: GridFIA - Python API for Spatial Forest Biomass Analysis
+description: GridFIA provides efficient Zarr-based storage and processing for USDA Forest Service BIGMAP forest biomass data. Download, analyze, and visualize 30-meter resolution species biomass across the United States.
+---
+
 # GridFIA Documentation
 
 Welcome to GridFIA - a Python API for spatial forest analysis using USDA Forest Service BIGMAP data.
+
+!!! tip "Part of the FIAtools Ecosystem"
+    GridFIA is one of four integrated Python tools for forest inventory analysis. Visit **[fiatools.org](https://fiatools.org)** to explore the complete ecosystem and see how the tools work together.
 
 ## What is GridFIA?
 
@@ -11,14 +19,16 @@ GridFIA is a user-friendly wrapper that makes it easy to work with [BIGMAP 2018]
 - Calculate diversity metrics (Shannon, Simpson, richness, evenness)
 - Generate publication-ready maps and visualizations
 
-**Part of the FIA Python Ecosystem:**
+## The FIAtools Python Ecosystem
 
-| Package | Purpose |
-|---------|---------|
-| [PyFIA](https://github.com/mihiarc/pyfia) | Survey/plot data analysis |
-| **GridFIA** | Spatial raster analysis (this package) |
-| [PyFVS](https://github.com/mihiarc/pyfvs) | Growth/yield simulation |
-| [AskFIA](https://github.com/mihiarc/askfia) | AI conversational interface |
+| Tool | Purpose | Key Features |
+|------|---------|--------------|
+| [**pyFIA**](https://fiatools.org) | Survey & plot data | DuckDB backend, 10-100x faster than EVALIDator |
+| [**gridFIA**](https://fiatools.org) | Spatial raster analysis | 327 species at 30m resolution, Zarr storage |
+| [**pyFVS**](https://fiatools.org) | Growth simulation | Chapman-Richards curves, yield projections |
+| [**askFIA**](https://fiatools.org) | AI interface | Natural language queries for forest data |
+
+[:material-arrow-right: Explore the full ecosystem at fiatools.org](https://fiatools.org){ .md-button .md-button--primary }
 
 ## Quick Start
 
@@ -129,6 +139,18 @@ We welcome contributions! See our [GitHub repository](https://github.com/mihiarc
 - Submit pull requests
 - Request features
 
+## Learn More
+
+- **[fiatools.org](https://fiatools.org)** - Explore the complete FIA Python ecosystem
+- **[GitHub](https://github.com/mihiarc/gridfia)** - Source code and issue tracker
+- **[PyPI](https://pypi.org/project/gridfia/)** - Package installation
+
 ## License
 
 GridFIA is released under the MIT License.
+
+---
+
+<div align="center">
+<strong><a href="https://fiatools.org">fiatools.org</a></strong> · Python Ecosystem for Forest Inventory Analysis
+</div>

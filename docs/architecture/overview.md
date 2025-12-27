@@ -1,10 +1,10 @@
 # Architecture Overview
 
-BigMap is designed as a modular, extensible toolkit for forest data analysis with clear separation of concerns and modern software engineering practices. This page provides a comprehensive overview of the system architecture, component relationships, and design patterns.
+GridFIA is designed as a modular, extensible toolkit for forest data analysis with clear separation of concerns and modern software engineering practices. This page provides a comprehensive overview of the system architecture, component relationships, and design patterns.
 
 ## System Overview
 
-BigMap follows a layered architecture pattern with the following key principles:
+GridFIA follows a layered architecture pattern with the following key principles:
 
 - **Modularity**: Clear separation between data processing, analysis, visualization, and user interfaces
 - **Extensibility**: Plugin-like architecture for adding new analysis types
@@ -14,14 +14,14 @@ BigMap follows a layered architecture pattern with the following key principles:
 
 ## Package Structure
 
-The following diagram shows how the main components of BigMap fit together:
+The following diagram shows how the main components of GridFIA fit together:
 
 ```mermaid
 graph TB
     subgraph "Entry Points"
-        CLI["CLI Commands<br/>bigmap-analyze<br/>bigmap-visualize<br/>bigmap-process"]
+        CLI["CLI Commands<br/>gridfia-analyze<br/>gridfia-visualize<br/>gridfia-process"]
         Scripts["Root Scripts<br/>identify_missing_species.py<br/>batch_add_missing_species.py<br/>add_api_species_to_zarr.py"]
-        Package["Python Package<br/>import bigmap"]
+        Package["Python Package<br/>import gridfia"]
     end
     
     subgraph "Core Package Structure"
@@ -84,7 +84,7 @@ graph TB
 
 ## Data Processing Pipeline
 
-BigMap implements a comprehensive data processing pipeline that transforms raw geospatial data into analysis-ready formats:
+GridFIA implements a comprehensive data processing pipeline that transforms raw geospatial data into analysis-ready formats:
 
 ```mermaid
 graph TD
@@ -142,7 +142,7 @@ The object-oriented design emphasizes clear responsibilities and dependency inje
 
 ```mermaid
 classDiagram
-    class BigMapSettings {
+    class GridFIASettings {
         +Path data_dir
         +Path output_dir
         +Path cache_dir
@@ -203,7 +203,7 @@ classDiagram
     }
     
     class CLIInterface {
-        +bigmap_cli()
+        +gridfia_cli()
         +analyze()
         +visualize()
         +process()
@@ -217,9 +217,9 @@ classDiagram
         +display_configuration()
     }
     
-    BigMapSettings --> RasterConfig
-    BigMapSettings --> VisualizationConfig
-    BigMapSettings --> ProcessingConfig
+    GridFIASettings --> RasterConfig
+    GridFIASettings --> VisualizationConfig
+    GridFIASettings --> ProcessingConfig
     
     CLIInterface --> SpeciesAnalyzer
     CLIInterface --> DiversityCalculator
@@ -231,12 +231,12 @@ classDiagram
     DiversityCalculator --> ZarrManager
     DiversityCalculator --> Console
     
-    RasterProcessor --> BigMapSettings
+    RasterProcessor --> GridFIASettings
     RasterProcessor --> Console
-    ZarrManager --> BigMapSettings
+    ZarrManager --> GridFIASettings
     ZarrManager --> Console
     
-    Visualizer --> BigMapSettings
+    Visualizer --> GridFIASettings
     Visualizer --> Console
     
     BigMapRestClient --> Console
@@ -244,7 +244,7 @@ classDiagram
 
 ## Dependency Mapping
 
-BigMap leverages modern Python libraries, with each external dependency serving specific functions:
+GridFIA leverages modern Python libraries, with each external dependency serving specific functions:
 
 ```mermaid
 graph LR
@@ -302,7 +302,7 @@ graph LR
 
 ## Analysis Workflow Types
 
-BigMap supports multiple types of analysis workflows, each with specific data requirements and outputs:
+GridFIA supports multiple types of analysis workflows, each with specific data requirements and outputs:
 
 ```mermaid
 graph TB
@@ -356,7 +356,7 @@ graph TB
 ## Design Patterns
 
 ### 1. Configuration as Code
-BigMap uses Pydantic for type-safe, environment-aware configuration management:
+GridFIA uses Pydantic for type-safe, environment-aware configuration management:
 
 - **Centralized settings** with validation and type checking
 - **Environment variable support** for deployment flexibility
@@ -439,4 +439,4 @@ The architecture provides several extension points for customization:
 4. **CLI Commands**: Add new command-line tools in the `cli/` module
 5. **Configuration**: Extend settings with new configuration sections
 
-This modular design ensures BigMap can grow and adapt to new requirements while maintaining code quality and user experience. 
+This modular design ensures GridFIA can grow and adapt to new requirements while maintaining code quality and user experience. 

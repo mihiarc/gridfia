@@ -1,8 +1,8 @@
-# BigMap Documentation System Setup
+# GridFIA Documentation System Setup
 
 ## Overview
 
-I've created a comprehensive MkDocs documentation system for the BigMap project that includes architectural diagrams, detailed technical documentation, and a modern, user-friendly interface. This system showcases the project's sophisticated architecture and provides excellent documentation for users and contributors.
+I've created a comprehensive MkDocs documentation system for the GridFIA project that includes architectural diagrams, detailed technical documentation, and a modern, user-friendly interface. This system showcases the project's sophisticated architecture and provides excellent documentation for users and contributors.
 
 ## What Was Created
 
@@ -59,7 +59,7 @@ Detailed technical specifications covering:
 - **Code syntax highlighting** with copy-to-clipboard functionality
 
 ### **Modern Architecture Showcase**
-The documentation demonstrates that BigMap follows modern software engineering practices:
+The documentation demonstrates that GridFIA follows modern software engineering practices:
 
 1. **Configuration as Code**: Pydantic-based settings management
 2. **Rich CLI Experience**: Terminal UI with progress tracking
@@ -108,7 +108,7 @@ mkdocs build
 
 ## Technical Highlights Demonstrated
 
-The documentation showcases several sophisticated aspects of your BigMap codebase:
+The documentation showcases several sophisticated aspects of your GridFIA codebase:
 
 ### **1. Modern Python Ecosystem Integration**
 - **Scientific Computing**: NumPy, Pandas, Xarray for data processing
@@ -137,7 +137,7 @@ The documentation showcases several sophisticated aspects of your BigMap codebas
 
 ## Project Architecture Summary
 
-Based on my analysis, BigMap demonstrates excellent software engineering practices:
+Based on my analysis, GridFIA demonstrates excellent software engineering practices:
 
 **Here is my logic:** The codebase follows a well-structured, modular design with clear separation of concerns between data processing, analysis, visualization, and user interfaces.
 
@@ -153,4 +153,4 @@ Based on my analysis, BigMap demonstrates excellent software engineering practic
 4. **Examples Gallery**: Add a showcase of analysis results and visualizations
 5. **Performance Benchmarks**: Document processing capabilities and timing tests
 
-The documentation system is now ready to serve as the primary resource for BigMap users, contributors, and stakeholders, providing a professional presentation of your sophisticated forest analysis toolkit. 
+The documentation system is now ready to serve as the primary resource for GridFIA users, contributors, and stakeholders, providing a professional presentation of your sophisticated forest analysis toolkit. 

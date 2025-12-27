@@ -1,6 +1,6 @@
 # Tutorial: Species Diversity Analysis
 
-This tutorial demonstrates how to perform a comprehensive species diversity analysis using BigMap.
+This tutorial demonstrates how to perform a comprehensive species diversity analysis using GridFIA.
 
 ## Scientific Background
 
@@ -31,7 +31,7 @@ The Simpson index (Simpson, 1949) has multiple formulations:
 - Effective number of equally abundant species
 - Values range from 1 to S (number of species)
 
-Note: The BigMap implementation calculates dominance (D) by default, with options for diversity (1-D) or inverse (1/D) via the `inverse` parameter.
+Note: The GridFIA implementation calculates dominance (D) by default, with options for diversity (1-D) or inverse (1/D) via the `inverse` parameter.
 
 ### Pielou's Evenness (J)
 Pielou's evenness (Pielou, 1966) measures how evenly species are distributed:
@@ -59,7 +59,7 @@ We'll analyze forest species diversity across North Carolina by:
 
 ## Prerequisites
 
-- BigMap installed (`pip install bigmap` or `uv pip install bigmap`)
+- GridFIA installed (`pip install gridfia` or `uv pip install gridfia`)
 - Basic Python knowledge
 - ~5GB disk space for data
 
@@ -75,7 +75,7 @@ Complete working examples are available in the `examples/` directory:
 First, let's see what species are available:
 
 ```bash
-bigmap list-species
+gridfia list-species
 ```
 
 For this tutorial, we'll download common NC tree species:
@@ -85,7 +85,7 @@ For this tutorial, we'll download common NC tree species:
 mkdir -p tutorial_data
 
 # Download species data
-bigmap download \
+gridfia download \
     --species 0131 \  # Loblolly pine
     --species 0068 \  # Eastern white pine  
     --species 0110 \  # Shortleaf pine
@@ -117,11 +117,11 @@ zarr_path = create_zarr_from_rasters(
 print(f"Created zarr array: {zarr_path}")
 ```
 
-Or use the BigMap API directly:
+Or use the GridFIA API directly:
 ```python
-from bigmap import BigMapAPI
+from gridfia import GridFIA
 
-api = BigMapAPI()
+api = GridFIA()
 zarr_path = api.create_zarr(
     input_dir="tutorial_data/",
     output_path="tutorial_data/nc_biomass.zarr"
@@ -178,7 +178,7 @@ calculations:
 Execute the diversity analysis:
 
 ```bash
-bigmap calculate tutorial_data/nc_biomass.zarr --config diversity_config.yaml
+gridfia calculate tutorial_data/nc_biomass.zarr --config diversity_config.yaml
 ```
 
 **See `examples/04_calculations.py`** for detailed calculation examples and custom metrics.
@@ -400,4 +400,4 @@ For complete, runnable code:
 - Magurran, A.E. (2004). *Measuring biological diversity*. Blackwell Publishing.
 - USDA Forest Service. (2018). *BIGMAP 2018 Forest Biomass Dataset*. Forest Inventory and Analysis Program.
 
-For complete citations and how to cite BigMap in your work, see [CITATIONS.md](../../CITATIONS.md).
+For complete citations and how to cite GridFIA in your work, see [CITATIONS.md](../../CITATIONS.md).

@@ -1,10 +1,10 @@
 # System Design
 
-This document provides detailed technical specifications for the BigMap system architecture, explaining the design decisions, implementation patterns, and technical considerations that guide the development of this forest analysis toolkit.
+This document provides detailed technical specifications for the GridFIA system architecture, explaining the design decisions, implementation patterns, and technical considerations that guide the development of this forest analysis toolkit.
 
 ## Design Philosophy
 
-BigMap is built on several core design principles that shape every technical decision:
+GridFIA is built on several core design principles that shape every technical decision:
 
 ### 1. **Scientific Computing First**
 - Prioritize accuracy and reproducibility in all calculations
@@ -37,17 +37,17 @@ BigMap is built on several core design principles that shape every technical dec
 The configuration system uses Pydantic for type-safe, validated settings management:
 
 ```python
-class BigMapSettings(BaseSettings):
+class GridFIASettings(BaseSettings):
     """
     Hierarchical configuration with:
-    - Environment variable support (BIGMAP_*)
+    - Environment variable support (GRIDFIA_*)
     - Type validation and conversion
     - Nested configuration objects
     - Automatic path creation
     """
     
     # Application settings
-    app_name: str = "BigMap"
+    app_name: str = "GridFIA"
     debug: bool = False
     verbose: bool = False
     
@@ -70,7 +70,7 @@ class BigMapSettings(BaseSettings):
 
 ### Data Storage Architecture
 
-BigMap uses a multi-layered data storage strategy optimized for different access patterns:
+GridFIA uses a multi-layered data storage strategy optimized for different access patterns:
 
 #### Primary Storage: Zarr Arrays
 ```python
@@ -115,7 +115,7 @@ class ProcessingPipeline:
     - Checkpoint/resume capability
     """
     
-    def __init__(self, config: BigMapSettings):
+    def __init__(self, config: GridFIASettings):
         self.config = config
         self.logger = self._setup_logging()
         self.progress = self._create_progress_tracker()
@@ -179,7 +179,7 @@ class AnalysisEngine:
     - Parallel execution
     """
     
-    def __init__(self, config: BigMapSettings):
+    def __init__(self, config: GridFIASettings):
         self.config = config
         self.analyzers = self._load_analyzers()
         self.cache = self._setup_cache()
@@ -300,7 +300,7 @@ class VisualizationEngine:
 The REST API client implements robust patterns for external service integration:
 
 ```python
-class BigMapRestClient:
+class BigMapRestClient:  # Note: This class name references the USDA BIGMAP data source
     """
     Production-ready REST client with:
     - Automatic retry with exponential backoff
@@ -354,13 +354,13 @@ The command-line interface follows Unix philosophy and modern CLI best practices
 @click.option('--config', type=click.Path(), help='Configuration file path')
 @click.option('--verbose', '-v', is_flag=True, help='Enable verbose output')
 @click.pass_context
-def bigmap_cli(ctx, config, verbose):
-    """BigMap: Forest Analysis Toolkit."""
+def gridfia_cli(ctx, config, verbose):
+    """GridFIA: Forest Analysis Toolkit."""
     ctx.ensure_object(dict)
-    ctx.obj['config'] = load_config(config) if config else BigMapSettings()
+    ctx.obj['config'] = load_config(config) if config else GridFIASettings()
     ctx.obj['verbose'] = verbose
 
-@bigmap_cli.command()
+@gridfia_cli.command()
 @click.option('--input', '-i', type=click.Path(exists=True), required=True)
 @click.option('--output', '-o', type=click.Path(), required=True)
 @click.option('--method', type=click.Choice(['shannon', 'simpson', 'richness']))
@@ -513,7 +513,7 @@ def safe_api_request(url: str, params: dict) -> dict:
 ```python
 import pytest
 from unittest.mock import Mock, patch
-from bigmap.core import analyze_species_presence
+from gridfia.core import analyze_species_presence
 
 class TestSpeciesAnalysis:
     """Comprehensive test suite for species analysis."""
@@ -531,7 +531,7 @@ class TestSpeciesAnalysis:
         assert 0 <= result.min() <= result.max() <= 1  # Valid range
         assert not np.isnan(result).any()  # No NaN values
     
-    @patch('bigmap.utils.zarr.open')
+    @patch('gridfia.utils.zarr.open')
     def test_file_not_found_handling(self, mock_zarr_open):
         """Test graceful handling of missing files."""
         mock_zarr_open.side_effect = FileNotFoundError()
@@ -579,4 +579,4 @@ class TestDataPipeline:
             assert arr.attrs['processing_date'] is not None
 ```
 
-This comprehensive system design ensures BigMap provides a robust, scalable, and maintainable platform for forest analysis while following software engineering best practices and scientific computing standards. 
+This comprehensive system design ensures GridFIA provides a robust, scalable, and maintainable platform for forest analysis while following software engineering best practices and scientific computing standards. 

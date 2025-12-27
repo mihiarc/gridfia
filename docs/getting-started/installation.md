@@ -1,6 +1,6 @@
 # Installation Guide
 
-This guide will help you install BigMap and its dependencies on your system. BigMap supports Python 3.9+ and has been tested on Linux, macOS, and Windows.
+This guide will help you install GridFIA and its dependencies on your system. GridFIA supports Python 3.9+ and has been tested on Linux, macOS, and Windows.
 
 ## System Requirements
 
@@ -40,18 +40,18 @@ This guide will help you install BigMap and its dependencies on your system. Big
     pip install uv
     ```
 
-#### Install BigMap with uv
+#### Install GridFIA with uv
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/bigmap.git
-cd bigmap
+git clone https://github.com/mihiarc/gridfia.git
+cd gridfia
 
 # Create and activate virtual environment
 uv venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
-# Install BigMap in development mode
+# Install GridFIA in development mode
 uv pip install -e .
 
 # Install with development dependencies (optional)
@@ -62,17 +62,17 @@ uv pip install -e ".[dev,test,docs]"
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/bigmap.git
-cd bigmap
+git clone https://github.com/mihiarc/gridfia.git
+cd gridfia
 
 # Create virtual environment (recommended)
-python -m venv bigmap-env
-source bigmap-env/bin/activate  # On Windows: bigmap-env\Scripts\activate
+python -m venv gridfia-env
+source gridfia-env/bin/activate  # On Windows: gridfia-env\Scripts\activate
 
 # Upgrade pip
 pip install --upgrade pip
 
-# Install BigMap
+# Install GridFIA
 pip install -e .
 
 # Install with optional dependencies
@@ -83,21 +83,21 @@ pip install -e ".[dev,test,docs]"
 
 ```bash
 # Create conda environment
-conda create -n bigmap python=3.11
-conda activate bigmap
+conda create -n gridfia python=3.11
+conda activate gridfia
 
 # Install core dependencies from conda-forge
 conda install -c conda-forge numpy pandas xarray zarr rasterio geopandas matplotlib
 
-# Clone and install BigMap
-git clone https://github.com/yourusername/bigmap.git
-cd bigmap
+# Clone and install GridFIA
+git clone https://github.com/mihiarc/gridfia.git
+cd gridfia
 pip install -e .
 ```
 
 ## Dependency Overview
 
-BigMap has several categories of dependencies:
+GridFIA has several categories of dependencies:
 
 ### Core Dependencies
 - **numpy** (≥1.21.0) - Scientific computing
@@ -122,19 +122,19 @@ BigMap has several categories of dependencies:
 
 ## Verification
 
-After installation, verify that BigMap is working correctly:
+After installation, verify that GridFIA is working correctly:
 
 ### Test Installation
 
 ```bash
-# Check BigMap version
-bigmap --version
+# Check GridFIA version
+gridfia --version
 
 # Test Python import
-python -c "import bigmap; print(f'BigMap v{bigmap.__version__} installed successfully!')"
+python -c "import gridfia; print(f'GridFIA v{gridfia.__version__} installed successfully!')"
 
 # Run basic CLI help
-bigmap --help
+gridfia --help
 ```
 
 ### Run Example Analysis
@@ -144,9 +144,9 @@ bigmap --help
 mkdir -p data output
 
 # Run a quick test (requires sample data)
-bigmap-analyze --help
-bigmap-visualize --help
-bigmap-process --help
+gridfia-analyze --help
+gridfia-visualize --help
+gridfia-process --help
 ```
 
 ### Test Dependencies
@@ -225,12 +225,12 @@ Alternatively, you can use the [OSGeo4W](https://trac.osgeo.org/osgeo4w/) distri
 
 ## Development Installation
 
-For contributors and developers who want to modify BigMap:
+For contributors and developers who want to modify GridFIA:
 
 ```bash
 # Clone with development branch
-git clone -b develop https://github.com/yourusername/bigmap.git
-cd bigmap
+git clone -b develop https://github.com/mihiarc/gridfia.git
+cd gridfia
 
 # Create development environment
 uv venv --python 3.11
@@ -264,10 +264,10 @@ For containerized deployment:
 
 ```bash
 # Build Docker image
-docker build -t bigmap:latest .
+docker build -t gridfia:latest .
 
 # Run with mounted data directory
-docker run -v $(pwd)/data:/app/data -v $(pwd)/output:/app/output bigmap:latest
+docker run -v $(pwd)/data:/app/data -v $(pwd)/output:/app/output gridfia:latest
 ```
 
 ## Troubleshooting
@@ -310,8 +310,8 @@ If you encounter permission errors:
 
 ```bash
 # Create virtual environment in user directory
-python -m venv ~/.bigmap-env
-source ~/.bigmap-env/bin/activate
+python -m venv ~/.gridfia-env
+source ~/.gridfia-env/bin/activate
 pip install -e .
 ```
 
@@ -320,8 +320,8 @@ pip install -e .
 If you encounter issues:
 
 1. Check the [troubleshooting guide](../reference/troubleshooting.md)
-2. Search [existing issues](https://github.com/yourusername/bigmap/issues)
-3. Create a [new issue](https://github.com/yourusername/bigmap/issues/new) with:
+2. Search [existing issues](https://github.com/mihiarc/gridfia/issues)
+3. Create a [new issue](https://github.com/mihiarc/gridfia/issues/new) with:
    - Your operating system and Python version
    - Complete error message
    - Steps to reproduce the issue

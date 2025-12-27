@@ -149,10 +149,37 @@ extra:
   version:
     provider: mike
   social:
+    - icon: fontawesome/solid/globe
+      link: https://fiatools.org
+      name: FIAtools Ecosystem
     - icon: fontawesome/brands/github
       link: https://github.com/mihiarc/gridfia
     - icon: fontawesome/brands/python
       link: https://pypi.org/project/gridfia/
+  # SEO meta tags for better discoverability
+  meta:
+    - name: keywords
+      content: gridfia, python, forestry, biomass, USDA, FIA, BIGMAP, zarr, species diversity, forest inventory, geospatial, remote sensing, ecological modeling
+    - name: author
+      content: Christopher Mihiar, USDA Forest Service
+    - property: og:title
+      content: GridFIA - Python API for Spatial Forest Analysis
+    - property: og:description
+      content: Efficient Zarr-based storage and processing for USDA Forest Service BIGMAP forest biomass data. Calculate species diversity indices and create publication-ready maps.
+    - property: og:type
+      content: website
+    - property: og:url
+      content: https://mihiarc.github.io/gridfia/
+    - property: og:image
+      content: https://fiatools.org/logos/gridfia_logo.png
+    - property: og:site_name
+      content: GridFIA Documentation
+    - name: twitter:card
+      content: summary_large_image
+    - name: twitter:title
+      content: GridFIA - Python API for Spatial Forest Analysis
+    - name: twitter:description
+      content: Python API for USDA Forest Service BIGMAP spatial raster analysis. Forest biomass and species diversity at 30m resolution.
 
 extra_css:
   - stylesheets/extra.css

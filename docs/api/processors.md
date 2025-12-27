@@ -24,11 +24,11 @@ class ForestMetricsProcessor:
 ### Constructor
 
 ```python
-ForestMetricsProcessor(settings: Optional[BigMapSettings] = None)
+ForestMetricsProcessor(settings: Optional[GridFIASettings] = None)
 ```
 
 **Parameters:**
-- `settings` (BigMapSettings, optional): Configuration settings. If None, uses default settings.
+- `settings` (GridFIASettings, optional): Configuration settings. If None, uses default settings.
 
 ### Methods
 
@@ -48,11 +48,11 @@ Run forest metric calculations on zarr data.
 
 **Example:**
 ```python
-from bigmap.config import BigMapSettings, CalculationConfig
-from bigmap.core.processors.forest_metrics import ForestMetricsProcessor
+from gridfia.config import GridFIASettings, CalculationConfig
+from gridfia.core.processors.forest_metrics import ForestMetricsProcessor
 
 # Configure settings
-settings = BigMapSettings(
+settings = GridFIASettings(
     output_dir="results",
     calculations=[
         CalculationConfig(name="species_richness", enabled=True),

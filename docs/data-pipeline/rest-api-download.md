@@ -1,10 +1,10 @@
 # REST API Download
 
-The BigMap REST API client provides robust access to the USFS FIA BIGMAP 2018 Tree Species Aboveground Biomass ImageServer, enabling programmatic download of forest species data for analysis.
+The GridFIA REST API client provides robust access to the USFS FIA BIGMAP 2018 Tree Species Aboveground Biomass ImageServer, enabling programmatic download of forest species data for analysis.
 
 ## Overview
 
-The REST API client (`bigmap.api.BigMapRestClient`) implements a production-ready interface to the BIGMAP ImageServer with:
+The REST API client (`gridfia.external.BigMapRestClient`) implements a production-ready interface to the BIGMAP ImageServer with:
 
 - **Automatic retry logic** with exponential backoff
 - **Rate limiting** to respect server constraints
@@ -16,7 +16,7 @@ The REST API client (`bigmap.api.BigMapRestClient`) implements a production-read
 
 ```mermaid
 graph TD
-    A[BigMap REST Client] --> B[USFS ImageServer API]
+    A[GridFIA REST Client] --> B[USFS ImageServer API]
     B --> C[Species Metadata]
     B --> D[Raster Export]
     
@@ -37,10 +37,10 @@ graph TD
 
 ## Installation
 
-The REST client is included with the BigMap package:
+The REST client is included with the GridFIA package:
 
 ```bash
-pip install bigmap
+pip install gridfia
 ```
 
 ## Basic Usage
@@ -48,7 +48,7 @@ pip install bigmap
 ### Initialize the Client
 
 ```python
-from bigmap.api import BigMapRestClient
+from gridfia.external import BigMapRestClient
 
 # Create client with default settings
 client = BigMapRestClient()
@@ -225,8 +225,8 @@ with ThreadPoolExecutor(max_workers=4) as executor:
 The REST client integrates seamlessly with the Zarr construction pipeline:
 
 ```python
-from bigmap.api import BigMapRestClient
-from bigmap.utils import append_species_to_zarr
+from gridfia.external import BigMapRestClient
+from gridfia.utils import append_species_to_zarr
 
 client = BigMapRestClient()
 
