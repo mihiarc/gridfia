@@ -114,7 +114,7 @@ test = [
 ]
 
 [project.urls]
-Homepage = "https://fiatools.org"
+Homepage = "https://fiatools.org/tools/gridfia/"
 Documentation = "https://mihiarc.github.io/gridfia/"
 Repository = "https://github.com/mihiarc/gridfia.git"
 "Bug Tracker" = "https://github.com/mihiarc/gridfia/issues"
