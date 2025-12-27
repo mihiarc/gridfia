@@ -1,26 +1,26 @@
-# Getting Started with BigMap
+# Getting Started with GridFIA
 
-BigMap is a modern Python framework for analyzing forest biomass and species diversity using BIGMAP 2018 data for North Carolina.
+GridFIA is a modern Python framework for analyzing forest biomass and species diversity using BIGMAP 2018 data for North Carolina.
 
 ## Installation
 
 ### Using pip
 
 ```bash
-pip install bigmap
+pip install gridfia
 ```
 
 ### Using uv (recommended)
 
 ```bash
-uv pip install bigmap
+uv pip install gridfia
 ```
 
 ### Development Installation
 
 ```bash
-git clone https://github.com/yourusername/bigmap.git
-cd bigmap
+git clone https://github.com/mihiarc/gridfia.git
+cd gridfia
 uv pip install -e ".[dev,test,docs]"
 ```
 
@@ -32,13 +32,13 @@ First, download some species data from the FIA BIGMAP REST API:
 
 ```bash
 # List available species
-bigmap list-species
+gridfia list-species
 
 # Download default NC species
-bigmap download --output data/
+gridfia download --output data/
 
 # Download specific species
-bigmap download --species 0131 --species 0068 --output data/
+gridfia download --species 0131 --species 0068 --output data/
 ```
 
 ### 2. Create Zarr Array
@@ -97,16 +97,16 @@ Use the CLI to run forest metric calculations:
 
 ```bash
 # List available calculations
-bigmap calculate data/nc_biomass.zarr --list
+gridfia calculate data/nc_biomass.zarr --list
 
 # Run specific calculations
-bigmap calculate data/nc_biomass.zarr \
+gridfia calculate data/nc_biomass.zarr \
     --calc species_richness \
     --calc total_biomass \
     --output results/
 
 # Use a configuration file
-bigmap calculate data/nc_biomass.zarr --config config.yaml
+gridfia calculate data/nc_biomass.zarr --config config.yaml
 ```
 
 ### 4. View Results
@@ -134,13 +134,13 @@ plt.show()
 
 ```bash
 # Create a diversity analysis configuration
-bigmap config create --template diversity --output my_config.yaml
+gridfia config create --template diversity --output my_config.yaml
 
 # Validate configuration
-bigmap config validate --config my_config.yaml
+gridfia config validate --config my_config.yaml
 
 # Show current configuration
-bigmap config show
+gridfia config show
 ```
 
 ### Configuration Example
@@ -175,11 +175,11 @@ calculations:
 ### Basic Example
 
 ```python
-from bigmap.config import BigMapSettings, CalculationConfig
-from bigmap.core.processors.forest_metrics import ForestMetricsProcessor
+from gridfia.config import GridFIASettings, CalculationConfig
+from gridfia.core.processors.forest_metrics import ForestMetricsProcessor
 
 # Configure settings
-settings = BigMapSettings(
+settings = GridFIASettings(
     output_dir="results",
     calculations=[
         CalculationConfig(name="species_richness", enabled=True),
@@ -197,7 +197,7 @@ print(f"Completed calculations: {list(results.keys())}")
 ### Advanced Example with Custom Parameters
 
 ```python
-from bigmap.core.calculations import registry
+from gridfia.core.calculations import registry
 import numpy as np
 
 # Load zarr data

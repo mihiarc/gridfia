@@ -1,6 +1,6 @@
 # Local Documentation Deployment Guide
 
-This guide covers various ways to deploy and view your BigMap documentation privately.
+This guide covers various ways to deploy and view your GridFIA documentation privately.
 
 ## 🚀 Quick Start
 
@@ -89,10 +89,10 @@ mkdocs serve --watch docs/ --watch mkdocs.yml
 ```bash
 # Build and compress
 ./build_docs.sh
-tar -czf bigmap-docs.tar.gz site/
+tar -czf gridfia-docs.tar.gz site/
 
 # Share the tarball
-# Recipients: tar -xzf bigmap-docs.tar.gz && open site/index.html
+# Recipients: tar -xzf gridfia-docs.tar.gz && open site/index.html
 ```
 
 ### Option 2: Git Repository
@@ -149,7 +149,7 @@ mkdocs build --clean
 
 ## 🎯 Current Documentation Status
 
-Your BigMap documentation includes:
+Your GridFIA documentation includes:
 
 - ✅ **Professional Homepage** with feature highlights
 - ✅ **Interactive Architecture Diagrams** (5 comprehensive visualizations)

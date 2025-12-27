@@ -17,7 +17,9 @@ maintainers = [
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
@@ -25,8 +27,38 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: GIS",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+    "Topic :: Scientific/Engineering :: Atmospheric Science",
+    "Natural Language :: English",
+    "Environment :: Console",
+    "Framework :: Pydantic :: 2",
 ]
-keywords = ["gis", "forestry", "biomass", "species-diversity", "fia", "bigmap", "zarr", "raster"]
+keywords = [
+    # Core functionality
+    "gis",
+    "forestry",
+    "biomass",
+    "species-diversity",
+    "fia",
+    "bigmap",
+    "zarr",
+    "raster",
+    # Extended discoverability
+    "usda",
+    "forest-inventory",
+    "geospatial",
+    "remote-sensing",
+    "landsat",
+    "biodiversity",
+    "ecological-modeling",
+    "shannon-diversity",
+    "simpson-diversity",
+    "species-richness",
+    "cloud-optimized",
+    "forest-analysis",
+    "tree-species",
+    "carbon-accounting",
+]
 dependencies = [
     # Core scientific computing
     "numpy>=1.21.0",
@@ -82,10 +114,13 @@ test = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/mihiarc/gridfia"
+Homepage = "https://fiatools.org"
 Documentation = "https://mihiarc.github.io/gridfia/"
 Repository = "https://github.com/mihiarc/gridfia.git"
 "Bug Tracker" = "https://github.com/mihiarc/gridfia/issues"
+Changelog = "https://github.com/mihiarc/gridfia/releases"
+"Source Code" = "https://github.com/mihiarc/gridfia"
+"FIA Ecosystem" = "https://fiatools.org"
 
 [tool.hatch.build.targets.wheel]
 packages = ["gridfia"]

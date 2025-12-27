@@ -1,10 +1,10 @@
 # Zarr Construction
 
-The BigMap Zarr construction system provides an efficient, scalable storage solution for multi-species forest biomass data, enabling fast analysis of large geospatial datasets.
+The GridFIA Zarr construction system provides an efficient, scalable storage solution for multi-species forest biomass data, enabling fast analysis of large geospatial datasets.
 
 ## Overview
 
-Zarr is an open-source data format designed for storing large N-dimensional arrays efficiently. BigMap uses Zarr to create expandable 3D arrays that store biomass data for multiple tree species across North Carolina.
+Zarr is an open-source data format designed for storing large N-dimensional arrays efficiently. GridFIA uses Zarr to create expandable 3D arrays that store biomass data for multiple tree species across North Carolina.
 
 ### Why Zarr?
 
@@ -70,7 +70,7 @@ chunks = (1, 1000, 1000)
 ### Basic Creation
 
 ```python
-from bigmap.utils import create_expandable_zarr_from_base_raster
+from gridfia.utils import create_expandable_zarr_from_base_raster
 
 # Create zarr from total biomass raster
 create_expandable_zarr_from_base_raster(
@@ -107,7 +107,7 @@ Mean biomass (valid pixels): 123.4 Mg/ha
 ### Single Species Append
 
 ```python
-from bigmap.utils import append_species_to_zarr
+from gridfia.utils import append_species_to_zarr
 
 # Add a species layer
 append_species_to_zarr(
@@ -121,7 +121,7 @@ append_species_to_zarr(
 ### Batch Processing
 
 ```python
-from bigmap.utils import batch_append_species_from_dir
+from gridfia.utils import batch_append_species_from_dir
 
 # Process all species files in directory
 results = batch_append_species_from_dir(
@@ -137,7 +137,7 @@ print(f"Compression ratio: {results['compression_ratio']:.2f}x")
 ### From REST API
 
 ```python
-from bigmap.api import BigMapRestClient
+from gridfia.external import BigMapRestClient
 from scripts.add_api_species_to_zarr import APISpeciesProcessor
 
 # Download and add species from API
@@ -314,8 +314,8 @@ def consolidate_metadata(zarr_path):
 ### With REST API Pipeline
 
 ```python
-from bigmap.api import BigMapRestClient
-from bigmap.utils import append_species_to_zarr
+from gridfia.external import BigMapRestClient
+from gridfia.utils import append_species_to_zarr
 import tempfile
 
 client = BigMapRestClient()
@@ -350,7 +350,7 @@ for species in missing[:5]:  # Process 5 at a time
 ### With Analysis Pipeline
 
 ```python
-from bigmap.core import ForestMetricsProcessor
+from gridfia.core import ForestMetricsProcessor
 
 # Use zarr in analysis
 processor = ForestMetricsProcessor(

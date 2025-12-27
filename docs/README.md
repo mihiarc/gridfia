@@ -1,6 +1,6 @@
-# BigMap Documentation
+# GridFIA Documentation
 
-This directory contains the documentation source files for the BigMap project, built with [MkDocs](https://www.mkdocs.org/) and the [Material theme](https://squidfunk.github.io/mkdocs-material/).
+This directory contains the documentation source files for the GridFIA project, built with [MkDocs](https://www.mkdocs.org/) and the [Material theme](https://squidfunk.github.io/mkdocs-material/).
 
 ## Building the Documentation
 
@@ -87,8 +87,8 @@ Use syntax highlighting for code blocks:
 
 ````markdown
 ```python
-import bigmap
-from bigmap.core import analyze_species_presence
+import gridfia
+from gridfia.core import analyze_species_presence
 
 # Analyze species presence
 result = analyze_species_presence("data/species.zarr")

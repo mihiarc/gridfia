@@ -1,11 +1,11 @@
 # CLI Reference
 
-The BigMap CLI provides commands for forest analysis, data management, and configuration.
+The GridFIA CLI provides commands for forest analysis, data management, and configuration.
 
 ## Global Options
 
 ```bash
-bigmap [OPTIONS] COMMAND [ARGS]...
+gridfia [OPTIONS] COMMAND [ARGS]...
 ```
 
 **Options:**
@@ -21,7 +21,7 @@ bigmap [OPTIONS] COMMAND [ARGS]...
 Calculate forest metrics using the flexible calculation framework.
 
 ```bash
-bigmap calculate ZARR_PATH [OPTIONS]
+gridfia calculate ZARR_PATH [OPTIONS]
 ```
 
 **Arguments:**
@@ -37,24 +37,24 @@ bigmap calculate ZARR_PATH [OPTIONS]
 
 ```bash
 # List available calculations
-bigmap calculate data.zarr --list
+gridfia calculate data.zarr --list
 
 # Run specific calculations
-bigmap calculate data.zarr --calc total_biomass --calc species_richness
+gridfia calculate data.zarr --calc total_biomass --calc species_richness
 
 # Use configuration file
-bigmap calculate data.zarr --config diversity_config.yaml
+gridfia calculate data.zarr --config diversity_config.yaml
 
 # Custom output directory
-bigmap calculate data.zarr --calc shannon_diversity --output results/
+gridfia calculate data.zarr --calc shannon_diversity --output results/
 ```
 
 ### config
 
-Manage BigMap configuration files.
+Manage GridFIA configuration files.
 
 ```bash
-bigmap config ACTION [OPTIONS]
+gridfia config ACTION [OPTIONS]
 ```
 
 **Actions:**
@@ -71,16 +71,16 @@ bigmap config ACTION [OPTIONS]
 
 ```bash
 # Show default configuration
-bigmap config show
+gridfia config show
 
 # Show specific configuration
-bigmap config show --config my_config.yaml
+gridfia config show --config my_config.yaml
 
 # Create diversity analysis configuration
-bigmap config create --template diversity --output diversity_config.yaml
+gridfia config create --template diversity --output diversity_config.yaml
 
 # Validate configuration
-bigmap config validate --config my_config.yaml
+gridfia config validate --config my_config.yaml
 ```
 
 **Available Templates:**
@@ -93,7 +93,7 @@ bigmap config validate --config my_config.yaml
 List available species from the FIA BIGMAP REST API.
 
 ```bash
-bigmap list-species
+gridfia list-species
 ```
 
 **Example Output:**
@@ -116,7 +116,7 @@ bigmap list-species
 Download species data via REST API.
 
 ```bash
-bigmap download [OPTIONS]
+gridfia download [OPTIONS]
 ```
 
 **Options:**
@@ -128,16 +128,16 @@ bigmap download [OPTIONS]
 
 ```bash
 # Download default NC species
-bigmap download --output data/
+gridfia download --output data/
 
 # Download specific species
-bigmap download --species 0131 --species 0068 --output data/
+gridfia download --species 0131 --species 0068 --output data/
 
 # Download with custom bounding box
-bigmap download --bbox "-9200000,4000000,-8400000,4400000" --output data/
+gridfia download --bbox "-9200000,4000000,-8400000,4400000" --output data/
 
 # Download multiple species
-bigmap download \
+gridfia download \
     --species 0131 \  # Loblolly pine
     --species 0068 \  # Eastern white pine
     --species 0110 \  # Shortleaf pine
@@ -175,20 +175,20 @@ The following calculations are available in the registry:
 
 ## Environment Variables
 
-BigMap settings can be configured via environment variables:
+GridFIA settings can be configured via environment variables:
 
 ```bash
 # Enable debug mode
-export BIGMAP_DEBUG=true
+export GRIDFIA_DEBUG=true
 
 # Set output directory
-export BIGMAP_OUTPUT_DIR=/path/to/output
+export GRIDFIA_OUTPUT_DIR=/path/to/output
 
 # Set data directory
-export BIGMAP_DATA_DIR=/path/to/data
+export GRIDFIA_DATA_DIR=/path/to/data
 
 # Enable verbose output
-export BIGMAP_VERBOSE=true
+export GRIDFIA_VERBOSE=true
 ```
 
 ## Exit Codes
