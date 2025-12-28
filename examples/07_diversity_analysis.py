@@ -22,17 +22,13 @@ Takes about 15-30 minutes to run depending on network speed.
 from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.colors import Normalize
 from rich.console import Console
 from rich.table import Table
-from rich.progress import Progress, SpinnerColumn, TextColumn
 import geopandas as gpd
-from shapely.geometry import box
 
 from gridfia import GridFIA
 from gridfia.examples import print_zarr_info
-from gridfia.visualization.mapper import ZarrMapper
-from gridfia.visualization.plots import set_plot_style, save_figure
+from gridfia.visualization.plots import set_plot_style
 from gridfia.visualization.boundaries import (
     load_counties_for_state,
     add_basemap,
@@ -265,7 +261,7 @@ def interpret_diversity_statistics(zarr_path: Path, species_stats: dict):
 
 def create_diversity_maps(zarr_path: Path, output_dir: Path, county_name: str = "Durham"):
     """
-    Create publication-quality diversity maps.
+    Create publication-quality diversity maps with county boundary and basemap.
     """
     console.print("\n[bold blue]Step 6: Create Diversity Maps[/bold blue]")
     console.print("-" * 50)
@@ -273,40 +269,7 @@ def create_diversity_maps(zarr_path: Path, output_dir: Path, county_name: str = 
     set_plot_style('publication')
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    mapper = ZarrMapper(str(zarr_path))
-
-    # Create richness map
-    console.print("Creating species richness map...")
-    fig, ax = mapper.create_richness_map(
-        cmap='Spectral_r',
-        threshold=0.0,
-        title="Species Richness"
-    )
-    save_figure(fig, str(output_dir / "species_richness_map.png"), dpi=200)
-    plt.close(fig)
-
-    # Create Shannon diversity map
-    console.print("Creating Shannon diversity map...")
-    fig, ax = mapper.create_diversity_map(
-        diversity_type='shannon',
-        cmap='viridis',
-        title="Shannon Diversity Index (H')"
-    )
-    save_figure(fig, str(output_dir / "shannon_diversity_map.png"), dpi=200)
-    plt.close(fig)
-
-    # Create Simpson diversity map
-    console.print("Creating Simpson diversity map...")
-    fig, ax = mapper.create_diversity_map(
-        diversity_type='simpson',
-        cmap='plasma',
-        title="Simpson Diversity Index (1-D)"
-    )
-    save_figure(fig, str(output_dir / "simpson_diversity_map.png"), dpi=200)
-    plt.close(fig)
-
-    # Create composite figure with county boundary and basemap
-    console.print("Creating composite diversity figure...")
+    # Create composite figure with all diversity metrics, county boundary, and basemap
     create_composite_diversity_figure(zarr_path, output_dir, county_name=county_name)
 
     console.print(f"\n[green]Maps saved to {output_dir}[/green]")
