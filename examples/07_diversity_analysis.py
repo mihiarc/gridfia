@@ -369,20 +369,36 @@ def create_composite_diversity_figure(zarr_path: Path, output_dir: Path, county_
         pixel_height = (ymin - ymax) / height  # Negative for north-up
         transform = Affine(pixel_width, 0, xmin, 0, pixel_height, ymax)
 
-    # Calculate extent for matplotlib (left, right, bottom, top)
+    # Calculate data extent for matplotlib (left, right, bottom, top)
     height, width = biomass.shape[1], biomass.shape[2]
-    left = transform.c
-    right = transform.c + width * transform.a
-    top = transform.f
-    bottom = transform.f + height * transform.e
-    extent = (left, right, bottom, top)
+    data_left = transform.c
+    data_right = transform.c + width * transform.a
+    data_top = transform.f
+    data_bottom = transform.f + height * transform.e
+    data_extent = (data_left, data_right, data_bottom, data_top)
 
-    console.print(f"  Data extent: {extent}")
+    console.print(f"  Data extent: {data_extent}")
     console.print(f"  CRS: {crs_str}")
 
     # Load county boundary
     console.print("Loading county boundary...")
     county_gdf = load_wake_county_boundary(crs=crs_str)
+
+    # Use county bounds for figure extent (shows full county, not just data area)
+    if county_gdf is not None:
+        county_bounds = county_gdf.total_bounds  # (minx, miny, maxx, maxy)
+        # Add 5% padding around county
+        pad_x = (county_bounds[2] - county_bounds[0]) * 0.05
+        pad_y = (county_bounds[3] - county_bounds[1]) * 0.05
+        extent = (
+            county_bounds[0] - pad_x,  # left
+            county_bounds[2] + pad_x,  # right
+            county_bounds[1] - pad_y,  # bottom
+            county_bounds[3] + pad_y   # top
+        )
+        console.print(f"  Figure extent (full county): {extent}")
+    else:
+        extent = data_extent
 
     # Prepare data layers
     total_layer = biomass[0]
@@ -446,8 +462,8 @@ def create_composite_diversity_figure(zarr_path: Path, output_dir: Path, county_
         except Exception as e:
             console.print(f"[dim]Basemap skipped: {e}[/dim]")
 
-        # Plot raster data with transparency
-        im = ax.imshow(data, cmap=cmap, extent=extent, origin='upper',
+        # Plot raster data with transparency (use data_extent for proper positioning)
+        im = ax.imshow(data, cmap=cmap, extent=data_extent, origin='upper',
                       alpha=0.85, vmin=vmin, vmax=vmax, zorder=5)
 
         # Add county boundary overlay
