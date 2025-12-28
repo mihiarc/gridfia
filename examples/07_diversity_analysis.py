@@ -22,14 +22,23 @@ Takes about 15-30 minutes to run depending on network speed.
 from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.colors import Normalize
 from rich.console import Console
 from rich.table import Table
 from rich.progress import Progress, SpinnerColumn, TextColumn
+import geopandas as gpd
+from shapely.geometry import box
 
 from gridfia import GridFIA
 from gridfia.examples import print_zarr_info
 from gridfia.visualization.mapper import ZarrMapper
 from gridfia.visualization.plots import set_plot_style, save_figure
+from gridfia.visualization.boundaries import (
+    load_counties_for_state,
+    add_basemap,
+    plot_boundaries,
+    get_basemap_zoom_level
+)
 from examples.common_locations import get_location_bbox
 
 console = Console()
@@ -303,21 +312,91 @@ def create_diversity_maps(zarr_path: Path, output_dir: Path):
     console.print(f"\n[green]Maps saved to {output_dir}[/green]")
 
 
-def create_composite_diversity_figure(zarr_path: Path, output_dir: Path):
-    """Create a 2x2 composite figure showing all diversity metrics."""
-    import zarr
+def load_wake_county_boundary(crs: str = 'EPSG:3857') -> gpd.GeoDataFrame:
+    """
+    Load Wake County, NC boundary for clipping and overlay.
 
+    Returns GeoDataFrame with Wake County boundary in the specified CRS.
+    """
+    try:
+        # Load all NC counties
+        nc_counties = load_counties_for_state('NC', crs=crs)
+
+        # Filter for Wake County
+        wake_county = nc_counties[nc_counties['NAME'].str.lower() == 'wake'].copy()
+
+        if len(wake_county) == 0:
+            console.print("[yellow]Warning: Wake County not found, using bounding box[/yellow]")
+            return None
+
+        return wake_county
+    except Exception as e:
+        console.print(f"[yellow]Warning: Could not load county boundary: {e}[/yellow]")
+        return None
+
+
+def create_composite_diversity_figure(zarr_path: Path, output_dir: Path, county_name: str = "Wake"):
+    """
+    Create a 2x2 composite figure showing all diversity metrics.
+
+    Improved version with:
+    - County boundary clipping/masking
+    - Basemap for geographic context
+    - Professional cartographic styling
+    """
+    import zarr
+    from rasterio.transform import Affine
+
+    console.print("Loading data and calculating metrics...")
+
+    # Open zarr and get metadata
     root = zarr.open(str(zarr_path), mode='r')
     biomass = root['biomass'][:]
 
+    # Get transform and CRS from zarr attributes
+    transform_params = root.attrs.get('transform', None)
+    crs_str = root.attrs.get('crs', 'EPSG:3857')
+
+    if transform_params:
+        transform = Affine(*transform_params[:6])
+    else:
+        # Fallback: estimate from data shape and typical Wake County extent
+        height, width = biomass.shape[1], biomass.shape[2]
+        # Use the bbox from common_locations
+        bbox, _ = get_location_bbox("wake_nc")
+        xmin, ymin, xmax, ymax = bbox
+        pixel_width = (xmax - xmin) / width
+        pixel_height = (ymin - ymax) / height  # Negative for north-up
+        transform = Affine(pixel_width, 0, xmin, 0, pixel_height, ymax)
+
+    # Calculate extent for matplotlib (left, right, bottom, top)
+    height, width = biomass.shape[1], biomass.shape[2]
+    left = transform.c
+    right = transform.c + width * transform.a
+    top = transform.f
+    bottom = transform.f + height * transform.e
+    extent = (left, right, bottom, top)
+
+    console.print(f"  Data extent: {extent}")
+    console.print(f"  CRS: {crs_str}")
+
+    # Load county boundary
+    console.print("Loading county boundary...")
+    county_gdf = load_wake_county_boundary(crs=crs_str)
+
+    # Prepare data layers
     total_layer = biomass[0]
     species_layers = biomass[1:]
     forest_mask = total_layer > 0
 
-    # Calculate metrics
+    # Calculate diversity metrics
+    console.print("Calculating diversity metrics...")
+
+    # Species Richness
     richness = np.sum(species_layers > 0, axis=0).astype(float)
     richness[~forest_mask] = np.nan
 
+    # Shannon Diversity
     shannon = np.zeros_like(total_layer)
     simpson_d = np.zeros_like(total_layer)
 
@@ -333,50 +412,71 @@ def create_composite_diversity_figure(zarr_path: Path, output_dir: Path):
     simpson[~forest_mask] = np.nan
 
     # Evenness
-    max_shannon = np.log(np.sum(species_layers > 0, axis=0))
-    max_shannon[max_shannon == 0] = np.nan
-    evenness = shannon / max_shannon
-    evenness[~forest_mask] = np.nan
+    with np.errstate(divide='ignore', invalid='ignore'):
+        max_shannon = np.log(np.sum(species_layers > 0, axis=0))
+        max_shannon[max_shannon == 0] = np.nan
+        evenness = shannon / max_shannon
+        evenness[~forest_mask] = np.nan
 
-    # Create figure
-    fig, axes = plt.subplots(2, 2, figsize=(14, 12))
-    fig.suptitle('Forest Species Diversity Analysis', fontsize=16, fontweight='bold')
+    # Create figure with improved layout
+    console.print("Creating visualization...")
+    fig, axes = plt.subplots(2, 2, figsize=(16, 14))
+    fig.suptitle(f'{county_name} County, NC - Forest Species Diversity Analysis',
+                 fontsize=18, fontweight='bold', y=0.98)
 
-    # Species Richness
-    ax = axes[0, 0]
-    im = ax.imshow(richness, cmap='Spectral_r')
-    ax.set_title('Species Richness\n(count per pixel)', fontsize=12)
-    ax.axis('off')
-    plt.colorbar(im, ax=ax, label='Species Count', fraction=0.046)
+    # Define metrics to plot
+    metrics = [
+        (richness, 'Spectral_r', 'Species Richness\n(count per pixel)', 'Species Count', None, None),
+        (shannon, 'viridis', "Shannon Diversity (H')\n(information entropy)", "H'", None, None),
+        (simpson, 'plasma', 'Simpson Diversity (1-D)\n(probability measure)', '1-D', 0, 1),
+        (evenness, 'RdYlGn', "Evenness (Pielou's J)\n(distribution equality)", 'J', 0, 1),
+    ]
 
-    # Shannon Diversity
-    ax = axes[0, 1]
-    im = ax.imshow(shannon, cmap='viridis')
-    ax.set_title("Shannon Diversity (H')\n(information entropy)", fontsize=12)
-    ax.axis('off')
-    plt.colorbar(im, ax=ax, label="H'", fraction=0.046)
+    for idx, (data, cmap, title, label, vmin, vmax) in enumerate(metrics):
+        ax = axes[idx // 2, idx % 2]
 
-    # Simpson Diversity
-    ax = axes[1, 0]
-    im = ax.imshow(simpson, cmap='plasma', vmin=0, vmax=1)
-    ax.set_title('Simpson Diversity (1-D)\n(probability measure)', fontsize=12)
-    ax.axis('off')
-    plt.colorbar(im, ax=ax, label='1-D', fraction=0.046)
+        # Set extent for proper georeferencing
+        ax.set_xlim(extent[0], extent[1])
+        ax.set_ylim(extent[2], extent[3])
 
-    # Evenness
-    ax = axes[1, 1]
-    im = ax.imshow(evenness, cmap='RdYlGn', vmin=0, vmax=1)
-    ax.set_title("Evenness (Pielou's J)\n(distribution equality)", fontsize=12)
-    ax.axis('off')
-    plt.colorbar(im, ax=ax, label='J', fraction=0.046)
+        # Add basemap first (behind everything)
+        try:
+            zoom = get_basemap_zoom_level(extent)
+            add_basemap(ax, zoom=zoom, source='CartoDB', crs=crs_str, alpha=0.7)
+        except Exception as e:
+            console.print(f"[dim]Basemap skipped: {e}[/dim]")
 
-    # Footer
-    fig.text(0.5, 0.02,
-             'Data: USDA Forest Service FIA BIGMAP 2018 | All species included for valid diversity metrics',
-             ha='center', fontsize=10, style='italic')
+        # Plot raster data with transparency
+        im = ax.imshow(data, cmap=cmap, extent=extent, origin='upper',
+                      alpha=0.85, vmin=vmin, vmax=vmax, zorder=5)
 
-    plt.tight_layout()
-    plt.savefig(output_dir / "diversity_composite.png", dpi=300, bbox_inches='tight', facecolor='white')
+        # Add county boundary overlay
+        if county_gdf is not None:
+            try:
+                plot_boundaries(ax, county_gdf, color='#333333', linewidth=2.5,
+                              alpha=0.9, zorder=15)
+            except Exception as e:
+                console.print(f"[dim]Boundary overlay skipped: {e}[/dim]")
+
+        ax.set_title(title, fontsize=13, fontweight='bold', pad=10)
+        ax.set_aspect('equal')
+        ax.tick_params(left=False, bottom=False, labelleft=False, labelbottom=False)
+
+        # Add colorbar
+        cbar = plt.colorbar(im, ax=ax, label=label, fraction=0.046, pad=0.02)
+        cbar.ax.tick_params(labelsize=9)
+
+    # Footer with data attribution
+    fig.text(0.5, 0.01,
+             'Data: USDA Forest Service FIA BIGMAP 2018 | Basemap: CartoDB | All species included for valid diversity metrics',
+             ha='center', fontsize=10, style='italic', color='#555555')
+
+    plt.tight_layout(rect=[0, 0.03, 1, 0.96])
+
+    # Save figure
+    output_path = output_dir / "diversity_composite.png"
+    plt.savefig(output_path, dpi=300, bbox_inches='tight', facecolor='white')
+    console.print(f"[green]Saved: {output_path}[/green]")
     plt.close()
 
 
