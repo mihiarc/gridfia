@@ -9,6 +9,11 @@ A comprehensive case study demonstrating the full GridFIA workflow:
 - Multiple visualizations
 - Statistical analysis
 - Publication-ready outputs
+
+NOTE: This example downloads only 2 species for speed. The diversity metrics
+(species richness, Shannon, Simpson, evenness) shown are NOT ecologically valid
+with only 2 species. For true diversity analysis with all species present in
+a region, see 07_diversity_analysis.py instead.
 """
 
 from pathlib import Path
@@ -60,6 +65,8 @@ def download_wake_county_data():
 
     # Download key species for Wake County
     # Using just 2 species for faster demo
+    # WARNING: Diversity metrics calculated with only 2 species are NOT valid!
+    # For true diversity analysis, see 07_diversity_analysis.py which downloads ALL species
     species = [
         ("0131", "Loblolly Pine"),
         ("0068", "Red Maple"),

@@ -6,12 +6,13 @@ This directory contains example scripts demonstrating BigMap functionality, orga
 
 | File | Description | Time | Prerequisites |
 |------|-------------|------|---------------|
-| **01_quickstart.py** | Minimal working example - download, process, analyze one county | 2 min | None |
+| **01_quickstart.py** | Minimal working example - download, process, calculate biomass | 2 min | None |
 | **02_api_overview.py** | Complete API feature demonstration | 5 min | None |
 | **03_location_configs.py** | Working with different geographic locations | 3 min | None |
 | **04_calculations.py** | Forest calculation framework and custom metrics | 5 min | None |
 | **05_species_analysis.py** | Species proportions, groups, and diversity analysis | 10 min | None |
 | **06_wake_county_full.py** | Complete case study with publication outputs | 15 min | Internet connection |
+| **07_diversity_analysis.py** | **True species diversity** - downloads ALL species for valid metrics | 15-30 min | Internet connection |
 | **utils.py** | Shared utilities used by all examples | - | - |
 
 ## 🚀 Getting Started
@@ -21,7 +22,7 @@ This directory contains example scripts demonstrating BigMap functionality, orga
 # Run the simplest example
 python examples/01_quickstart.py
 ```
-This downloads data for Wake County, NC and calculates species richness.
+This downloads data for Wake County, NC and calculates total biomass.
 
 ### Learning Path
 
@@ -39,8 +40,11 @@ This downloads data for Wake County, NC and calculates species richness.
 **Purpose**: Get running quickly with minimal code
 - Downloads 2 species for Wake County
 - Creates a Zarr store
-- Calculates species richness
+- Calculates total biomass
 - Prints basic statistics
+
+**Note**: This example downloads only 2 species for speed. For true diversity
+metrics, see `07_diversity_analysis.py`.
 
 ### 02_api_overview.py
 **Purpose**: Demonstrate all API capabilities
@@ -86,6 +90,22 @@ This downloads data for Wake County, NC and calculates species richness.
 - Multiple visualization types
 - Publication-ready figures
 - Summary report generation
+
+### 07_diversity_analysis.py
+**Purpose**: Calculate ecologically valid diversity metrics
+- Downloads ALL species for the study area (not just a subset)
+- Shows which species are actually present in the region
+- Calculates all diversity indices:
+  - **Species Richness**: Count of species per pixel
+  - **Shannon Diversity (H')**: Information entropy measure
+  - **Simpson Diversity (1-D)**: Probability-based dominance
+  - **Evenness (Pielou's J)**: Distribution equality
+- Provides ecological interpretation of results
+- Creates publication-quality diversity maps
+
+**Why this matters**: Diversity indices are only meaningful when ALL species
+are included. The quickstart and other examples use 2-5 species for speed,
+which makes diversity metrics invalid. This example shows the correct workflow.
 
 ## 💡 Tips
 

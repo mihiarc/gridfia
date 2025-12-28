@@ -3,7 +3,11 @@
 GridFIA Quickstart Example
 
 The simplest possible example to get started with GridFIA.
-Downloads data for one county, creates a zarr store, and calculates species richness.
+Downloads data for one county, creates a zarr store, and calculates total biomass.
+
+Note: This example downloads only 2 species for speed. For true species diversity
+metrics (richness, Shannon, Simpson), you must download ALL species present in
+the study area. See 07_diversity_analysis.py for a complete diversity workflow.
 
 Takes about 2 minutes to run.
 """
@@ -45,11 +49,11 @@ def main():
     )
     print_zarr_info(Path(zarr_path))
 
-    # 3. Calculate species richness
-    print("\n3. Calculating species richness...")
+    # 3. Calculate total biomass
+    print("\n3. Calculating total biomass...")
     results = api.calculate_metrics(
         zarr_path=zarr_path,
-        calculations=["species_richness"],
+        calculations=["total_biomass"],
         output_dir="quickstart_results"
     )
 
@@ -64,6 +68,7 @@ def main():
     print(f"   Results saved to: quickstart_results/")
     print("\nNext steps:")
     print("  - Run 02_api_overview.py to see all API features")
+    print("  - Run 07_diversity_analysis.py for species richness & diversity metrics")
     print("  - Run 06_wake_county_full.py for complete analysis")
 
 
