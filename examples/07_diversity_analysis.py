@@ -263,7 +263,7 @@ def interpret_diversity_statistics(zarr_path: Path, species_stats: dict):
     console.print("  [dim]0 = One species dominates, 1 = All species equal[/dim]")
 
 
-def create_diversity_maps(zarr_path: Path, output_dir: Path):
+def create_diversity_maps(zarr_path: Path, output_dir: Path, county_name: str = "Durham"):
     """
     Create publication-quality diversity maps.
     """
@@ -305,37 +305,43 @@ def create_diversity_maps(zarr_path: Path, output_dir: Path):
     save_figure(fig, str(output_dir / "simpson_diversity_map.png"), dpi=200)
     plt.close(fig)
 
-    # Create composite figure
+    # Create composite figure with county boundary and basemap
     console.print("Creating composite diversity figure...")
-    create_composite_diversity_figure(zarr_path, output_dir)
+    create_composite_diversity_figure(zarr_path, output_dir, county_name=county_name)
 
     console.print(f"\n[green]Maps saved to {output_dir}[/green]")
 
 
-def load_wake_county_boundary(crs: str = 'EPSG:3857') -> gpd.GeoDataFrame:
+def load_county_boundary(county_name: str, state: str = 'NC', crs: str = 'EPSG:3857') -> gpd.GeoDataFrame:
     """
-    Load Wake County, NC boundary for clipping and overlay.
+    Load county boundary for clipping and overlay.
 
-    Returns GeoDataFrame with Wake County boundary in the specified CRS.
+    Args:
+        county_name: Name of the county (e.g., 'Durham', 'Wake')
+        state: State abbreviation (default 'NC')
+        crs: Coordinate reference system (default 'EPSG:3857')
+
+    Returns:
+        GeoDataFrame with county boundary in the specified CRS.
     """
     try:
-        # Load all NC counties
-        nc_counties = load_counties_for_state('NC', crs=crs)
+        # Load all counties for the state
+        counties = load_counties_for_state(state, crs=crs)
 
-        # Filter for Wake County
-        wake_county = nc_counties[nc_counties['NAME'].str.lower() == 'wake'].copy()
+        # Filter for the requested county
+        county = counties[counties['NAME'].str.lower() == county_name.lower()].copy()
 
-        if len(wake_county) == 0:
-            console.print("[yellow]Warning: Wake County not found, using bounding box[/yellow]")
+        if len(county) == 0:
+            console.print(f"[yellow]Warning: {county_name} County not found[/yellow]")
             return None
 
-        return wake_county
+        return county
     except Exception as e:
         console.print(f"[yellow]Warning: Could not load county boundary: {e}[/yellow]")
         return None
 
 
-def create_composite_diversity_figure(zarr_path: Path, output_dir: Path, county_name: str = "Wake"):
+def create_composite_diversity_figure(zarr_path: Path, output_dir: Path, county_name: str = "Durham"):
     """
     Create a 2x2 composite figure showing all diversity metrics.
 
@@ -381,8 +387,8 @@ def create_composite_diversity_figure(zarr_path: Path, output_dir: Path, county_
     console.print(f"  CRS: {crs_str}")
 
     # Load county boundary
-    console.print("Loading county boundary...")
-    county_gdf = load_wake_county_boundary(crs=crs_str)
+    console.print(f"Loading {county_name} County boundary...")
+    county_gdf = load_county_boundary(county_name, state='NC', crs=crs_str)
 
     # Use county bounds for figure extent (shows full county, not just data area)
     if county_gdf is not None:
@@ -505,17 +511,18 @@ def main():
     console.print("[yellow]This takes longer than the quickstart but produces ecologically meaningful results.[/yellow]")
     console.print()
 
-    # Setup paths
-    data_dir = Path("diversity_analysis_data")
-    results_dir = Path("diversity_analysis_results")
-    zarr_path = data_dir / "forest_all_species.zarr"
+    # Setup paths - using Durham County for full county-level analysis
+    county_name = "Durham"
+    data_dir = Path("durham_diversity_data")
+    results_dir = Path("durham_diversity_results")
+    zarr_path = data_dir / "durham_all_species.zarr"
 
     # Initialize API
     api = GridFIA()
 
-    # Get location - using Wake County NC subset
-    bbox, crs = get_location_bbox("wake_nc")
-    console.print(f"Study Area: Wake County, NC (subset)")
+    # Get location - using full Durham County
+    bbox, crs = get_location_bbox("durham_nc")
+    console.print(f"Study Area: {county_name} County, NC (full county)")
     console.print(f"Bbox: {bbox}")
     console.print(f"CRS: EPSG:{crs}")
 
@@ -551,8 +558,8 @@ def main():
     # Step 5: Interpret statistics
     interpret_diversity_statistics(zarr_path, species_stats)
 
-    # Step 6: Create maps
-    create_diversity_maps(zarr_path, results_dir / "maps")
+    # Step 6: Create maps with county boundary overlay
+    create_diversity_maps(zarr_path, results_dir / "maps", county_name=county_name)
 
     # Summary
     console.print("\n" + "=" * 60)

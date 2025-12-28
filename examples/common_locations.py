@@ -11,8 +11,15 @@ All coordinates are in WGS84 (EPSG:4326) format: (west, south, east, north)
 
 # Common counties for examples
 COUNTIES = {
+    "durham_nc": {
+        "name": "Durham County, North Carolina",
+        "bbox": (-8796055, 4281816, -8760768, 4333602),  # Full county in Web Mercator
+        "crs": "3857",  # Web Mercator EPSG code
+        "description": "Full Durham County - compact size ideal for demos (~35x52 km)",
+        "bbox_wgs84": (-79.0163, 35.8632, -78.6993, 36.2393)  # For reference
+    },
     "wake_nc": {
-        "name": "Wake County, North Carolina",
+        "name": "Wake County, North Carolina (subset)",
         "bbox": (-8765000, 4280000, -8740000, 4305000),  # Smaller area in Web Mercator
         "crs": "3857",  # Web Mercator EPSG code
         "description": "Central Wake County - smaller area for quick demos",

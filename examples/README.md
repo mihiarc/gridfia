@@ -12,7 +12,7 @@ This directory contains example scripts demonstrating BigMap functionality, orga
 | **04_calculations.py** | Forest calculation framework and custom metrics | 5 min | None |
 | **05_species_analysis.py** | Species proportions, groups, and diversity analysis | 10 min | None |
 | **06_wake_county_full.py** | Complete case study with publication outputs | 15 min | Internet connection |
-| **07_diversity_analysis.py** | **True species diversity** - downloads ALL species for valid metrics | 15-30 min | Internet connection |
+| **07_diversity_analysis.py** | **True species diversity** - downloads ALL species for Durham County, NC | 15-30 min | Internet connection |
 | **utils.py** | Shared utilities used by all examples | - | - |
 
 ## 🚀 Getting Started
