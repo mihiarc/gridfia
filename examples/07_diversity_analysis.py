@@ -352,6 +352,7 @@ def create_composite_diversity_figure(zarr_path: Path, output_dir: Path, county_
     """
     import zarr
     from rasterio.transform import Affine
+    from rasterio.features import geometry_mask
 
     console.print("Loading data and calculating metrics...")
 
@@ -391,6 +392,7 @@ def create_composite_diversity_figure(zarr_path: Path, output_dir: Path, county_
     county_gdf = load_county_boundary(county_name, state='NC', crs=crs_str)
 
     # Use county bounds for figure extent (shows full county, not just data area)
+    county_mask = None
     if county_gdf is not None:
         county_bounds = county_gdf.total_bounds  # (minx, miny, maxx, maxy)
         # Add 5% padding around county
@@ -403,6 +405,16 @@ def create_composite_diversity_figure(zarr_path: Path, output_dir: Path, county_
             county_bounds[3] + pad_y   # top
         )
         console.print(f"  Figure extent (full county): {extent}")
+
+        # Create mask from county boundary to clip raster data
+        console.print("Creating county mask for clipping...")
+        county_mask = geometry_mask(
+            county_gdf.geometry,
+            out_shape=(height, width),
+            transform=transform,
+            invert=True  # True inside county, False outside
+        )
+        console.print(f"  Pixels inside county: {np.sum(county_mask):,}")
     else:
         extent = data_extent
 
@@ -439,6 +451,14 @@ def create_composite_diversity_figure(zarr_path: Path, output_dir: Path, county_
         max_shannon[max_shannon == 0] = np.nan
         evenness = shannon / max_shannon
         evenness[~forest_mask] = np.nan
+
+    # Apply county mask to clip data to county boundary
+    if county_mask is not None:
+        console.print("Clipping data to county boundary...")
+        richness[~county_mask] = np.nan
+        shannon[~county_mask] = np.nan
+        simpson[~county_mask] = np.nan
+        evenness[~county_mask] = np.nan
 
     # Create figure with improved layout
     console.print("Creating visualization...")
