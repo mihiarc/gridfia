@@ -994,17 +994,16 @@ class GridFIA:
         # Copy arrays and attributes
         local_root.attrs.update(store.attrs)
 
-        # Copy biomass array
-        local_biomass = local_root.create_array(
-            'biomass',
-            data=store.biomass[:],
-            chunks=store.chunks,
-            dtype=store.dtype
-        )
+        # Copy biomass array - Zarr v3 doesn't allow both data and dtype
+        import numpy as np
+        biomass_data = np.array(store.biomass[:], dtype=store.dtype)
+        local_root.create_array('biomass', data=biomass_data, chunks=store.chunks)
 
-        # Copy species metadata
-        local_root.create_array('species_codes', data=store.species_codes)
-        local_root.create_array('species_names', data=store.species_names)
+        # Copy species metadata - convert to numpy arrays for Zarr v3 compatibility
+        codes_array = np.array(store.species_codes, dtype='U10')
+        names_array = np.array(store.species_names, dtype='U100')
+        local_root.create_array('species_codes', data=codes_array)
+        local_root.create_array('species_names', data=names_array)
 
         logger.info(f"Downloaded to {output_path}")
         return output_path
