@@ -828,6 +828,21 @@ class GridFIA:
         },
     }
 
+    # Cloud-hosted state datasets (full state coverage)
+    # Base URL for state data on R2
+    STATE_DATA_BASE_URL = "https://pub-da6f67cd8f9147418258ed71cc130443.r2.dev/states"
+
+    STATE_DATASETS = {
+        "RI": {
+            "name": "Rhode Island",
+            "url": "https://pub-da6f67cd8f9147418258ed71cc130443.r2.dev/states/ri/ri_forest.zarr",
+            "description": "Full Rhode Island state coverage",
+            "num_species": 326,
+            "shape": [326, 3407, 2264],
+            "approximate_size_mb": 646
+        },
+    }
+
     def list_sample_datasets(self) -> List[Dict[str, Any]]:
         """
         List available pre-hosted sample datasets.
@@ -851,6 +866,76 @@ class GridFIA:
             {"key": key, **info}
             for key, info in self.SAMPLE_DATASETS.items()
         ]
+
+    def list_state_datasets(self) -> List[Dict[str, Any]]:
+        """
+        List available pre-hosted state datasets.
+
+        These are full-state forest data hosted on cloud storage, enabling
+        streaming access to any US state's forest data without local download.
+
+        Returns
+        -------
+        List[Dict[str, Any]]
+            List of available state datasets with metadata.
+
+        Examples
+        --------
+        >>> api = GridFIA()
+        >>> states = api.list_state_datasets()
+        >>> for s in states:
+        ...     print(f"{s['state']}: {s['name']} ({s['approximate_size_mb']} MB)")
+        """
+        return [
+            {"state": key, **info}
+            for key, info in self.STATE_DATASETS.items()
+        ]
+
+    def load_state(
+        self,
+        state: str,
+        storage_options: Optional[Dict[str, Any]] = None
+    ) -> ZarrStore:
+        """
+        Load a state's forest data from cloud storage.
+
+        This enables streaming access to full-state forest data. Only the chunks
+        you access are downloaded, making it efficient to analyze specific regions
+        within a state.
+
+        Parameters
+        ----------
+        state : str
+            State abbreviation (e.g., "NC", "CA", "RI").
+        storage_options : Dict[str, Any], optional
+            Options passed to the filesystem backend.
+
+        Returns
+        -------
+        ZarrStore
+            A ZarrStore instance for streaming access to the state data.
+
+        Raises
+        ------
+        ValueError
+            If the state is not available in cloud storage.
+
+        Examples
+        --------
+        >>> api = GridFIA()
+        >>> store = api.load_state("RI")
+        >>> print(f"Shape: {store.shape}")
+        >>> print(f"Species: {store.num_species}")
+        """
+        state_upper = state.upper()
+        if state_upper not in self.STATE_DATASETS:
+            available = list(self.STATE_DATASETS.keys())
+            raise ValueError(
+                f"State '{state}' not available. Available states: {available}"
+            )
+
+        url = self.STATE_DATASETS[state_upper]["url"]
+        return self.load_from_cloud(url=url, storage_options=storage_options)
 
     def load_from_cloud(
         self,
