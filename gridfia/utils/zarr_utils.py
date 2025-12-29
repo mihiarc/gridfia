@@ -23,6 +23,12 @@ import xarray as xr
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeRemainingColumn
 
+try:
+    import fsspec
+    HAS_FSSPEC = True
+except ImportError:
+    HAS_FSSPEC = False
+
 from ..exceptions import InvalidZarrStructure, SpeciesNotFound
 
 console = Console()
@@ -175,6 +181,92 @@ class ZarrStore:
                     f"Cannot open as Zarr group: {e}",
                     zarr_path=str(path)
                 ) from e
+
+    @classmethod
+    def from_url(
+        cls,
+        url: str,
+        storage_options: Optional[Dict[str, Any]] = None
+    ) -> 'ZarrStore':
+        """
+        Create a ZarrStore from a remote URL (HTTP, S3, R2, GCS).
+
+        This enables streaming access to cloud-hosted Zarr stores. Only the
+        chunks needed for your analysis are downloaded, making it efficient
+        to work with large datasets.
+
+        Parameters
+        ----------
+        url : str
+            URL to the Zarr store. Supported protocols:
+            - HTTP/HTTPS: "https://example.com/data.zarr"
+            - S3: "s3://bucket/data.zarr"
+            - R2: "https://account.r2.cloudflarestorage.com/bucket/data.zarr"
+            - GCS: "gs://bucket/data.zarr"
+        storage_options : Dict[str, Any], optional
+            Options passed to fsspec filesystem. Common options:
+            - For S3: {'anon': True} for public buckets
+            - For HTTP: {'block_size': 0} for streaming
+
+        Returns
+        -------
+        ZarrStore
+            Initialized ZarrStore instance for streaming access.
+
+        Raises
+        ------
+        ImportError
+            If fsspec is not installed.
+        InvalidZarrStructure
+            If the URL does not point to a valid GridFIA Zarr store.
+
+        Examples
+        --------
+        >>> # Open from public HTTP URL (Cloudflare R2)
+        >>> store = ZarrStore.from_url(
+        ...     "https://data.gridfia.org/samples/durham_nc.zarr"
+        ... )
+        >>> print(f"Species: {store.num_species}")
+
+        >>> # Open from S3 with anonymous access
+        >>> store = ZarrStore.from_url(
+        ...     "s3://gridfia-data/us_forest.zarr",
+        ...     storage_options={'anon': True}
+        ... )
+        >>> # Only downloads chunks for your bbox when you access data
+        >>> subset = store.biomass[:, 1000:2000, 1000:2000]
+
+        Notes
+        -----
+        Remote access uses lazy loading - metadata is fetched immediately but
+        actual data chunks are only downloaded when accessed. This makes it
+        efficient to work with subsets of large datasets.
+
+        For best performance with HTTP sources, ensure the Zarr store has
+        consolidated metadata (.zmetadata file at the root).
+        """
+        if not HAS_FSSPEC:
+            raise ImportError(
+                "fsspec is required for remote Zarr access. "
+                "Install with: pip install fsspec aiohttp"
+            )
+
+        storage_options = storage_options or {}
+
+        try:
+            # Create filesystem mapper for the URL
+            fs_map = fsspec.get_mapper(url, **storage_options)
+
+            # Open as Zarr group with consolidated metadata for efficiency
+            root = zarr.open_group(fs_map, mode='r')
+
+            return cls(root, store=None, path=None)
+
+        except Exception as e:
+            raise InvalidZarrStructure(
+                f"Cannot open remote Zarr store: {e}",
+                zarr_path=url
+            ) from e
 
     @classmethod
     @contextmanager

@@ -24,7 +24,7 @@ from .config import GridFIASettings, CalculationConfig, load_settings
 from .core.processors.forest_metrics import ForestMetricsProcessor
 from .external.fia_client import BigMapRestClient
 from .utils.location_config import LocationConfig
-from .utils.zarr_utils import create_zarr_from_geotiffs, validate_zarr_store
+from .utils.zarr_utils import create_zarr_from_geotiffs, validate_zarr_store, ZarrStore
 from .visualization.mapper import ZarrMapper
 from .core.calculations import registry
 from .exceptions import (
@@ -797,17 +797,17 @@ class GridFIA:
     def validate_zarr(self, zarr_path: Union[str, Path]) -> Dict[str, Any]:
         """
         Validate a Zarr store and return metadata.
-        
+
         Parameters
         ----------
         zarr_path : str or Path
             Path to Zarr store.
-            
+
         Returns
         -------
         Dict[str, Any]
             Zarr store metadata including shape, species, chunks, etc.
-            
+
         Examples
         --------
         >>> api = GridFIA()
@@ -816,3 +816,202 @@ class GridFIA:
         >>> print(f"Species: {info['num_species']}")
         """
         return validate_zarr_store(Path(zarr_path))
+
+    # Pre-hosted sample datasets for quick demos
+    SAMPLE_DATASETS = {
+        "durham_nc": {
+            "name": "Durham County, North Carolina",
+            "url": "https://pub-gridfia.r2.dev/samples/durham_nc.zarr",
+            "description": "Full Durham County with all species (~263 MB)",
+            "num_species": 50,
+            "approximate_size_mb": 263
+        },
+        "wake_nc": {
+            "name": "Wake County, North Carolina (subset)",
+            "url": "https://pub-gridfia.r2.dev/samples/wake_nc.zarr",
+            "description": "Central Wake County subset (~150 MB)",
+            "num_species": 45,
+            "approximate_size_mb": 150
+        }
+    }
+
+    def list_sample_datasets(self) -> List[Dict[str, Any]]:
+        """
+        List available pre-hosted sample datasets.
+
+        These datasets are hosted on cloud storage and can be loaded
+        instantly without downloading from the FIA API.
+
+        Returns
+        -------
+        List[Dict[str, Any]]
+            List of available sample datasets with metadata.
+
+        Examples
+        --------
+        >>> api = GridFIA()
+        >>> samples = api.list_sample_datasets()
+        >>> for s in samples:
+        ...     print(f"{s['key']}: {s['name']} ({s['approximate_size_mb']} MB)")
+        """
+        return [
+            {"key": key, **info}
+            for key, info in self.SAMPLE_DATASETS.items()
+        ]
+
+    def load_from_cloud(
+        self,
+        url: Optional[str] = None,
+        sample: Optional[str] = None,
+        storage_options: Optional[Dict[str, Any]] = None
+    ) -> ZarrStore:
+        """
+        Load a Zarr store from cloud storage for streaming access.
+
+        This enables efficient access to cloud-hosted forest data. Only the
+        chunks you access are downloaded, making it efficient to work with
+        subsets of large datasets (e.g., one county from a US-wide store).
+
+        Parameters
+        ----------
+        url : str, optional
+            Direct URL to a Zarr store. Supports HTTP, S3, R2, GCS.
+        sample : str, optional
+            Name of a pre-hosted sample dataset (e.g., "durham_nc").
+            See list_sample_datasets() for available options.
+        storage_options : Dict[str, Any], optional
+            Options passed to the filesystem backend.
+
+        Returns
+        -------
+        ZarrStore
+            A ZarrStore instance for streaming access to the data.
+
+        Raises
+        ------
+        ValueError
+            If neither url nor sample is provided, or if sample is unknown.
+        ImportError
+            If fsspec is not installed.
+
+        Examples
+        --------
+        >>> api = GridFIA()
+        >>>
+        >>> # Load a pre-hosted sample dataset
+        >>> store = api.load_from_cloud(sample="durham_nc")
+        >>> print(f"Species: {store.num_species}")
+        >>> print(f"Shape: {store.shape}")
+        >>>
+        >>> # Load from custom URL
+        >>> store = api.load_from_cloud(
+        ...     url="https://your-bucket.r2.dev/forest_data.zarr"
+        ... )
+        >>>
+        >>> # Access data - only downloads needed chunks
+        >>> biomass = store.biomass[:, 100:200, 100:200]  # Small subset
+        >>>
+        >>> # Use with calculations (works like local Zarr)
+        >>> # Note: For calculations, you may want to download to local first
+        >>> # for better performance with large operations
+
+        Notes
+        -----
+        For best performance:
+        - Use pre-hosted samples for demos and tutorials
+        - For production analysis, consider downloading to local Zarr first
+        - Remote stores work best for exploratory analysis of subsets
+        """
+        if sample:
+            if sample not in self.SAMPLE_DATASETS:
+                available = list(self.SAMPLE_DATASETS.keys())
+                raise ValueError(
+                    f"Unknown sample dataset: '{sample}'. "
+                    f"Available: {available}"
+                )
+            url = self.SAMPLE_DATASETS[sample]["url"]
+            logger.info(f"Loading sample dataset: {self.SAMPLE_DATASETS[sample]['name']}")
+
+        if not url:
+            raise ValueError(
+                "Must provide either 'url' or 'sample' parameter. "
+                "Use list_sample_datasets() to see available samples."
+            )
+
+        logger.info(f"Opening cloud Zarr store: {url}")
+        return ZarrStore.from_url(url, storage_options=storage_options)
+
+    def download_sample(
+        self,
+        sample: str,
+        output_path: Union[str, Path],
+        show_progress: bool = True
+    ) -> Path:
+        """
+        Download a sample dataset to local storage.
+
+        Use this when you need faster repeated access or want to run
+        calculations on the full dataset.
+
+        Parameters
+        ----------
+        sample : str
+            Name of the sample dataset (e.g., "durham_nc").
+        output_path : str or Path
+            Local path to save the Zarr store.
+        show_progress : bool, default=True
+            Whether to show download progress.
+
+        Returns
+        -------
+        Path
+            Path to the downloaded Zarr store.
+
+        Examples
+        --------
+        >>> api = GridFIA()
+        >>> local_path = api.download_sample("durham_nc", "data/durham.zarr")
+        >>> results = api.calculate_metrics(local_path)
+        """
+        import shutil
+        import urllib.request
+
+        if sample not in self.SAMPLE_DATASETS:
+            available = list(self.SAMPLE_DATASETS.keys())
+            raise ValueError(
+                f"Unknown sample dataset: '{sample}'. Available: {available}"
+            )
+
+        output_path = Path(output_path)
+        dataset_info = self.SAMPLE_DATASETS[sample]
+
+        logger.info(f"Downloading {dataset_info['name']} to {output_path}")
+
+        # For now, use the cloud loading and copy approach
+        # A more efficient implementation would use streaming download
+        store = self.load_from_cloud(sample=sample)
+
+        # Copy to local zarr
+        output_path.mkdir(parents=True, exist_ok=True)
+
+        import zarr
+        local_store = zarr.storage.LocalStore(output_path)
+        local_root = zarr.open_group(store=local_store, mode='w')
+
+        # Copy arrays and attributes
+        local_root.attrs.update(store.attrs)
+
+        # Copy biomass array
+        local_biomass = local_root.create_array(
+            'biomass',
+            data=store.biomass[:],
+            chunks=store.chunks,
+            dtype=store.dtype
+        )
+
+        # Copy species metadata
+        local_root.create_array('species_codes', data=store.species_codes)
+        local_root.create_array('species_names', data=store.species_names)
+
+        logger.info(f"Downloaded to {output_path}")
+        return output_path
