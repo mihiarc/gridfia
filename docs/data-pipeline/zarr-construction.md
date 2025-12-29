@@ -434,7 +434,7 @@ results = processor.calculate_metrics([
 
 ## See Also
 
-- [REST API Download](rest-api-download.md) - Fetching species data
-- [Forest Metrics](../analysis/forest-metrics.md) - Using zarr for analysis
-- [CLI Commands](../cli/commands.md) - Command-line tools
-- [Zarr Documentation](https://zarr.readthedocs.io/) - Official zarr docs
+- [REST API Download](rest-api-download.md) - Fetching species data from BIGMAP
+- [Calculations](../api/calculations.md) - Forest metrics calculations
+- [GridFIA API Reference](../api/gridfia.md) - Main API class documentation
+- [Zarr Documentation](https://zarr.readthedocs.io/) - Official Zarr docs

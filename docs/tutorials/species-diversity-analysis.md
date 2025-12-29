@@ -1,288 +1,255 @@
 # Tutorial: Species Diversity Analysis
 
-This tutorial demonstrates how to perform a comprehensive species diversity analysis using GridFIA.
+This tutorial demonstrates how to perform a comprehensive species diversity analysis using GridFIA and BIGMAP data.
 
 ## Scientific Background
 
 Species diversity is a fundamental measure of ecosystem health and resilience. This tutorial covers three key diversity metrics:
 
 ### Shannon Diversity Index (H')
+
 The Shannon diversity index (Shannon, 1948) measures both species richness and evenness:
 
-**H' = -Σ(pi × ln(pi))**
+$$H' = -\sum_{i=1}^{S} p_i \ln(p_i)$$
 
-Where pi is the proportion of species i. Higher values indicate greater diversity.
+Where $p_i$ is the proportion of species $i$. Higher values indicate greater diversity.
+
 - Values typically range from 0 to 5
 - H' = 0 indicates a monoculture
 - H' > 3 indicates high diversity
 
 ### Simpson Diversity Index
+
 The Simpson index (Simpson, 1949) has multiple formulations:
 
-**Simpson's Dominance (D)**: Σ(pi²)
+**Simpson's Dominance (D)**: $\sum p_i^2$
+
 - Probability that two individuals belong to the same species
 - Values range from 0 to 1 (lower = more diverse)
 
-**Simpson's Diversity (1-D)**: 1 - Σ(pi²)
+**Simpson's Diversity (1-D)**: $1 - \sum p_i^2$
+
 - Probability that two individuals belong to different species
 - Values range from 0 to 1 (higher = more diverse)
 
-**Inverse Simpson (1/D)**: 1/Σ(pi²)
-- Effective number of equally abundant species
-- Values range from 1 to S (number of species)
-
-Note: The GridFIA implementation calculates dominance (D) by default, with options for diversity (1-D) or inverse (1/D) via the `inverse` parameter.
+GridFIA calculates Simpson's Diversity (1-D) by default.
 
 ### Pielou's Evenness (J)
+
 Pielou's evenness (Pielou, 1966) measures how evenly species are distributed:
 
-**J = H' / ln(S)**
+$$J = \frac{H'}{\ln(S)}$$
 
 Where S is the number of species.
+
 - Values range from 0 to 1
 - J = 1 indicates perfect evenness
 - J < 0.5 suggests dominance by few species
 
 ### When to Use Each Index
-- **Shannon**: General biodiversity assessment, sensitive to rare species
-- **Simpson**: When dominance patterns are important
-- **Species Richness**: Simple count when presence/absence is sufficient
-- **Evenness**: To assess community balance independent of richness
+
+| Index | Best For |
+|-------|----------|
+| **Shannon** | General biodiversity assessment, sensitive to rare species |
+| **Simpson** | When dominance patterns are important |
+| **Species Richness** | Simple count when presence/absence is sufficient |
+| **Evenness** | Assessing community balance independent of richness |
 
 ## Overview
 
-We'll analyze forest species diversity across North Carolina by:
-1. Downloading species biomass data
-2. Creating a zarr array for efficient processing
+We'll analyze forest species diversity by:
+
+1. Downloading species biomass data from BIGMAP
+2. Creating a Zarr array for efficient processing
 3. Calculating diversity metrics
-4. Visualizing and interpreting the results
+4. Visualizing and interpreting results
 
 ## Prerequisites
 
-- GridFIA installed (`pip install gridfia` or `uv pip install gridfia`)
+- GridFIA installed (`pip install gridfia`)
 - Basic Python knowledge
-- ~5GB disk space for data
+- ~2GB disk space for data
 
-## Example Code
-
-Complete working examples are available in the `examples/` directory:
-- **Quick start**: See `examples/01_quickstart.py` for a minimal example
-- **Species analysis**: See `examples/05_species_analysis.py` for comprehensive species analysis
-- **Full workflow**: See `examples/06_wake_county_full.py` for complete case study
-
-## Step 1: Download Species Data
-
-First, let's see what species are available:
-
-```bash
-gridfia list-species
-```
-
-For this tutorial, we'll download common NC tree species:
-
-```bash
-# Create data directory
-mkdir -p tutorial_data
-
-# Download species data
-gridfia download \
-    --species 0131 \  # Loblolly pine
-    --species 0068 \  # Eastern white pine  
-    --species 0110 \  # Shortleaf pine
-    --species 0316 \  # Eastern redcedar
-    --species 0611 \  # Sweetgum
-    --species 0802 \  # White oak
-    --species 0833 \  # Northern red oak
-    --output tutorial_data/
-```
-
-## Step 2: Create Zarr Array
-
-Convert the downloaded GeoTIFF files to a zarr array.
-
-**See `examples/utils.py`** for the reusable `create_zarr_from_rasters()` function.
+## Step 1: Initialize and Explore
 
 ```python
-# Using the shared utility function
-from examples.utils import create_zarr_from_rasters
-from pathlib import Path
+from gridfia import GridFIA
 
-# Create the zarr array
-zarr_path = create_zarr_from_rasters(
-    raster_dir=Path("tutorial_data/"),
-    output_path=Path("tutorial_data/nc_biomass.zarr"),
-    chunk_size=(1, 1000, 1000)
-)
+# Initialize the API
+api = GridFIA()
 
-print(f"Created zarr array: {zarr_path}")
+# List available species from BIGMAP
+species = api.list_species()
+print(f"BIGMAP provides data for {len(species)} tree species")
+
+# Display some common species
+for s in species[:10]:
+    print(f"  {s.species_code}: {s.common_name}")
 ```
 
-Or use the GridFIA API directly:
+## Step 2: Download Species Data
+
+Download biomass rasters for common North Carolina tree species:
+
 ```python
 from gridfia import GridFIA
 
 api = GridFIA()
-zarr_path = api.create_zarr(
-    input_dir="tutorial_data/",
-    output_path="tutorial_data/nc_biomass.zarr"
-)
-```
 
-## Step 3: Configure Diversity Analysis
-
-Create a configuration file for diversity analysis:
-
-```yaml
-# diversity_config.yaml
-app_name: NC Forest Diversity Analysis
-output_dir: tutorial_results/diversity
-
-calculations:
-  # Species count per pixel
-  - name: species_richness
-    enabled: true
-    parameters:
-      biomass_threshold: 0.5  # Minimum Mg/ha to count as present
-    output_format: geotiff
-    
-  # Shannon diversity index
-  - name: shannon_diversity
-    enabled: true
-    parameters:
-      base: e  # Natural logarithm
-    output_format: geotiff
-    
-  # Simpson diversity index  
-  - name: simpson_diversity
-    enabled: true
-    output_format: geotiff
-    
-  # Species evenness
-  - name: evenness
-    enabled: true
-    output_format: geotiff
-    
-  # Dominant species map
-  - name: dominant_species
-    enabled: true
-    output_format: geotiff
-    
-  # Total biomass for context
-  - name: total_biomass
-    enabled: true
-    output_format: geotiff
-```
-
-## Step 4: Run Diversity Calculations
-
-Execute the diversity analysis:
-
-```bash
-gridfia calculate tutorial_data/nc_biomass.zarr --config diversity_config.yaml
-```
-
-**See `examples/04_calculations.py`** for detailed calculation examples and custom metrics.
-
-## Step 5: Visualize Results
-
-Create a Python script to visualize the diversity maps:
-
-```python
-# visualize_diversity.py
-import rasterio
-import numpy as np
-import matplotlib.pyplot as plt
-from pathlib import Path
-
-# Set up plot style
-plt.style.use('seaborn-v0_8-darkgrid')
-
-# Load results
-results_dir = Path("tutorial_results/diversity")
-
-fig, axes = plt.subplots(2, 3, figsize=(18, 12))
-axes = axes.flatten()
-
-# Define visualization settings
-plots = [
-    ("species_richness.tif", "Species Richness", "viridis", "Number of Species"),
-    ("shannon_diversity.tif", "Shannon Diversity Index", "plasma", "H'"),
-    ("simpson_diversity.tif", "Simpson Diversity Index", "cividis", "1-D"),
-    ("evenness.tif", "Species Evenness", "RdYlBu", "Pielou's J"),
-    ("dominant_species.tif", "Dominant Species", "tab20", "Species ID"),
-    ("total_biomass.tif", "Total Biomass", "YlGn", "Mg/ha")
+# Define species of interest
+species_codes = [
+    "0131",  # Loblolly pine
+    "0068",  # Eastern white pine
+    "0110",  # Shortleaf pine
+    "0316",  # Eastern redcedar
+    "0611",  # Sweetgum
+    "0802",  # White oak
+    "0833",  # Northern red oak
 ]
 
-for ax, (filename, title, cmap, label) in zip(axes, plots):
-    filepath = results_dir / filename
-    
-    with rasterio.open(filepath) as src:
-        data = src.read(1)
-        
-        # Handle no-data values
-        data = np.ma.masked_where(data == src.nodata, data)
-        
-        # Plot
-        im = ax.imshow(data, cmap=cmap)
-        ax.set_title(title, fontsize=14, fontweight='bold')
-        ax.axis('off')
-        
-        # Colorbar
-        cbar = plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
-        cbar.set_label(label, rotation=270, labelpad=20)
+# Download for Wake County, NC
+files = api.download_species(
+    state="North Carolina",
+    county="Wake",
+    species_codes=species_codes,
+    output_dir="tutorial_data"
+)
 
-plt.suptitle('North Carolina Forest Diversity Analysis', fontsize=16, fontweight='bold')
-plt.tight_layout()
-plt.savefig('nc_forest_diversity.png', dpi=300, bbox_inches='tight')
-plt.show()
-
-# Print summary statistics
-print("\nDiversity Statistics Summary:")
-print("-" * 50)
-
-with rasterio.open(results_dir / "species_richness.tif") as src:
-    richness = src.read(1)
-    valid_richness = richness[richness > 0]
-    print(f"Species Richness:")
-    print(f"  Mean: {valid_richness.mean():.2f} species")
-    print(f"  Max: {valid_richness.max()} species")
-    print(f"  Min: {valid_richness.min()} species")
-
-with rasterio.open(results_dir / "shannon_diversity.tif") as src:
-    shannon = src.read(1)
-    valid_shannon = shannon[shannon > 0]
-    print(f"\nShannon Diversity:")
-    print(f"  Mean: {valid_shannon.mean():.3f}")
-    print(f"  Max: {valid_shannon.max():.3f}")
-    print(f"  Min: {valid_shannon.min():.3f}")
+print(f"Downloaded {len(files)} species files")
+for f in files:
+    print(f"  {f}")
 ```
 
-Run the visualization:
-```bash
-uv run python visualize_diversity.py
-```
+## Step 3: Create Zarr Store
 
-## Step 6: Advanced Analysis
-
-Let's identify diversity hotspots:
+Convert downloaded GeoTIFF files to cloud-optimized Zarr format:
 
 ```python
-# diversity_hotspots.py
+from gridfia import GridFIA
+
+api = GridFIA()
+
+# Create Zarr store from downloaded rasters
+zarr_path = api.create_zarr(
+    input_dir="tutorial_data",
+    output_path="tutorial_data/wake_forest.zarr",
+    chunk_size=(1, 1000, 1000)
+)
+
+# Validate the store
+info = api.validate_zarr(zarr_path)
+print(f"Created Zarr store:")
+print(f"  Species: {info['num_species']}")
+print(f"  Shape: {info['shape']}")
+print(f"  CRS: {info['crs']}")
+```
+
+## Step 4: Calculate Diversity Metrics
+
+Run all diversity calculations:
+
+```python
+from gridfia import GridFIA
+
+api = GridFIA()
+
+# List available calculations
+print("Available calculations:")
+for calc in api.list_calculations():
+    print(f"  - {calc}")
+
+# Calculate diversity metrics
+results = api.calculate_metrics(
+    zarr_path="tutorial_data/wake_forest.zarr",
+    calculations=[
+        "species_richness",
+        "shannon_diversity",
+        "simpson_diversity",
+        "evenness",
+        "dominant_species",
+        "total_biomass"
+    ],
+    output_dir="tutorial_results"
+)
+
+# Display results
+print("\nCalculation results:")
+for result in results:
+    print(f"  {result.name}: {result.output_path}")
+```
+
+## Step 5: Create Maps
+
+Generate publication-ready visualizations:
+
+```python
+from gridfia import GridFIA
+
+api = GridFIA()
+
+# Create diversity maps
+maps = api.create_maps(
+    zarr_path="tutorial_data/wake_forest.zarr",
+    map_type="diversity",
+    output_dir="tutorial_results/maps",
+    dpi=300
+)
+
+print(f"Created {len(maps)} map files")
+```
+
+## Step 6: Analyze Results
+
+Load and analyze the calculated metrics:
+
+```python
+import rasterio
+import numpy as np
+from pathlib import Path
+
+results_dir = Path("tutorial_results")
+
+# Load species richness
+with rasterio.open(results_dir / "species_richness.tif") as src:
+    richness = src.read(1)
+    valid = richness[richness > 0]
+
+print("Species Richness Statistics:")
+print(f"  Mean: {valid.mean():.2f} species")
+print(f"  Max: {valid.max()} species")
+print(f"  Min: {valid.min()} species")
+
+# Load Shannon diversity
+with rasterio.open(results_dir / "shannon_diversity.tif") as src:
+    shannon = src.read(1)
+    valid = shannon[shannon > 0]
+
+print("\nShannon Diversity Statistics:")
+print(f"  Mean: {valid.mean():.3f}")
+print(f"  Max: {valid.max():.3f}")
+print(f"  Min: {valid.min():.3f}")
+```
+
+## Step 7: Identify Diversity Hotspots
+
+Find areas of exceptional biodiversity:
+
+```python
 import rasterio
 import numpy as np
 from scipy import ndimage
-import matplotlib.pyplot as plt
 
-# Load diversity indices
-with rasterio.open("tutorial_results/diversity/shannon_diversity.tif") as src:
+# Load Shannon diversity
+with rasterio.open("tutorial_results/shannon_diversity.tif") as src:
     shannon = src.read(1)
     transform = src.transform
 
-# Define hotspots as areas with high diversity
-threshold = np.percentile(shannon[shannon > 0], 90)  # Top 10%
+# Define hotspots as top 10% diversity areas
+valid_shannon = shannon[shannon > 0]
+threshold = np.percentile(valid_shannon, 90)
 hotspots = shannon > threshold
 
-# Apply morphological operations to clean up
+# Clean up with morphological operations
 hotspots = ndimage.binary_opening(hotspots, iterations=2)
 hotspots = ndimage.binary_closing(hotspots, iterations=2)
 
@@ -290,107 +257,159 @@ hotspots = ndimage.binary_closing(hotspots, iterations=2)
 labeled, num_features = ndimage.label(hotspots)
 print(f"Found {num_features} diversity hotspots")
 
-# Calculate hotspot statistics
-hotspot_sizes = []
-for i in range(1, num_features + 1):
-    size = np.sum(labeled == i)
-    hotspot_sizes.append(size * 30 * 30 / 10000)  # Convert to hectares
+# Calculate hotspot areas (30m pixels)
+pixel_area_ha = 30 * 30 / 10000  # hectares per pixel
+for i in range(1, min(num_features + 1, 6)):  # Top 5
+    size = np.sum(labeled == i) * pixel_area_ha
+    print(f"  Hotspot {i}: {size:.1f} hectares")
+```
 
-# Visualize
-fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+## Complete Workflow Example
 
-# Shannon diversity map
-im1 = ax1.imshow(shannon, cmap='viridis')
-ax1.set_title('Shannon Diversity Index')
-plt.colorbar(im1, ax=ax1)
+Here's the entire analysis in one script:
 
-# Hotspots overlay
-ax2.imshow(shannon, cmap='gray', alpha=0.5)
-ax2.imshow(np.ma.masked_where(labeled == 0, labeled), cmap='hot')
-ax2.set_title(f'Diversity Hotspots (Top 10%, n={num_features})')
+```python
+"""
+Complete species diversity analysis workflow using GridFIA.
+"""
+from gridfia import GridFIA
+from pathlib import Path
 
-plt.tight_layout()
-plt.savefig('diversity_hotspots.png', dpi=300)
-plt.show()
+def main():
+    # Initialize API
+    api = GridFIA()
 
-# Print statistics
-print(f"\nHotspot Statistics:")
-print(f"Total area: {sum(hotspot_sizes):.1f} hectares")
-print(f"Average size: {np.mean(hotspot_sizes):.1f} hectares")
-print(f"Largest hotspot: {max(hotspot_sizes):.1f} hectares")
+    # Configuration
+    state = "North Carolina"
+    county = "Wake"
+    species_codes = ["0131", "0068", "0110", "0316", "0611", "0802", "0833"]
+    output_dir = Path("diversity_analysis")
+    output_dir.mkdir(exist_ok=True)
+
+    # Step 1: Download BIGMAP data
+    print("Downloading species data from BIGMAP...")
+    files = api.download_species(
+        state=state,
+        county=county,
+        species_codes=species_codes,
+        output_dir=output_dir / "downloads"
+    )
+    print(f"  Downloaded {len(files)} files")
+
+    # Step 2: Create Zarr store
+    print("\nCreating Zarr store...")
+    zarr_path = api.create_zarr(
+        input_dir=output_dir / "downloads",
+        output_path=output_dir / "forest.zarr"
+    )
+
+    # Validate
+    info = api.validate_zarr(zarr_path)
+    print(f"  Species: {info['num_species']}")
+    print(f"  Shape: {info['shape']}")
+
+    # Step 3: Calculate metrics
+    print("\nCalculating diversity metrics...")
+    results = api.calculate_metrics(
+        zarr_path=zarr_path,
+        calculations=[
+            "species_richness",
+            "shannon_diversity",
+            "simpson_diversity",
+            "evenness",
+            "total_biomass"
+        ],
+        output_dir=output_dir / "metrics"
+    )
+
+    for r in results:
+        print(f"  {r.name}: completed")
+
+    # Step 4: Create maps
+    print("\nGenerating maps...")
+    maps = api.create_maps(
+        zarr_path=zarr_path,
+        map_type="diversity",
+        output_dir=output_dir / "maps"
+    )
+    print(f"  Created {len(maps)} maps")
+
+    print(f"\nAnalysis complete! Results in: {output_dir}")
+
+if __name__ == "__main__":
+    main()
 ```
 
 ## Interpreting Results
 
-### Understanding Diversity Values
+### Species Richness (S)
 
-**Species Richness (S)**
-- **Low (1-3)**: Monoculture or degraded forest
-- **Medium (4-7)**: Typical managed forest
-- **High (8+)**: Mature, mixed forest ecosystem
+| Value | Interpretation |
+|-------|----------------|
+| 1-3 | Monoculture or degraded forest |
+| 4-7 | Typical managed forest |
+| 8+ | Mature, mixed forest ecosystem |
 
-**Shannon Diversity (H')**
-- **< 1.0**: Very low diversity, dominated by 1-2 species
-- **1.0-2.0**: Low to moderate diversity
-- **2.0-3.0**: Moderate to high diversity, healthy forest
-- **> 3.0**: Very high diversity, exceptional biodiversity
+### Shannon Diversity (H')
 
-**Simpson Index**
-- **Dominance (D < 0.5)**: High diversity
-- **Dominance (D > 0.7)**: Low diversity, few species dominate
-- **Diversity (1-D > 0.5)**: Good diversity
-- **Inverse (1/D > 5)**: High effective species number
+| Value | Interpretation |
+|-------|----------------|
+| < 1.0 | Very low diversity, 1-2 species dominate |
+| 1.0-2.0 | Low to moderate diversity |
+| 2.0-3.0 | Moderate to high diversity, healthy forest |
+| > 3.0 | Very high diversity, exceptional biodiversity |
 
-**Evenness (J)**
-- **< 0.5**: Strong dominance by few species
-- **0.5-0.7**: Moderate evenness
-- **> 0.7**: High evenness, balanced community
+### Simpson Index (1-D)
 
-### Ecological Implications
+| Value | Interpretation |
+|-------|----------------|
+| < 0.5 | Low diversity, few species dominate |
+| 0.5-0.7 | Moderate diversity |
+| > 0.7 | High diversity |
 
-High diversity areas often indicate:
+### Evenness (J)
+
+| Value | Interpretation |
+|-------|----------------|
+| < 0.5 | Strong dominance by few species |
+| 0.5-0.7 | Moderate evenness |
+| > 0.7 | High evenness, balanced community |
+
+## Ecological Implications
+
+**High diversity areas** often indicate:
+
 - Mature forest stands
 - Ecotone transitions between forest types
 - Areas with varied topography or hydrology
 - Minimal human disturbance
 
-Low diversity areas may indicate:
+**Low diversity areas** may indicate:
+
 - Recent disturbance (fire, harvest, disease)
 - Plantations or managed stands
 - Environmental stress (drought, poor soils)
 - Early successional stages
 
-## Summary
+## Example Scripts
 
-In this tutorial, we:
-1. Downloaded species biomass data from the FIA BIGMAP REST API
-2. Created an efficient zarr array for processing
-3. Calculated multiple diversity metrics (richness, Shannon, Simpson, evenness)
-4. Visualized the results as maps
-5. Identified diversity hotspots
-6. Learned to interpret diversity metrics in ecological context
+Complete working examples are in the `examples/` directory:
 
-## Complete Examples
-
-For complete, runnable code:
-- **`examples/01_quickstart.py`** - Minimal working example
-- **`examples/05_species_analysis.py`** - Comprehensive species and diversity analysis
-- **`examples/06_wake_county_full.py`** - Full workflow with publication outputs
+| File | Description |
+|------|-------------|
+| `01_quickstart.py` | Minimal working example |
+| `04_calculations.py` | Custom calculation examples |
+| `05_species_analysis.py` | Comprehensive species analysis |
+| `06_wake_county_full.py` | Full workflow with publication outputs |
+| `07_diversity_analysis.py` | Diversity-focused analysis |
 
 ## Next Steps
 
 - Try different biomass thresholds for species presence
 - Add more species to the analysis
-- Compare diversity patterns with environmental variables
-- Export results for use in GIS software
-- Analyze temporal changes if multiple years are available
-
-## Tips
-
-1. **Memory Management**: The chunked processing handles large datasets efficiently
-2. **Custom Calculations**: See `examples/04_calculations.py` for custom metrics
-3. **Output Formats**: Use NetCDF for xarray integration, Zarr for large outputs
-4. **Visualization**: Export to GeoTIFF for use in QGIS or ArcGIS
+- Compare diversity patterns across counties
+- Export results to GIS software (QGIS, ArcGIS)
+- Analyze correlation with environmental variables
 
 ## References
 
@@ -398,6 +417,6 @@ For complete, runnable code:
 - Simpson, E.H. (1949). Measurement of diversity. *Nature*, 163(4148), 688.
 - Pielou, E.C. (1966). The measurement of diversity in different types of biological collections. *Journal of Theoretical Biology*, 13, 131-144.
 - Magurran, A.E. (2004). *Measuring biological diversity*. Blackwell Publishing.
-- USDA Forest Service. (2018). *BIGMAP 2018 Forest Biomass Dataset*. Forest Inventory and Analysis Program.
+- Wilson, B.T., Knight, J.F., and McRoberts, R.E. (2018). Harmonic regression of Landsat time series for modeling attributes from national forest inventory data. *ISPRS Journal of Photogrammetry and Remote Sensing*, 137: 29-46.
 
-For complete citations and how to cite GridFIA in your work, see [CITATIONS.md](../../CITATIONS.md).
+For complete citations and how to cite GridFIA in your work, see [CITATIONS.md](https://github.com/mihiarc/gridfia/blob/main/CITATIONS.md) in the repository.

@@ -1,6 +1,6 @@
-# BigMap Configuration Files
+# GridFIA Configuration Files
 
-This directory contains configuration files for various BigMap analyses and operations.
+This directory contains configuration files for various GridFIA analyses and operations.
 
 ## Configuration Naming Conventions
 
@@ -35,7 +35,7 @@ cfg/
 - **paths_config.yaml** - Central directory and file path definitions for the project
 
 ### Analysis Configurations (`analysis/`)
-- **comparison_config.yaml** - Statistical comparison between heirs and non-heirs properties
+- **comparison_config.yaml** - Statistical comparison between property types
 - **diversity_analysis_config.yaml** - Comprehensive diversity metrics with multiple thresholds
 - **total_biomass_config.yaml** - Basic total biomass and richness calculations
 
@@ -60,13 +60,53 @@ All configuration files use YAML format and typically include:
 ## Usage
 
 Load configurations in Python:
-```python
-from bigmap.config import load_settings
 
-settings = load_settings("cfg/diversity_analysis_config.yaml")
+```python
+from gridfia.config import load_settings
+
+settings = load_settings("cfg/analysis/diversity_analysis_config.yaml")
 ```
 
-Or use with CLI:
-```bash
-bigmap calculate data.zarr --config cfg/diversity_analysis_config.yaml
+Use with the GridFIA API:
+
+```python
+from gridfia import GridFIA
+from gridfia.config import load_settings
+
+# Load configuration
+settings = load_settings("cfg/analysis/diversity_analysis_config.yaml")
+
+# Initialize API with settings
+api = GridFIA(config=settings)
+
+# Run analysis
+results = api.calculate_metrics("data.zarr")
+```
+
+## Example Configuration
+
+```yaml
+# diversity_analysis_config.yaml
+debug: false
+verbose: true
+output_dir: results/diversity
+
+calculations:
+  - name: species_richness
+    enabled: true
+    parameters:
+      biomass_threshold: 0.5
+    output_format: geotiff
+
+  - name: shannon_diversity
+    enabled: true
+    output_format: geotiff
+
+  - name: simpson_diversity
+    enabled: true
+    output_format: geotiff
+
+  - name: evenness
+    enabled: true
+    output_format: geotiff
 ```

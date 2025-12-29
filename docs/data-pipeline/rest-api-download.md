@@ -355,5 +355,5 @@ client = BigMapRestClient()
 ## See Also
 
 - [Zarr Construction](zarr-construction.md) - Building efficient storage containers
-- [CLI Commands](../cli/commands.md) - Command-line interface
-- [API Reference](../api/rest-client.md) - Detailed API documentation
+- [GridFIA API Reference](../api/gridfia.md) - Main API class documentation
+- [Configuration](../api/config.md) - Configuration options

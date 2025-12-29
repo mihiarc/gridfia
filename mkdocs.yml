@@ -19,14 +19,18 @@ nav:
     - GridFIA Class: api/gridfia.md
     - Data Models: api/models.md
     - Configuration: api/config.md
-    - Exceptions: api/exceptions.md
+    - Processors: api/processors.md
     - Calculations: api/calculations.md
     - Utilities: api/utilities.md
+    - Exceptions: api/exceptions.md
   - Tutorials:
     - Species Diversity Analysis: tutorials/species-diversity-analysis.md
   - Architecture:
+    - Overview: architecture/overview.md
     - System Design: architecture/system-design.md
-    - Data Pipeline: data-pipeline/rest-api-download.md
+  - Data Pipeline:
+    - REST API Download: data-pipeline/rest-api-download.md
+    - Zarr Construction: data-pipeline/zarr-construction.md
 
 theme:
   name: material

@@ -1,457 +1,537 @@
 # System Design
 
-This document provides detailed technical specifications for the GridFIA system architecture, explaining the design decisions, implementation patterns, and technical considerations that guide the development of this forest analysis toolkit.
+This document provides detailed technical specifications for the GridFIA system architecture, explaining the design decisions, implementation patterns, and technical considerations.
 
 ## Design Philosophy
 
-GridFIA is built on several core design principles that shape every technical decision:
+GridFIA is built on several core design principles:
 
-### 1. **Scientific Computing First**
-- Prioritize accuracy and reproducibility in all calculations
-- Use established scientific computing libraries (NumPy, SciPy, Xarray)
-- Maintain provenance and metadata throughout processing pipelines
-- Support for peer review and validation of results
+### 1. **API-First Architecture**
+- Single entry point through the `GridFIA` class
+- No CLI - all functionality exposed via Python API
+- Clean, discoverable interface for interactive and scripted use
+- Designed for Jupyter notebooks and programmatic workflows
 
-### 2. **Scalability by Design**
-- Handle datasets from small research plots to state-wide analyses
-- Memory-efficient processing using chunked arrays and lazy evaluation
-- Configurable parallelization for different computational environments
-- Streaming processing for datasets larger than available memory
+### 2. **Scientific Computing Standards**
+- Accuracy and reproducibility in all calculations
+- Established scientific computing libraries (NumPy, SciPy, Xarray)
+- Metadata preservation throughout processing
+- Support for peer review and validation
 
-### 3. **User Experience Excellence**
-- Multiple interfaces (CLI, Python API, scripts) for different user types
-- Rich terminal output with progress indication and helpful error messages
-- Comprehensive documentation with examples and tutorials
-- Intuitive command structure following common conventions
+### 3. **Scalability by Design**
+- Handle datasets from county-level to state-wide analyses
+- Memory-efficient processing using chunked Zarr arrays
+- Lazy evaluation with Xarray for large datasets
+- Configurable parallelization for different environments
 
-### 4. **Maintainability and Extensibility**
-- Modular architecture with clear separation of concerns
-- Comprehensive type hints and docstrings for all public APIs
-- Extensive test coverage with automated CI/CD pipelines
-- Plugin architecture for adding new analysis methods
+### 4. **Extensibility**
+- Plugin-based calculation framework with registry pattern
+- Clear separation between data access, processing, and visualization
+- Type-safe configuration with Pydantic v2
 
 ## Core Components
 
-### Configuration Management
+### GridFIA API (`api.py`)
 
-The configuration system uses Pydantic for type-safe, validated settings management:
+The main entry point providing all user-facing functionality:
 
 ```python
+from gridfia import GridFIA
+
+api = GridFIA()
+
+# Core workflow methods
+api.list_species()           # Query BIGMAP species catalog
+api.download_species()       # Download biomass rasters from BIGMAP
+api.create_zarr()           # Convert GeoTIFFs to Zarr format
+api.calculate_metrics()     # Run forest calculations
+api.create_maps()           # Generate visualizations
+api.validate_zarr()         # Validate Zarr store integrity
+
+# Configuration methods
+api.get_location_config()   # Configure geographic extents
+api.list_calculations()     # List available metrics
+
+# Cloud/sample data methods
+api.list_sample_datasets()  # List pre-hosted sample datasets
+api.download_sample()       # Download sample data for testing
+api.load_from_cloud()       # Load Zarr from cloud URL
+```
+
+**Design Decisions:**
+- All methods are instance methods on a single class
+- Configuration passed at instantiation, methods accept operation-specific parameters
+- Rich return types (dataclasses, Pydantic models) for structured results
+- Progress tracking integrated via Rich library
+
+### Configuration System (`config.py`)
+
+Pydantic v2 models for type-safe, validated settings:
+
+```python
+from gridfia.config import GridFIASettings, CalculationConfig
+from pathlib import Path
+
 class GridFIASettings(BaseSettings):
     """
     Hierarchical configuration with:
     - Environment variable support (GRIDFIA_*)
     - Type validation and conversion
     - Nested configuration objects
-    - Automatic path creation
     """
-    
+
     # Application settings
-    app_name: str = "GridFIA"
     debug: bool = False
     verbose: bool = False
-    
+
     # Path configuration
-    data_dir: Path = Path("data")
     output_dir: Path = Path("output")
-    cache_dir: Path = Path(".cache")
-    
-    # Processing configuration
-    raster: RasterConfig = Field(default_factory=RasterConfig)
-    visualization: VisualizationConfig = Field(default_factory=VisualizationConfig)
-    processing: ProcessingConfig = Field(default_factory=ProcessingConfig)
+
+    # Calculation configuration
+    calculations: list[CalculationConfig] = Field(default_factory=list)
+
+    model_config = SettingsConfigDict(
+        env_prefix="GRIDFIA_",
+        env_nested_delimiter="__"
+    )
+
+
+class CalculationConfig(BaseModel):
+    """Configuration for individual calculations."""
+    name: str
+    enabled: bool = True
+    parameters: dict = Field(default_factory=dict)
+    output_format: Literal["geotiff", "netcdf", "zarr"] = "geotiff"
 ```
 
 **Key Features:**
-- **Environment Awareness**: Automatically loads settings from environment variables
-- **Validation**: Type checking and custom validators ensure configuration integrity
-- **Hierarchical Structure**: Nested configuration objects for different functional areas
-- **Path Management**: Automatic directory creation and path resolution
+- **Environment Awareness**: Loads settings from `GRIDFIA_*` environment variables
+- **Validation**: Type checking ensures configuration integrity
+- **YAML Support**: Load configurations from YAML files in `cfg/` directory
+- **Hierarchical Structure**: Nested models for different functional areas
 
-### Data Storage Architecture
+### Calculation Registry (`core/calculations/`)
 
-GridFIA uses a multi-layered data storage strategy optimized for different access patterns:
+Plugin-based framework for forest metrics using the registry pattern:
 
-#### Primary Storage: Zarr Arrays
 ```python
-# Zarr configuration for optimal performance
+from gridfia.core.calculations.base import ForestCalculation
+from gridfia.core.calculations.registry import registry
+
+class ForestCalculation(ABC):
+    """Abstract base class for all calculations."""
+    name: str
+    description: str
+    units: str
+
+    @abstractmethod
+    def calculate(self, biomass: np.ndarray) -> np.ndarray:
+        """Perform the calculation on biomass data."""
+        pass
+
+    @abstractmethod
+    def get_stats(self, result: np.ndarray) -> dict:
+        """Generate statistics from calculation result."""
+        pass
+
+    def get_metadata(self) -> dict:
+        """Return calculation metadata."""
+        return {
+            "name": self.name,
+            "description": self.description,
+            "units": self.units
+        }
+
+
+# Registry pattern for extensibility
+class CalculationRegistry:
+    """Registry for calculation plugins."""
+
+    _calculations: dict[str, Type[ForestCalculation]] = {}
+
+    @classmethod
+    def register(cls, name: str):
+        """Decorator to register calculations."""
+        def decorator(calc_class):
+            cls._calculations[name] = calc_class
+            return calc_class
+        return decorator
+
+    @classmethod
+    def get(cls, name: str) -> Type[ForestCalculation]:
+        """Retrieve a calculation class by name."""
+        return cls._calculations[name]
+
+    @classmethod
+    def list_calculations(cls) -> list[str]:
+        """List all registered calculations."""
+        return list(cls._calculations.keys())
+```
+
+**Built-in Calculations:**
+
+| Category | Calculation | Description |
+|----------|-------------|-------------|
+| **Diversity** | `species_richness` | Count of species per pixel |
+| **Diversity** | `shannon_diversity` | Shannon-Wiener index (H') |
+| **Diversity** | `simpson_diversity` | Simpson's diversity (1-D) |
+| **Diversity** | `evenness` | Pielou's evenness (J) |
+| **Biomass** | `total_biomass` | Sum across all species |
+| **Biomass** | `biomass_threshold` | Binary mask above threshold |
+| **Species** | `dominant_species` | Most abundant species per pixel |
+| **Species** | `species_proportion` | Relative abundance |
+| **Species** | `species_presence` | Binary presence/absence |
+
+### BigMap REST Client (`external/fia_client.py`)
+
+Interface to USDA Forest Service BIGMAP ImageServer:
+
+```python
+from gridfia.external.fia_client import BigMapRestClient
+
+class BigMapRestClient:
+    """
+    Production-ready REST client for BIGMAP data with:
+    - Automatic retry with exponential backoff
+    - Rate limiting to respect service limits
+    - Progress tracking for downloads
+    - Chunked downloads for large areas
+    """
+
+    BASE_URL = "https://apps.fs.usda.gov/arcx/rest/services/RDW_Biomass"
+
+    def __init__(self):
+        self.session = self._create_session()
+
+    def _create_session(self) -> requests.Session:
+        """Create session with retry strategy."""
+        session = requests.Session()
+
+        retry_strategy = Retry(
+            total=3,
+            backoff_factor=1.0,
+            status_forcelist=[429, 500, 502, 503, 504]
+        )
+
+        adapter = HTTPAdapter(max_retries=retry_strategy)
+        session.mount("https://", adapter)
+
+        return session
+
+    def list_available_species(self) -> list[SpeciesInfo]:
+        """Query available species from BIGMAP catalog."""
+        pass
+
+    def export_species_raster(
+        self,
+        species_code: str,
+        bbox: tuple[float, float, float, float],
+        output_path: Path,
+        progress_callback: Callable | None = None
+    ) -> Path:
+        """Download species biomass raster for bounding box."""
+        pass
+
+    def batch_export_location_species(
+        self,
+        location_config: LocationConfig,
+        species_codes: list[str],
+        output_dir: Path
+    ) -> list[Path]:
+        """Download multiple species for a location."""
+        pass
+```
+
+**Features:**
+- Automatic retry with exponential backoff for transient failures
+- Rate limiting to respect USDA service limits
+- Progress tracking via Rich progress bars
+- Chunked downloads for large geographic areas
+- Geographic subsetting by state, county, or custom bounding box
+
+### Zarr Utilities (`utils/zarr_utils.py`)
+
+Cloud-optimized array storage using Zarr v3:
+
+```python
+from gridfia.utils.zarr_utils import ZarrStore
+
+class ZarrStore:
+    """
+    Wrapper for Zarr array access with:
+    - Consistent interface for local and cloud storage
+    - Metadata management
+    - Coordinate reference system handling
+    """
+
+    def __init__(self, zarr_group: zarr.Group):
+        self._group = zarr_group
+
+    @classmethod
+    def from_path(cls, path: Path | str) -> "ZarrStore":
+        """Open Zarr store from local path."""
+        group = zarr.open_group(path, mode="r")
+        return cls(group)
+
+    @classmethod
+    def from_url(cls, url: str) -> "ZarrStore":
+        """Open Zarr store from cloud URL."""
+        store = zarr.storage.RemoteStore(url)
+        group = zarr.open_group(store, mode="r")
+        return cls(group)
+
+    @property
+    def biomass(self) -> np.ndarray:
+        """Access biomass array (species, y, x)."""
+        return self._group["biomass"][:]
+
+    @property
+    def species_codes(self) -> list[str]:
+        """List of species codes in store."""
+        return list(self._group.attrs["species_codes"])
+
+    @property
+    def crs(self) -> CRS:
+        """Coordinate reference system."""
+        return CRS.from_string(self._group.attrs["crs"])
+
+    @property
+    def transform(self) -> Affine:
+        """Affine transform for georeferencing."""
+        return Affine(*self._group.attrs["transform"])
+```
+
+**Zarr Configuration:**
+
+```python
 zarr_config = {
-    'chunks': (1, 1000, 1000),      # Species, Height, Width
-    'compression': 'lz4',           # Fast compression/decompression
-    'compression_level': 5,         # Balance between size and speed
-    'dtype': 'float32',             # Sufficient precision for biomass data
+    'chunks': (1, 1000, 1000),    # Species, Height, Width
+    'compressor': 'lz4',          # Fast compression/decompression
+    'dtype': 'float32',           # Sufficient precision for biomass
 }
 ```
 
 **Benefits:**
-- **Chunked Storage**: Enables memory-efficient processing of large arrays
-- **Compression**: Reduces storage requirements while maintaining fast access
-- **Expandable**: Can add new species layers without rebuilding entire dataset
-- **Metadata**: Rich attribute storage for data provenance and documentation
+- **Chunked Storage**: Memory-efficient processing of large arrays
+- **LZ4 Compression**: Fast compression with good ratios
+- **Cloud-Ready**: Zarr v3 supports streaming from cloud storage
+- **Expandable**: Add species layers without rebuilding dataset
+- **Rich Metadata**: Embedded CRS, transform, and species information
 
-#### Secondary Storage: NetCDF/HDF5
-- Used for analysis results and intermediate products
-- Self-describing format with embedded metadata
-- Wide tool support across scientific computing ecosystem
-- Efficient for time-series and multi-dimensional analysis results
+### Location Configuration (`utils/location_config.py`)
 
-#### Tertiary Storage: GeoPackage
-- Vector data storage for boundaries, points, and analysis results
-- SQLite-based format with spatial indexing
-- Portable single-file format ideal for sharing results
-- Supports complex geometries and attribute tables
-
-### Processing Pipeline Design
-
-The data processing pipeline implements a robust ETL (Extract, Transform, Load) pattern:
+Geographic extent management for any US location:
 
 ```python
-class ProcessingPipeline:
+from gridfia.utils.location_config import LocationConfig
+
+class LocationConfig:
     """
-    Configurable processing pipeline with:
-    - Stage validation and error handling
-    - Progress tracking and logging
-    - Parallel processing support
-    - Checkpoint/resume capability
+    Geographic configuration with:
+    - Automatic boundary detection from census data
+    - State Plane CRS detection
+    - Bounding box calculations
     """
-    
-    def __init__(self, config: GridFIASettings):
-        self.config = config
-        self.logger = self._setup_logging()
-        self.progress = self._create_progress_tracker()
-    
-    def process(self, input_data: Path) -> ProcessingResult:
-        """Execute full processing pipeline with error recovery."""
-        try:
-            # 1. Validation stage
-            validated_data = self.validate_input(input_data)
-            
-            # 2. Transformation stages
-            clipped_data = self.clip_to_boundary(validated_data)
-            zarr_data = self.convert_to_zarr(clipped_data)
-            
-            # 3. Quality assurance
-            qa_result = self.quality_check(zarr_data)
-            
-            # 4. Metadata generation
-            metadata = self.generate_metadata(zarr_data, qa_result)
-            
-            return ProcessingResult(data=zarr_data, metadata=metadata)
-            
-        except ProcessingError as e:
-            self.logger.error(f"Processing failed: {e}")
-            return self.handle_error(e)
+
+    bbox: tuple[float, float, float, float]  # xmin, ymin, xmax, ymax
+    crs: CRS
+    state_fips: str | None
+    county_fips: str | None
+
+    @classmethod
+    def from_state_county(
+        cls,
+        state: str,
+        county: str | None = None
+    ) -> "LocationConfig":
+        """Create config from state/county names."""
+        # Fetches boundaries from Census TIGER data
+        pass
+
+    @classmethod
+    def from_bbox(
+        cls,
+        bbox: tuple[float, float, float, float],
+        crs: str = "EPSG:4326"
+    ) -> "LocationConfig":
+        """Create config from bounding box coordinates."""
+        pass
+
+    def to_native_crs(self) -> "LocationConfig":
+        """Transform to appropriate State Plane CRS."""
+        pass
 ```
 
-#### Key Processing Stages
+**Supported Location Types:**
+- State-level (e.g., "North Carolina")
+- County-level (e.g., "North Carolina", "Wake")
+- Custom bounding box with any CRS
+- Multi-county regions
 
-1. **Input Validation**
-   - Verify file formats and spatial reference systems
-   - Check data integrity and completeness
-   - Validate against expected schemas and ranges
+### Visualization (`visualization/`)
 
-2. **Spatial Operations**
-   - Coordinate system transformations using PROJ
-   - Clipping and masking operations with proper handling of edge cases
-   - Resampling and alignment to common grids
-
-3. **Data Transformation**
-   - Format conversion (GeoTIFF → Zarr, NetCDF)
-   - Compression and chunking optimization
-   - Metadata preservation and enhancement
-
-4. **Quality Assurance**
-   - Statistical validation of results
-   - Spatial integrity checks
-   - Comparison with reference datasets where available
-
-### Analysis Engine Architecture
-
-The analysis engine uses a modular, plugin-based architecture:
+Publication-ready map generation:
 
 ```python
-class AnalysisEngine:
-    """
-    Pluggable analysis engine supporting:
-    - Multiple analysis types
-    - Configurable parameters
-    - Result caching and persistence
-    - Parallel execution
-    """
-    
-    def __init__(self, config: GridFIASettings):
-        self.config = config
-        self.analyzers = self._load_analyzers()
-        self.cache = self._setup_cache()
-    
-    def register_analyzer(self, analyzer_class: Type[BaseAnalyzer]):
-        """Register new analysis methods dynamically."""
-        self.analyzers[analyzer_class.name] = analyzer_class
-    
-    def analyze(self, data: xr.Dataset, method: str, **kwargs) -> AnalysisResult:
-        """Execute analysis with caching and error handling."""
-        if method not in self.analyzers:
-            raise ValueError(f"Unknown analysis method: {method}")
-        
-        # Check cache for existing results
-        cache_key = self._generate_cache_key(data, method, kwargs)
-        if cache_key in self.cache:
-            return self.cache[cache_key]
-        
-        # Execute analysis
-        analyzer = self.analyzers[method](self.config)
-        result = analyzer.analyze(data, **kwargs)
-        
-        # Cache result for future use
-        self.cache[cache_key] = result
-        return result
-```
+from gridfia.visualization.mapper import ZarrMapper
 
-#### Built-in Analysis Methods
-
-1. **Species Presence Analysis**
-   - Binary presence/absence mapping
-   - Abundance threshold analysis
-   - Spatial distribution patterns
-
-2. **Diversity Metrics**
-   - Shannon diversity index
-   - Simpson diversity index
-   - Species richness calculations
-   - Evenness measures
-
-3. **Spatial Statistics**
-   - Spatial autocorrelation analysis
-   - Hotspot detection (Getis-Ord Gi*)
-   - Landscape connectivity metrics
-
-4. **Temporal Analysis**
-   - Trend detection and significance testing
-   - Change point analysis
-   - Seasonal decomposition
-
-### Visualization System
-
-The visualization system prioritizes publication-quality output while maintaining flexibility:
-
-```python
-class VisualizationEngine:
+class ZarrMapper:
     """
     Publication-quality visualization with:
-    - Consistent styling and branding
+    - Consistent styling
+    - Cartographic elements (scale bar, north arrow)
     - Multiple output formats
-    - Interactive and static options
-    - Customizable themes
     """
-    
-    def __init__(self, config: VisualizationConfig):
-        self.config = config
-        self.themes = self._load_themes()
-        self.style_manager = StyleManager(config)
-    
-    def create_map(self, data: xr.DataArray, map_type: str, **kwargs) -> Figure:
-        """Create publication-ready maps with consistent styling."""
-        # Apply theme and styling
-        style = self.style_manager.get_style(map_type)
-        
-        # Create base map
-        fig, ax = plt.subplots(figsize=style.figure_size, dpi=style.dpi)
-        
-        # Add data layer with appropriate colormap
-        im = data.plot(ax=ax, cmap=style.colormap, **style.plot_kwargs)
-        
-        # Add cartographic elements
-        self._add_north_arrow(ax)
-        self._add_scale_bar(ax)
-        self._add_legend(im, style.legend_config)
-        
-        # Apply final styling
-        self._apply_layout(fig, ax, style)
-        
-        return fig
+
+    def __init__(self, zarr_path: Path | str):
+        self.store = ZarrStore.from_path(zarr_path)
+
+    def create_diversity_map(
+        self,
+        calculation: str,
+        title: str | None = None,
+        cmap: str = "viridis",
+        figsize: tuple[int, int] = (10, 10),
+        dpi: int = 300
+    ) -> Figure:
+        """Create diversity visualization."""
+        pass
+
+    def create_biomass_map(
+        self,
+        species_code: str | None = None,
+        cmap: str = "Greens",
+        **kwargs
+    ) -> Figure:
+        """Create biomass visualization."""
+        pass
+
+    def create_comparison_map(
+        self,
+        calculations: list[str],
+        layout: tuple[int, int] = (2, 2),
+        **kwargs
+    ) -> Figure:
+        """Create multi-panel comparison."""
+        pass
 ```
 
-#### Visualization Features
+**Visualization Features:**
+- Matplotlib-based for compatibility
+- Colorblind-friendly default palettes
+- Automatic colorbar scaling
+- County/state boundary overlays
+- Export to PNG, PDF, SVG
 
-1. **Cartographic Standards**
-   - Proper coordinate system labeling
-   - Scale bars and north arrows
-   - Professional typography and layout
+## Data Flow
 
-2. **Color Theory Application**
-   - Colorblind-friendly palettes
-   - Perceptually uniform color spaces
-   - Appropriate color schemes for data types
+```mermaid
+flowchart LR
+    subgraph Input
+        BIGMAP["BIGMAP ImageServer<br/>REST API"]
+        Local["Local GeoTIFFs"]
+    end
 
-3. **Interactive Elements**
-   - Hover tooltips with data values
-   - Zoom and pan functionality
-   - Layer toggling and transparency controls
+    subgraph GridFIA API
+        Download["download_species()"]
+        Create["create_zarr()"]
+        Calculate["calculate_metrics()"]
+        Visualize["create_maps()"]
+    end
 
-4. **Export Options**
-   - Multiple formats (PNG, PDF, SVG)
-   - Configurable resolution and quality
-   - Embedded metadata for reproducibility
+    subgraph Storage
+        Zarr["Zarr Store<br/>Chunked Arrays"]
+    end
 
-## API Design Patterns
+    subgraph Output
+        GeoTIFF["GeoTIFF Results"]
+        Maps["PNG/PDF Maps"]
+        Stats["Statistics Dict"]
+    end
 
-### REST Client Architecture
-
-The REST API client implements robust patterns for external service integration:
-
-```python
-class BigMapRestClient:  # Note: This class name references the USDA BIGMAP data source
-    """
-    Production-ready REST client with:
-    - Automatic retry with exponential backoff
-    - Rate limiting and request throttling
-    - Session management and connection pooling
-    - Comprehensive error handling
-    """
-    
-    def __init__(self, config: APIConfig):
-        self.config = config
-        self.session = self._create_session()
-        self.rate_limiter = RateLimiter(config.rate_limit)
-        
-    def _create_session(self) -> requests.Session:
-        """Create configured session with retry strategy."""
-        session = requests.Session()
-        
-        # Configure retry strategy
-        retry_strategy = Retry(
-            total=self.config.max_retries,
-            backoff_factor=self.config.backoff_factor,
-            status_forcelist=[429, 500, 502, 503, 504]
-        )
-        
-        adapter = HTTPAdapter(max_retries=retry_strategy)
-        session.mount("http://", adapter)
-        session.mount("https://", adapter)
-        
-        return session
-    
-    @retry_on_failure
-    @rate_limited
-    def request(self, method: str, url: str, **kwargs) -> requests.Response:
-        """Make rate-limited request with comprehensive error handling."""
-        try:
-            response = self.session.request(method, url, **kwargs)
-            response.raise_for_status()
-            return response
-        except requests.RequestException as e:
-            self._handle_request_error(e)
-            raise
+    BIGMAP --> Download
+    Download --> Local
+    Local --> Create
+    Create --> Zarr
+    Zarr --> Calculate
+    Calculate --> GeoTIFF
+    Calculate --> Stats
+    Zarr --> Visualize
+    Visualize --> Maps
 ```
 
-### CLI Design Patterns
-
-The command-line interface follows Unix philosophy and modern CLI best practices:
-
-```python
-@click.group()
-@click.version_option(version=__version__)
-@click.option('--config', type=click.Path(), help='Configuration file path')
-@click.option('--verbose', '-v', is_flag=True, help='Enable verbose output')
-@click.pass_context
-def gridfia_cli(ctx, config, verbose):
-    """GridFIA: Forest Analysis Toolkit."""
-    ctx.ensure_object(dict)
-    ctx.obj['config'] = load_config(config) if config else GridFIASettings()
-    ctx.obj['verbose'] = verbose
-
-@gridfia_cli.command()
-@click.option('--input', '-i', type=click.Path(exists=True), required=True)
-@click.option('--output', '-o', type=click.Path(), required=True)
-@click.option('--method', type=click.Choice(['shannon', 'simpson', 'richness']))
-@click.pass_context
-def analyze(ctx, input, output, method):
-    """Run species diversity analysis."""
-    config = ctx.obj['config']
-    
-    with Progress() as progress:
-        task = progress.add_task("Analyzing...", total=100)
-        
-        # Execute analysis with progress updates
-        result = run_analysis(input, output, method, progress_callback=progress.update)
-        
-        console.print(f"✅ Analysis complete: {result.summary}")
-```
-
-## Performance Optimization Strategies
+## Performance Optimization
 
 ### Memory Management
 
-1. **Chunked Processing**
-   ```python
-   # Process data in chunks to manage memory usage
-   chunk_size = calculate_optimal_chunk_size(available_memory, data_shape)
-   
-   for chunk in data.chunks(chunk_size):
-       result_chunk = process_chunk(chunk)
-       write_chunk_to_output(result_chunk)
-   ```
+**Chunked Processing:**
+```python
+# Zarr arrays are processed chunk-by-chunk
+# Default chunk size: (1, 1000, 1000) - one species layer at a time
+zarr_path = api.create_zarr(
+    input_dir="downloads/",
+    output_path="data.zarr",
+    chunk_size=(1, 500, 500)  # Smaller chunks for limited memory
+)
+```
 
-2. **Lazy Evaluation**
-   ```python
-   # Use Xarray's lazy evaluation for memory efficiency
-   dataset = xr.open_dataset('large_file.nc', chunks={'time': 10})
-   result = dataset.groupby('time.season').mean()  # Lazy operation
-   computed_result = result.compute()  # Trigger computation
-   ```
+**Lazy Evaluation:**
+```python
+# Xarray provides lazy loading
+import xarray as xr
 
-3. **Memory Monitoring**
-   ```python
-   def monitor_memory_usage(func):
-       """Decorator to monitor memory usage during processing."""
-       def wrapper(*args, **kwargs):
-           initial_memory = psutil.Process().memory_info().rss
-           result = func(*args, **kwargs)
-           final_memory = psutil.Process().memory_info().rss
-           
-           memory_delta = (final_memory - initial_memory) / 1024**2  # MB
-           logger.info(f"Memory usage: {memory_delta:.1f} MB")
-           
-           return result
-       return wrapper
-   ```
+dataset = xr.open_zarr("data.zarr")
+# Data not loaded until accessed
+mean_biomass = dataset["biomass"].mean(dim="species")  # Lazy
+result = mean_biomass.compute()  # Triggers computation
+```
 
 ### Computational Optimization
 
-1. **Vectorized Operations**
-   ```python
-   # Use NumPy vectorization instead of loops
-   # Slow: loop-based calculation
-   result = np.zeros_like(data)
-   for i in range(data.shape[0]):
-       for j in range(data.shape[1]):
-           result[i, j] = calculate_diversity(data[i, j])
-   
-   # Fast: vectorized calculation
-   result = np.vectorize(calculate_diversity)(data)
-   ```
+**Vectorized Operations:**
+```python
+# All calculations use NumPy vectorization
+# Example: Shannon diversity calculation
+def shannon_diversity(biomass: np.ndarray) -> np.ndarray:
+    """Vectorized Shannon index calculation."""
+    # Sum across species axis
+    total = np.sum(biomass, axis=0)
 
-2. **Parallel Processing**
-   ```python
-   from concurrent.futures import ProcessPoolExecutor
-   
-   def parallel_analysis(data_chunks, analysis_func):
-       """Process data chunks in parallel."""
-       with ProcessPoolExecutor(max_workers=cpu_count()) as executor:
-           futures = [executor.submit(analysis_func, chunk) for chunk in data_chunks]
-           results = [future.result() for future in futures]
-       return combine_results(results)
-   ```
+    # Calculate proportions (with safe division)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        proportions = biomass / total
+        proportions = np.nan_to_num(proportions, 0)
 
-3. **Caching Strategy**
-   ```python
-   from functools import lru_cache
-   
-   @lru_cache(maxsize=128)
-   def expensive_calculation(data_hash, method):
-       """Cache expensive calculations using content hash."""
-       return perform_calculation(data_hash, method)
-   ```
+    # Shannon formula: -sum(p * ln(p))
+    with np.errstate(divide='ignore', invalid='ignore'):
+        log_p = np.log(proportions)
+        log_p = np.nan_to_num(log_p, 0)
+
+    return -np.sum(proportions * log_p, axis=0)
+```
+
+**Parallel Downloads:**
+```python
+# BigMapRestClient uses thread pool for concurrent downloads
+from concurrent.futures import ThreadPoolExecutor
+
+def batch_download(species_codes, output_dir):
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        futures = [
+            executor.submit(download_species, code, output_dir)
+            for code in species_codes
+        ]
+        return [f.result() for f in futures]
+```
+
+### Storage Optimization
+
+| Strategy | Implementation | Benefit |
+|----------|----------------|---------|
+| **LZ4 Compression** | Default Zarr compressor | Fast read/write |
+| **Chunking** | (1, 1000, 1000) default | Memory-efficient access |
+| **Float32** | Sufficient for biomass | 50% storage vs float64 |
+| **Metadata Indexing** | Species codes in attrs | Fast lookup |
 
 ## Security Considerations
 
@@ -459,124 +539,140 @@ def analyze(ctx, input, output, method):
 
 ```python
 def validate_raster_input(file_path: Path) -> None:
-    """Comprehensive raster file validation."""
-    # File existence and permissions
+    """Validate raster file before processing."""
     if not file_path.exists():
-        raise ValidationError(f"File not found: {file_path}")
-    
-    if not os.access(file_path, os.R_OK):
-        raise ValidationError(f"File not readable: {file_path}")
-    
-    # File format validation
-    try:
-        with rasterio.open(file_path) as dataset:
-            # Check for valid spatial reference
-            if dataset.crs is None:
-                raise ValidationError("Raster has no spatial reference system")
-            
-            # Validate data type and ranges
-            if dataset.dtypes[0] not in ['float32', 'float64', 'int16', 'int32']:
-                raise ValidationError(f"Unsupported data type: {dataset.dtypes[0]}")
-                
-    except rasterio.errors.RasterioIOError as e:
-        raise ValidationError(f"Invalid raster file: {e}")
+        raise FileNotFoundError(f"File not found: {file_path}")
+
+    if not file_path.suffix.lower() in ['.tif', '.tiff']:
+        raise ValueError(f"Expected GeoTIFF, got: {file_path.suffix}")
+
+    with rasterio.open(file_path) as src:
+        if src.crs is None:
+            raise ValueError("Raster missing coordinate reference system")
+
+        if src.count != 1:
+            raise ValueError(f"Expected single band, got {src.count}")
 ```
 
-### Safe External API Usage
+### Safe API Usage
 
 ```python
-def safe_api_request(url: str, params: dict) -> dict:
-    """Make safe API requests with input sanitization."""
-    # URL validation
-    parsed_url = urlparse(url)
-    if parsed_url.scheme not in ['http', 'https']:
-        raise SecurityError("Only HTTP/HTTPS URLs allowed")
-    
-    # Parameter sanitization
-    safe_params = {}
-    for key, value in params.items():
-        if not isinstance(key, str) or not key.isalnum():
-            raise SecurityError(f"Invalid parameter name: {key}")
-        safe_params[key] = str(value)[:1000]  # Limit parameter length
-    
-    # Make request with timeout
-    response = requests.get(url, params=safe_params, timeout=30)
-    response.raise_for_status()
-    
-    return response.json()
+class BigMapRestClient:
+    """REST client with security measures."""
+
+    ALLOWED_HOSTS = ["apps.fs.usda.gov"]
+
+    def _validate_url(self, url: str) -> None:
+        """Ensure URL is from allowed USDA host."""
+        parsed = urlparse(url)
+        if parsed.hostname not in self.ALLOWED_HOSTS:
+            raise SecurityError(f"Untrusted host: {parsed.hostname}")
+
+    def request(self, url: str, params: dict) -> Response:
+        self._validate_url(url)
+        return self.session.get(url, params=params, timeout=30)
 ```
 
 ## Testing Strategy
 
-### Unit Testing Framework
+### Unit Tests
 
 ```python
 import pytest
-from unittest.mock import Mock, patch
-from gridfia.core import analyze_species_presence
+from gridfia.core.calculations import registry
 
-class TestSpeciesAnalysis:
-    """Comprehensive test suite for species analysis."""
-    
+class TestCalculations:
+    """Test calculation implementations."""
+
     @pytest.fixture
-    def sample_data(self):
-        """Create sample data for testing."""
-        return create_test_zarr_array()
-    
-    def test_species_presence_calculation(self, sample_data):
-        """Test basic species presence calculation."""
-        result = analyze_species_presence(sample_data)
-        
-        assert result.shape == (10, 10)  # Expected output shape
-        assert 0 <= result.min() <= result.max() <= 1  # Valid range
-        assert not np.isnan(result).any()  # No NaN values
-    
-    @patch('gridfia.utils.zarr.open')
-    def test_file_not_found_handling(self, mock_zarr_open):
-        """Test graceful handling of missing files."""
-        mock_zarr_open.side_effect = FileNotFoundError()
-        
-        with pytest.raises(FileNotFoundError):
-            analyze_species_presence('nonexistent.zarr')
-    
-    def test_edge_cases(self, sample_data):
-        """Test edge cases and boundary conditions."""
-        # Test with empty data
-        empty_data = np.zeros_like(sample_data)
-        result = analyze_species_presence(empty_data)
-        assert result.sum() == 0
-        
-        # Test with single species
-        single_species = sample_data[:1]
-        result = analyze_species_presence(single_species)
-        assert result.shape[0] == 1
+    def sample_biomass(self):
+        """Create sample biomass data."""
+        # 5 species, 100x100 pixels
+        return np.random.rand(5, 100, 100).astype(np.float32)
+
+    def test_species_richness(self, sample_biomass):
+        """Test richness calculation."""
+        calc = registry.get("species_richness")()
+        result = calc.calculate(sample_biomass)
+
+        assert result.shape == (100, 100)
+        assert result.max() <= 5
+        assert result.min() >= 0
+
+    def test_shannon_diversity_range(self, sample_biomass):
+        """Test Shannon index is in valid range."""
+        calc = registry.get("shannon_diversity")()
+        result = calc.calculate(sample_biomass)
+
+        # Shannon should be >= 0
+        assert result.min() >= 0
+        # Max for 5 species is ln(5) ≈ 1.61
+        assert result.max() <= np.log(5) + 0.01
 ```
 
-### Integration Testing
+### Integration Tests
 
 ```python
-class TestDataPipeline:
-    """Integration tests for complete data processing pipeline."""
-    
+class TestWorkflow:
+    """Test complete workflows."""
+
     def test_full_pipeline(self, tmp_path):
-        """Test complete pipeline from raw data to analysis results."""
-        # Setup test data
-        input_file = create_test_geotiff(tmp_path / "input.tif")
-        output_dir = tmp_path / "output"
-        
-        # Run pipeline
-        pipeline = ProcessingPipeline(test_config)
-        result = pipeline.process(input_file, output_dir)
-        
-        # Validate results
-        assert result.success
-        assert (output_dir / "processed.zarr").exists()
-        assert result.metadata['species_count'] > 0
-        
-        # Validate output data integrity
-        with zarr.open(output_dir / "processed.zarr") as arr:
-            assert arr.shape == expected_shape
-            assert arr.attrs['processing_date'] is not None
+        """Test download -> zarr -> calculate workflow."""
+        api = GridFIA()
+
+        # Create sample data
+        zarr_path = create_test_zarr(tmp_path / "test.zarr")
+
+        # Run calculations
+        results = api.calculate_metrics(
+            zarr_path,
+            calculations=["species_richness", "shannon_diversity"]
+        )
+
+        assert len(results) == 2
+        for result in results:
+            assert result.output_path.exists()
+            assert result.stats is not None
 ```
 
-This comprehensive system design ensures GridFIA provides a robust, scalable, and maintainable platform for forest analysis while following software engineering best practices and scientific computing standards. 
+## Extension Points
+
+### Adding Custom Calculations
+
+1. Create a class inheriting from `ForestCalculation`:
+
+```python
+from gridfia.core.calculations.base import ForestCalculation
+from gridfia.core.calculations.registry import registry
+
+@registry.register("custom_metric")
+class CustomMetric(ForestCalculation):
+    name = "custom_metric"
+    description = "My custom forest metric"
+    units = "custom_units"
+
+    def calculate(self, biomass: np.ndarray) -> np.ndarray:
+        # Implementation
+        return result
+
+    def get_stats(self, result: np.ndarray) -> dict:
+        return {"mean": float(result.mean())}
+```
+
+2. Use via the API:
+
+```python
+api = GridFIA()
+results = api.calculate_metrics(
+    "data.zarr",
+    calculations=["custom_metric"]
+)
+```
+
+### Adding Data Sources
+
+Extend `BigMapRestClient` or create new clients in `external/` for additional data sources following the same patterns for retry, rate limiting, and progress tracking.
+
+### Custom Visualizations
+
+Add new methods to `ZarrMapper` or create specialized visualization modules in `visualization/` directory.

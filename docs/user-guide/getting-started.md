@@ -1,6 +1,6 @@
 # Getting Started with GridFIA
 
-GridFIA is a modern Python framework for analyzing forest biomass and species diversity using BIGMAP 2018 data for North Carolina.
+GridFIA is a Python API for analyzing forest biomass and species diversity using USDA Forest Service BIGMAP 2018 data at 30-meter resolution for any US state, county, or custom region.
 
 ## Installation
 
@@ -26,129 +26,242 @@ uv pip install -e ".[dev,test,docs]"
 
 ## Quick Start
 
-### 1. Download Species Data
-
-First, download some species data from the FIA BIGMAP REST API:
-
-```bash
-# List available species
-gridfia list-species
-
-# Download default NC species
-gridfia download --output data/
-
-# Download specific species
-gridfia download --species 0131 --species 0068 --output data/
-```
-
-### 2. Create Zarr Array
-
-Convert downloaded GeoTIFF files to a zarr array for efficient processing:
+### 1. Initialize the API
 
 ```python
-import zarr
-import rasterio
-import numpy as np
-from pathlib import Path
+from gridfia import GridFIA
 
-# Create zarr array from species rasters
-def create_zarr_from_rasters(raster_dir, output_path):
-    raster_files = sorted(Path(raster_dir).glob("*.tif"))
-    
-    # Read first raster for dimensions
-    with rasterio.open(raster_files[0]) as src:
-        height, width = src.shape
-        transform = src.transform
-        crs = src.crs
-    
-    # Create zarr array
-    z = zarr.open_array(
-        output_path,
-        mode='w',
-        shape=(len(raster_files), height, width),
-        chunks=(1, 1000, 1000),
-        dtype='f4'
-    )
-    
-    # Load each species
-    species_codes = []
-    for i, raster_file in enumerate(raster_files):
-        with rasterio.open(raster_file) as src:
-            z[i] = src.read(1)
-            species_codes.append(raster_file.stem)
-    
-    # Add metadata
-    z.attrs.update({
-        'species_codes': species_codes,
-        'crs': str(crs),
-        'transform': list(transform),
-        'units': 'Mg/ha'
-    })
-    
-    return output_path
-
-# Create zarr
-zarr_path = create_zarr_from_rasters("data/", "data/nc_biomass.zarr")
+api = GridFIA()
 ```
 
-### 3. Run Calculations
+### 2. List Available Species
 
-Use the CLI to run forest metric calculations:
+BIGMAP provides biomass data for 300+ tree species. List them all:
 
-```bash
+```python
+# Get all available species from BIGMAP
+species = api.list_species()
+
+# Display first 10 species
+for s in species[:10]:
+    print(f"{s.species_code}: {s.common_name} ({s.scientific_name})")
+```
+
+### 3. Download Species Data
+
+Download biomass rasters for specific species and locations:
+
+```python
+# Download for an entire state
+files = api.download_species(
+    state="North Carolina",
+    species_codes=["0131", "0068"],  # Loblolly Pine, Eastern White Pine
+    output_dir="data/nc"
+)
+print(f"Downloaded {len(files)} files")
+
+# Download for a specific county
+files = api.download_species(
+    state="North Carolina",
+    county="Wake",
+    species_codes=["0131", "0068"],
+    output_dir="data/wake"
+)
+
+# Download with custom bounding box (WGS84)
+files = api.download_species(
+    bbox=(-79.5, 35.5, -78.5, 36.5),
+    crs="EPSG:4326",
+    species_codes=["0131"],
+    output_dir="data/custom"
+)
+```
+
+### 4. Create Zarr Store
+
+Convert downloaded GeoTIFF files to cloud-optimized Zarr format:
+
+```python
+# Create Zarr store from downloaded rasters
+zarr_path = api.create_zarr(
+    input_dir="data/wake",
+    output_path="data/wake_forest.zarr"
+)
+
+# Validate the created store
+info = api.validate_zarr(zarr_path)
+print(f"Species: {info['num_species']}")
+print(f"Shape: {info['shape']}")
+print(f"CRS: {info['crs']}")
+```
+
+### 5. Calculate Forest Metrics
+
+Run diversity and biomass calculations:
+
+```python
 # List available calculations
-gridfia calculate data/nc_biomass.zarr --list
+calculations = api.list_calculations()
+print(f"Available: {calculations}")
 
 # Run specific calculations
-gridfia calculate data/nc_biomass.zarr \
-    --calc species_richness \
-    --calc total_biomass \
-    --output results/
+results = api.calculate_metrics(
+    zarr_path="data/wake_forest.zarr",
+    calculations=["species_richness", "shannon_diversity", "total_biomass"],
+    output_dir="output/metrics"
+)
 
-# Use a configuration file
-gridfia calculate data/nc_biomass.zarr --config config.yaml
+# View results
+for result in results:
+    print(f"{result.name}: {result.output_path}")
 ```
 
-### 4. View Results
+### 6. Create Visualizations
 
-The calculations produce GeoTIFF files that can be viewed in GIS software:
+Generate publication-ready maps:
 
 ```python
-import rasterio
-import matplotlib.pyplot as plt
+# Create diversity map
+maps = api.create_maps(
+    zarr_path="data/wake_forest.zarr",
+    map_type="diversity",
+    output_dir="output/maps"
+)
 
-# View species richness map
-with rasterio.open("results/species_richness.tif") as src:
-    richness = src.read(1)
-    
-plt.figure(figsize=(10, 8))
-plt.imshow(richness, cmap='viridis')
-plt.colorbar(label='Number of Species')
-plt.title('Forest Species Richness')
-plt.show()
+# Create species biomass map
+maps = api.create_maps(
+    zarr_path="data/wake_forest.zarr",
+    map_type="species",
+    species=["0131"],  # Loblolly Pine
+    output_dir="output/maps"
+)
+```
+
+## Complete Example
+
+Here's a full workflow from download to visualization:
+
+```python
+from gridfia import GridFIA
+from pathlib import Path
+
+# Initialize API
+api = GridFIA()
+
+# Define species of interest
+pine_species = ["0131", "0110", "0132"]  # Loblolly, Shortleaf, Longleaf
+
+# Download data for Wake County, NC
+files = api.download_species(
+    state="North Carolina",
+    county="Wake",
+    species_codes=pine_species,
+    output_dir="tutorial_data"
+)
+print(f"Downloaded {len(files)} species files")
+
+# Create Zarr store
+zarr_path = api.create_zarr(
+    input_dir="tutorial_data",
+    output_path="tutorial_data/wake_pines.zarr"
+)
+
+# Calculate diversity metrics
+results = api.calculate_metrics(
+    zarr_path=zarr_path,
+    calculations=[
+        "species_richness",
+        "shannon_diversity",
+        "simpson_diversity",
+        "total_biomass"
+    ],
+    output_dir="output"
+)
+
+# Create maps
+maps = api.create_maps(
+    zarr_path=zarr_path,
+    map_type="diversity",
+    output_dir="output/maps"
+)
+
+print("Analysis complete!")
+```
+
+## Using Sample Datasets
+
+GridFIA provides pre-hosted sample datasets for quick testing:
+
+```python
+from gridfia import GridFIA
+
+api = GridFIA()
+
+# List available sample datasets
+samples = api.list_sample_datasets()
+for sample in samples:
+    print(f"{sample['name']}: {sample['description']}")
+
+# Download a sample dataset
+zarr_path = api.download_sample(
+    name="wake_county_nc",
+    output_dir="samples"
+)
+
+# Or load directly from cloud (no download)
+store = api.load_from_cloud(
+    url="https://data.example.com/samples/wake_county.zarr"
+)
 ```
 
 ## Configuration
 
-### Create a Configuration File
+### Programmatic Configuration
 
-```bash
-# Create a diversity analysis configuration
-gridfia config create --template diversity --output my_config.yaml
+```python
+from gridfia import GridFIA
+from gridfia.config import GridFIASettings, CalculationConfig
+from pathlib import Path
 
-# Validate configuration
-gridfia config validate --config my_config.yaml
+# Create custom settings
+settings = GridFIASettings(
+    output_dir=Path("results"),
+    calculations=[
+        CalculationConfig(name="species_richness", enabled=True),
+        CalculationConfig(name="shannon_diversity", enabled=True),
+        CalculationConfig(
+            name="total_biomass",
+            enabled=True,
+            output_format="geotiff"
+        ),
+    ]
+)
 
-# Show current configuration
-gridfia config show
+# Initialize API with custom settings
+api = GridFIA(config=settings)
 ```
 
-### Configuration Example
+### Load Settings from YAML
+
+```python
+from gridfia import GridFIA
+from gridfia.config import load_settings
+from pathlib import Path
+
+# Load settings from file
+settings = load_settings(Path("config/my_analysis.yaml"))
+
+# Use with API
+api = GridFIA(config=settings)
+```
+
+Example YAML configuration:
 
 ```yaml
-# my_config.yaml
-app_name: NC Forest Analysis
-output_dir: results/diversity_analysis
+# my_analysis.yaml
+debug: false
+verbose: true
+output_dir: results/diversity
 
 calculations:
   - name: species_richness
@@ -156,74 +269,32 @@ calculations:
     parameters:
       biomass_threshold: 0.5
     output_format: geotiff
-    
+
   - name: shannon_diversity
     enabled: true
-    output_format: netcdf
-    output_name: shannon_index
-    
-  - name: dominant_species
-    enabled: true
-    
+    output_format: geotiff
+
   - name: total_biomass
     enabled: true
-    output_format: zarr
+    output_format: geotiff
 ```
 
-## Python API Usage
+## Available Calculations
 
-### Basic Example
-
-```python
-from gridfia.config import GridFIASettings, CalculationConfig
-from gridfia.core.processors.forest_metrics import ForestMetricsProcessor
-
-# Configure settings
-settings = GridFIASettings(
-    output_dir="results",
-    calculations=[
-        CalculationConfig(name="species_richness", enabled=True),
-        CalculationConfig(name="shannon_diversity", enabled=True)
-    ]
-)
-
-# Run analysis
-processor = ForestMetricsProcessor(settings)
-results = processor.run_calculations("data/nc_biomass.zarr")
-
-print(f"Completed calculations: {list(results.keys())}")
-```
-
-### Advanced Example with Custom Parameters
-
-```python
-from gridfia.core.calculations import registry
-import numpy as np
-
-# Load zarr data
-import zarr
-z = zarr.open_array("data/nc_biomass.zarr", mode='r')
-biomass_data = z[:]
-
-# Get calculation with custom parameters
-richness_calc = registry.get(
-    'species_richness', 
-    biomass_threshold=1.0,
-    exclude_total_layer=True
-)
-
-# Run calculation
-richness_map = richness_calc.calculate(biomass_data)
-
-# Get metadata
-metadata = richness_calc.get_metadata()
-print(f"Calculation: {metadata['description']}")
-print(f"Units: {metadata['units']}")
-```
+| Calculation | Description | Units |
+|-------------|-------------|-------|
+| `species_richness` | Number of species per pixel | count |
+| `shannon_diversity` | Shannon diversity index (H') | index |
+| `simpson_diversity` | Simpson diversity index | index |
+| `evenness` | Pielou's evenness (J) | ratio |
+| `total_biomass` | Total biomass across all species | Mg/ha |
+| `dominant_species` | Most abundant species by biomass | species_id |
+| `species_proportion` | Proportion of specific species | ratio |
+| `species_presence` | Binary presence of species | binary |
+| `biomass_threshold` | Areas above biomass threshold | binary |
 
 ## Next Steps
 
-- [CLI Reference](../cli-reference.md) - Detailed CLI documentation
 - [API Reference](../api/index.md) - Complete API documentation
-- [Tutorials](../tutorials/index.md) - Step-by-step tutorials
-- [Examples](../examples/index.md) - Example scripts and notebooks
+- [Tutorials](../tutorials/species-diversity-analysis.md) - Step-by-step guides
+- [Configuration](../api/config.md) - Advanced configuration options
