@@ -3,17 +3,14 @@
 Wake County Complete Analysis
 
 A comprehensive case study demonstrating the full GridFIA workflow:
-- Data download
+- Data download (ALL species for valid diversity metrics)
 - Zarr creation
 - All calculations
 - Multiple visualizations
 - Statistical analysis
 - Publication-ready outputs
 
-NOTE: This example downloads only 2 species for speed. The diversity metrics
-(species richness, Shannon, Simpson, evenness) shown are NOT ecologically valid
-with only 2 species. For true diversity analysis with all species present in
-a region, see 07_diversity_analysis.py instead.
+Takes about 15-20 minutes to run (mostly download time).
 """
 
 from pathlib import Path
@@ -63,34 +60,20 @@ def download_wake_county_data():
     console.print(f"  Dimensions: {bbox_width/1000:.1f}km x {bbox_height/1000:.1f}km")
     console.print(f"  [dim]Note: Hardcoded to avoid SSL certificate issues with census.gov[/dim]")
 
-    # Download key species for Wake County
-    # Using just 2 species for faster demo
-    # WARNING: Diversity metrics calculated with only 2 species are NOT valid!
-    # For true diversity analysis, see 07_diversity_analysis.py which downloads ALL species
-    species = [
-        ("0131", "Loblolly Pine"),
-        ("0068", "Red Maple"),
-        # ("0611", "Sweetgum"),  # Commented out for faster demo
-        # ("0802", "White Oak"),
-        # ("0316", "Eastern Redcedar")
-    ]
+    # Download ALL species for Wake County (required for valid diversity metrics)
+    console.print(f"\nDownloading ALL species for Wake County, NC...")
+    console.print("[yellow]This takes 10-15 minutes but is required for valid diversity metrics[/yellow]")
 
-    console.print(f"\nDownloading {len(species)} species for Wake County, NC...")
-
-    files = []
-    for code, name in species:
-        console.print(f"  Downloading {name} ({code})...")
-        try:
-            result = api.download_species(
-                bbox=wake_bbox,
-                crs="3857",  # Web Mercator
-                species_codes=[code],
-                output_dir="examples/wake_county_data"
-            )
-            files.extend(result)
-            console.print(f"    ✅ Downloaded {name}")
-        except Exception as e:
-            console.print(f"    [yellow]Skipped {name}: {e}[/yellow]")
+    try:
+        files = api.download_species(
+            bbox=wake_bbox,
+            crs="3857",  # Web Mercator
+            species_codes=None,  # Download ALL species
+            output_dir="examples/wake_county_data"
+        )
+    except Exception as e:
+        console.print(f"[red]Download failed: {e}[/red]")
+        files = []
 
     console.print(f"\n✅ Downloaded {len(files)} species files")
     return files
