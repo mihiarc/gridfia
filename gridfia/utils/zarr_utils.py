@@ -1143,15 +1143,19 @@ def validate_zarr_store(zarr_path: Union[str, Path]) -> Dict:
     }
     
     # Get species information
-    if 'species_codes' in root and 'species_names' in root:
+    if 'species_codes' in root:
+        codes_arr = root['species_codes'][:]
+        names_arr = root['species_names'][:] if 'species_names' in root else []
+
         for i in range(info['num_species']):
-            code = root['species_codes'][i]
-            name = root['species_names'][i]
-            if code:  # Skip empty entries
-                info['species'].append({
-                    'index': i,
-                    'code': str(code),
-                    'name': str(name)
-                })
+            if i < len(codes_arr):
+                code = codes_arr[i]
+                name = names_arr[i] if i < len(names_arr) else ''
+                if code:  # Skip empty entries
+                    info['species'].append({
+                        'index': i,
+                        'code': str(code),
+                        'name': str(name) if name else f"Species {code}"
+                    })
     
     return info
