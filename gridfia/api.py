@@ -821,18 +821,11 @@ class GridFIA:
     SAMPLE_DATASETS = {
         "durham_nc": {
             "name": "Durham County, North Carolina",
-            "url": "https://pub-gridfia.r2.dev/samples/durham_nc.zarr",
+            "url": "https://pub-da6f67cd8f9147418258ed71cc130443.r2.dev/samples/durham_nc.zarr",
             "description": "Full Durham County with all species (~263 MB)",
-            "num_species": 50,
+            "num_species": 326,
             "approximate_size_mb": 263
         },
-        "wake_nc": {
-            "name": "Wake County, North Carolina (subset)",
-            "url": "https://pub-gridfia.r2.dev/samples/wake_nc.zarr",
-            "description": "Central Wake County subset (~150 MB)",
-            "num_species": 45,
-            "approximate_size_mb": 150
-        }
     }
 
     def list_sample_datasets(self) -> List[Dict[str, Any]]:
