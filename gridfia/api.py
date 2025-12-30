@@ -164,12 +164,14 @@ class GridFIA:
         state: Optional[str] = None,
         county: Optional[str] = None,
         bbox: Optional[Tuple[float, float, float, float]] = None,
+        polygon: Optional[Union[str, Path, "gpd.GeoDataFrame"]] = None,
         location_config: Optional[Union[str, Path]] = None,
-        crs: str = "102100"
+        crs: str = "102100",
+        use_boundary_clip: bool = False
     ) -> List[Path]:
         """
         Download species data from FIA BIGMAP service.
-        
+
         Parameters
         ----------
         output_dir : str or Path, default="downloads"
@@ -182,29 +184,42 @@ class GridFIA:
             County name (requires state).
         bbox : Tuple[float, float, float, float], optional
             Custom bounding box (xmin, ymin, xmax, ymax).
+        polygon : str, Path, or GeoDataFrame, optional
+            Custom polygon boundary. Data will be downloaded for the polygon's
+            bbox and can be clipped to the polygon during create_zarr.
         location_config : str or Path, optional
             Path to location configuration file.
         crs : str, default="102100"
             Coordinate reference system for bbox.
-            
+        use_boundary_clip : bool, default=False
+            If True, stores actual state/county boundary for later clipping.
+            Only affects state/county downloads, ignored for bbox/polygon.
+
         Returns
         -------
         List[Path]
             Paths to downloaded files.
-            
+
         Examples
         --------
         >>> api = GridFIA()
         >>> # Download for entire state
         >>> files = api.download_species(state="Montana", species_codes=["0202"])
-        >>> 
-        >>> # Download for specific county
+        >>>
+        >>> # Download for specific county with boundary stored
         >>> files = api.download_species(
-        ...     state="Texas", 
+        ...     state="Texas",
         ...     county="Harris",
-        ...     species_codes=["0131", "0068"]
+        ...     species_codes=["0131", "0068"],
+        ...     use_boundary_clip=True
         ... )
-        >>> 
+        >>>
+        >>> # Download with custom polygon
+        >>> files = api.download_species(
+        ...     polygon="study_area.geojson",
+        ...     species_codes=["0131"]
+        ... )
+        >>>
         >>> # Download with custom bbox
         >>> files = api.download_species(
         ...     bbox=(-104, 44, -104.5, 44.5),
@@ -213,29 +228,41 @@ class GridFIA:
         """
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Determine location and bbox
         location_name = "location"
         location_bbox = None
         bbox_crs = crs
-        
+        location_config_obj = None
+
         if location_config:
-            config = LocationConfig(Path(location_config))
-            location_name = config.location_name.lower().replace(' ', '_')
-            location_bbox = config.web_mercator_bbox
-            logger.info(f"Using location config: {config.location_name}")
-            
+            location_config_obj = LocationConfig(Path(location_config))
+            location_name = location_config_obj.location_name.lower().replace(' ', '_')
+            location_bbox = location_config_obj.web_mercator_bbox
+            logger.info(f"Using location config: {location_config_obj.location_name}")
+
+        elif polygon:
+            # Create config from polygon
+            location_config_obj = LocationConfig.from_polygon(polygon)
+            location_name = location_config_obj.location_name.lower().replace(' ', '_')
+            location_bbox = location_config_obj.web_mercator_bbox
+            logger.info(f"Using polygon boundary: {location_config_obj.location_name}")
+
         elif state:
             if county:
-                config = LocationConfig.from_county(county, state)
+                location_config_obj = LocationConfig.from_county(
+                    county, state, store_boundary=use_boundary_clip
+                )
                 location_name = f"{county}_{state}".lower().replace(' ', '_')
             else:
-                config = LocationConfig.from_state(state)
+                location_config_obj = LocationConfig.from_state(
+                    state, store_boundary=use_boundary_clip
+                )
                 location_name = state.lower().replace(' ', '_')
-            
-            location_bbox = config.web_mercator_bbox
-            logger.info(f"Using {config.location_name} boundaries")
-            
+
+            location_bbox = location_config_obj.web_mercator_bbox
+            logger.info(f"Using {location_config_obj.location_name} boundaries")
+
         elif bbox:
             # Transform bbox to Web Mercator if a different CRS is specified
             crs_normalized = str(crs).upper().replace("EPSG:", "")
@@ -260,7 +287,7 @@ class GridFIA:
 
         else:
             raise InvalidLocationConfig(
-                "Must specify state, bbox, or location_config",
+                "Must specify state, bbox, polygon, or location_config",
                 location_type="unknown"
             )
 
@@ -269,7 +296,7 @@ class GridFIA:
                 "Could not determine bounding box for location",
                 location_name=location_name
             )
-        
+
         # Download species data
         exported_files = self.rest_client.batch_export_location_species(
             bbox=location_bbox,
@@ -278,7 +305,13 @@ class GridFIA:
             location_name=location_name,
             bbox_srs=bbox_crs
         )
-        
+
+        # Save location config with polygon if available
+        if location_config_obj and location_config_obj.has_polygon:
+            config_path = output_dir / f"{location_name}_config.yaml"
+            location_config_obj.save(config_path)
+            logger.info(f"Saved location config with polygon boundary to {config_path}")
+
         logger.info(f"Downloaded {len(exported_files)} species rasters")
         return exported_files
     
@@ -290,11 +323,12 @@ class GridFIA:
         chunk_size: Tuple[int, int, int] = (1, 1000, 1000),
         compression: str = "lz4",
         compression_level: int = 5,
-        include_total: bool = True
+        include_total: bool = True,
+        clip_to_polygon: Optional[Union[bool, str, Path, "gpd.GeoDataFrame"]] = None
     ) -> Path:
         """
         Create a Zarr store from GeoTIFF files.
-        
+
         Parameters
         ----------
         input_dir : str or Path
@@ -311,12 +345,17 @@ class GridFIA:
             Compression level (1-9).
         include_total : bool, default=True
             Whether to include or calculate total biomass.
-            
+        clip_to_polygon : bool, str, Path, or GeoDataFrame, optional
+            Clip GeoTIFFs to polygon boundary before creating Zarr.
+            - If True: looks for *_config.yaml in input_dir and uses its polygon
+            - If str/Path: path to polygon file or config file
+            - If GeoDataFrame: uses the provided polygon
+
         Returns
         -------
         Path
             Path to created Zarr store.
-            
+
         Examples
         --------
         >>> api = GridFIA()
@@ -326,6 +365,13 @@ class GridFIA:
         ...     chunk_size=(1, 2000, 2000)
         ... )
         >>> print(f"Created Zarr store at {zarr_path}")
+        >>>
+        >>> # With polygon clipping
+        >>> zarr_path = api.create_zarr(
+        ...     "downloads/lane_county/",
+        ...     "data/lane.zarr",
+        ...     clip_to_polygon=True  # Auto-detect from saved config
+        ... )
         """
         input_dir = Path(input_dir)
         output_path = Path(output_path)
@@ -346,7 +392,52 @@ class GridFIA:
             )
         
         logger.info(f"Found {len(tiff_files)} GeoTIFF files")
-        
+
+        # Handle polygon clipping
+        polygon_gdf = None
+        clipped_dir = None
+
+        if clip_to_polygon:
+            from .utils.polygon_utils import clip_geotiffs_batch
+
+            # Determine polygon source
+            if isinstance(clip_to_polygon, bool) and clip_to_polygon:
+                # Auto-detect from config file in input_dir
+                config_files = list(input_dir.glob("*_config.yaml"))
+                if config_files:
+                    config = LocationConfig(config_files[0])
+                    if config.has_polygon:
+                        polygon_gdf = config.polygon_gdf
+                        logger.info(f"Using polygon from {config_files[0]}")
+                    else:
+                        logger.warning(f"Config file found but has no polygon boundary")
+            elif isinstance(clip_to_polygon, (str, Path)):
+                clip_path = Path(clip_to_polygon)
+                if clip_path.suffix in ('.yaml', '.yml'):
+                    # Config file
+                    config = LocationConfig(clip_path)
+                    if config.has_polygon:
+                        polygon_gdf = config.polygon_gdf
+                else:
+                    # Polygon file
+                    from .utils.polygon_utils import load_polygon
+                    polygon_gdf = load_polygon(clip_path)
+            else:
+                # GeoDataFrame provided directly
+                polygon_gdf = clip_to_polygon
+
+            if polygon_gdf is not None:
+                # Clip GeoTIFFs to polygon
+                clipped_dir = input_dir / "clipped"
+                clipped_dir.mkdir(exist_ok=True)
+                clipped_files = clip_geotiffs_batch(
+                    tiff_files,
+                    polygon_gdf,
+                    clipped_dir
+                )
+                logger.info(f"Clipped {len(clipped_files)} files to polygon boundary")
+                tiff_files = clipped_files
+
         # Filter by species codes if provided
         if species_codes:
             filtered_files = []
