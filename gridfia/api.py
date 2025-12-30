@@ -974,7 +974,8 @@ class GridFIA:
         url = self.settings.cloud.get_state_url(state_upper)
 
         # Merge config storage options with user-provided options
-        config_options = self.settings.cloud.get_storage_options()
+        # Pass URL to get correct options (HTTP vs S3)
+        config_options = self.settings.cloud.get_storage_options(url=url)
         if storage_options:
             config_options.update(storage_options)
 
@@ -1060,7 +1061,8 @@ class GridFIA:
             )
 
         # Merge config storage options with user-provided options
-        config_options = self.settings.cloud.get_storage_options()
+        # Pass URL to get correct options (HTTP vs S3)
+        config_options = self.settings.cloud.get_storage_options(url=url)
         if storage_options:
             config_options.update(storage_options)
 

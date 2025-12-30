@@ -110,19 +110,28 @@ class CloudStorageConfig(BaseModel):
         """
         return f"{self.public_url}/{self.samples_prefix}/{sample_name}.zarr"
 
-    def get_storage_options(self) -> Dict[str, Any]:
+    def get_storage_options(self, url: Optional[str] = None) -> Dict[str, Any]:
         """Get fsspec storage options for this backend.
+
+        Args:
+            url: Optional URL to determine protocol. If starts with http(s),
+                 returns empty options for public HTTP access.
 
         Returns:
             Dictionary of options to pass to fsspec/zarr for cloud access
         """
         options: Dict[str, Any] = {}
 
-        if self.backend == CloudStorageBackend.HTTP:
-            # HTTP needs no special options for public access
+        # For HTTP/HTTPS URLs (public bucket access), no special options needed
+        # fsspec uses aiohttp backend which doesn't need S3 credentials
+        if url and url.startswith(("http://", "https://")):
             return options
 
-        # S3-compatible backends (B2, R2, S3)
+        if self.backend == CloudStorageBackend.HTTP:
+            # HTTP backend explicitly set - no special options
+            return options
+
+        # S3-compatible backends (B2, R2, S3) - only for s3:// URLs
         if self.access_key and self.secret_key:
             options["key"] = self.access_key
             options["secret"] = self.secret_key
