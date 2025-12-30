@@ -219,6 +219,10 @@ analysis_comparison/
 !CITATIONS.md
 !docs/**/*.md
 !CLAUDE.md
+!CONTRIBUTING.md
+!CHANGELOG.md
+!CODE_OF_CONDUCT.md
+!.github/**/*.md
 
 # Visualization outputs
 *.png
