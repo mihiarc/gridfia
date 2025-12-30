@@ -112,13 +112,21 @@ def _bootstrap_worker(data_tuple: Tuple[np.ndarray, np.ndarray, Dict]) -> Dict[s
     """
     Worker function for bootstrap analysis.
     Must be at module level to be pickleable.
+
+    The options dict can contain a 'seed' key for reproducibility.
+    If no seed is provided, uses a random seed (non-reproducible).
     """
     try:
         group1_data, group2_data, options = data_tuple
-        
-        # Resample with replacement
-        np.random.seed()  # Ensure different seeds for each worker
-        
+
+        # Set seed for reproducibility if provided
+        worker_seed = options.get('seed')
+        if worker_seed is not None:
+            np.random.seed(worker_seed)
+        else:
+            # No seed provided - use random seed for non-reproducible behavior
+            np.random.seed()
+
         n1, n2 = len(group1_data), len(group2_data)
         resampled1 = np.random.choice(group1_data, size=n1, replace=True)
         resampled2 = np.random.choice(group2_data, size=n2, replace=True)
@@ -141,16 +149,28 @@ def _bootstrap_worker(data_tuple: Tuple[np.ndarray, np.ndarray, Dict]) -> Dict[s
             'statistic': np.nan
         }
 
-def _permutation_worker(data_tuple: Tuple[np.ndarray, int, int]) -> float:
+def _permutation_worker(data_tuple: Tuple[np.ndarray, int, int, Optional[int]]) -> float:
     """
     Worker function for permutation test.
     Must be at module level to be pickleable.
+
+    The data tuple can optionally contain a seed as the 4th element for reproducibility.
     """
     try:
-        combined_data, n1, n2 = data_tuple
-        
-        # Shuffle and split
-        np.random.seed()  # Ensure different seeds for each worker
+        # Handle both old (3-element) and new (4-element) tuple formats
+        if len(data_tuple) == 4:
+            combined_data, n1, n2, worker_seed = data_tuple
+        else:
+            combined_data, n1, n2 = data_tuple
+            worker_seed = None
+
+        # Set seed for reproducibility if provided
+        if worker_seed is not None:
+            np.random.seed(worker_seed)
+        else:
+            # No seed provided - use random seed for non-reproducible behavior
+            np.random.seed()
+
         shuffled = np.random.permutation(combined_data)
         
         group1_perm = shuffled[:n1]
@@ -335,15 +355,28 @@ class ParallelProcessor:
         # Determine optimal chunk size for iterations
         chunk_size = max(1, n_iterations // (self.max_workers * 4))
         
-        # Prepare iteration chunks
+        # Prepare iteration chunks with deterministic seeds if global seed is set
         iteration_chunks = []
-        options = {}
-        
+
+        # Try to get seeds from SeedManager for reproducibility
+        try:
+            from ..core.reproducibility import SeedManager
+            global_seed = SeedManager.get_seed()
+        except ImportError:
+            global_seed = None
+
         remaining_iterations = n_iterations
+        iteration_index = 0
         while remaining_iterations > 0:
             current_chunk_size = min(chunk_size, remaining_iterations)
             for _ in range(current_chunk_size):
+                # Create options dict with worker-specific seed
+                if global_seed is not None:
+                    options = {'seed': global_seed + iteration_index}
+                else:
+                    options = {}
                 iteration_chunks.append((group1_data, group2_data, options))
+                iteration_index += 1
             remaining_iterations -= current_chunk_size
         
         start_time = time.time()
@@ -404,9 +437,25 @@ class ParallelProcessor:
         # Combine data for permutation
         combined_data = np.concatenate([group1_data, group2_data])
         n1, n2 = len(group1_data), len(group2_data)
-        
-        # Prepare permutation chunks
-        permutation_chunks = [(combined_data, n1, n2) for _ in range(n_permutations)]
+
+        # Try to get seeds from SeedManager for reproducibility
+        try:
+            from ..core.reproducibility import SeedManager
+            global_seed = SeedManager.get_seed()
+        except ImportError:
+            global_seed = None
+
+        # Prepare permutation chunks with deterministic seeds if global seed is set
+        if global_seed is not None:
+            permutation_chunks = [
+                (combined_data, n1, n2, global_seed + i)
+                for i in range(n_permutations)
+            ]
+        else:
+            permutation_chunks = [
+                (combined_data, n1, n2, None)
+                for _ in range(n_permutations)
+            ]
         
         start_time = time.time()
         

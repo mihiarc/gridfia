@@ -85,7 +85,11 @@ class GridFIA:
     >>> api.create_maps("data/nc_forest.zarr", map_type="diversity")
     """
 
-    def __init__(self, config: Optional[Union[str, Path, GridFIASettings]] = None):
+    def __init__(
+        self,
+        config: Optional[Union[str, Path, GridFIASettings]] = None,
+        seed: Optional[int] = None
+    ):
         """
         Initialize GridFIA API.
 
@@ -94,6 +98,18 @@ class GridFIA:
         config : str, Path, or GridFIASettings, optional
             Configuration file path or settings object.
             If None, uses default settings.
+        seed : int, optional
+            Random seed for reproducibility. If provided, all random
+            operations (bootstrap, permutation tests, etc.) will be
+            deterministic.
+
+        Examples
+        --------
+        >>> api = GridFIA(seed=42)  # Reproducible results
+        >>> result1 = api.calculate_metrics(zarr_path)
+        >>>
+        >>> api2 = GridFIA(seed=42)  # Same seed = same results
+        >>> result2 = api2.calculate_metrics(zarr_path)
         """
         if config is None:
             self.settings = GridFIASettings()
@@ -102,10 +118,39 @@ class GridFIA:
         else:
             self.settings = config
 
+        # Set seed for reproducibility
+        self._seed = seed
+        if seed is not None:
+            from .core.reproducibility import SeedManager
+            SeedManager.set_global_seed(seed)
+
         # Lock for thread-safe lazy initialization of components
         self._init_lock = threading.Lock()
         self._rest_client = None
         self._processor = None
+
+    def set_seed(self, seed: int) -> None:
+        """
+        Set random seed for reproducibility.
+
+        Parameters
+        ----------
+        seed : int
+            Random seed value.
+
+        Examples
+        --------
+        >>> api = GridFIA()
+        >>> api.set_seed(42)
+        """
+        from .core.reproducibility import SeedManager
+        self._seed = seed
+        SeedManager.set_global_seed(seed)
+
+    @property
+    def seed(self) -> Optional[int]:
+        """Get current random seed."""
+        return self._seed
         
     @property
     def rest_client(self) -> BigMapRestClient:

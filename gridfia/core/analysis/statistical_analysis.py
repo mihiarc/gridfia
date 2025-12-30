@@ -391,21 +391,39 @@ class StatisticalTester:
             # Sequential permutation test implementation
             # Observed difference
             observed_diff = group1.mean() - group2.mean()
-            
+
             # Combine all data
             combined = np.concatenate([group1.values, group2.values])
             n1, n2 = len(group1), len(group2)
-            
+
+            # Check for global seed from SeedManager for reproducibility
+            try:
+                from ..reproducibility import SeedManager
+                global_seed = SeedManager.get_seed()
+            except ImportError:
+                global_seed = None
+
+            # Create random state for reproducibility if seed is set
+            if global_seed is not None:
+                rng = np.random.RandomState(global_seed)
+            else:
+                rng = np.random
+
             # Permutation distribution
             perm_diffs = []
-            for _ in range(n_permutations):
-                # Randomly permute the combined data
-                np.random.shuffle(combined)
-                
+            for i in range(n_permutations):
+                # Randomly permute the combined data (using reproducible RNG if seed set)
+                if global_seed is not None:
+                    # Create iteration-specific seed for reproducibility
+                    iter_rng = np.random.RandomState(global_seed + i)
+                    shuffled = iter_rng.permutation(combined)
+                else:
+                    shuffled = rng.permutation(combined)
+
                 # Split into two groups of original sizes
-                perm_group1 = combined[:n1]
-                perm_group2 = combined[n1:n1+n2]
-                
+                perm_group1 = shuffled[:n1]
+                perm_group2 = shuffled[n1:n1+n2]
+
                 # Calculate difference
                 perm_diff = perm_group1.mean() - perm_group2.mean()
                 perm_diffs.append(perm_diff)
@@ -463,15 +481,27 @@ class StatisticalTester:
                     logger.debug("Parallel processing not available for bootstrap")
             
             # Sequential bootstrap implementation
+            # Check for global seed from SeedManager for reproducibility
+            try:
+                from ..reproducibility import SeedManager
+                global_seed = SeedManager.get_seed()
+            except ImportError:
+                global_seed = None
+
             # Bootstrap distributions
             group1_boots = []
             group2_boots = []
             diff_boots = []
-            
-            for _ in range(n_bootstrap):
-                # Bootstrap samples
-                boot1 = resample(group1.values, n_samples=len(group1))
-                boot2 = resample(group2.values, n_samples=len(group2))
+
+            for i in range(n_bootstrap):
+                # Bootstrap samples with reproducible random state if seed is set
+                if global_seed is not None:
+                    iter_seed = global_seed + i
+                    boot1 = resample(group1.values, n_samples=len(group1), random_state=iter_seed)
+                    boot2 = resample(group2.values, n_samples=len(group2), random_state=iter_seed + n_bootstrap)
+                else:
+                    boot1 = resample(group1.values, n_samples=len(group1))
+                    boot2 = resample(group2.values, n_samples=len(group2))
                 
                 mean1 = np.mean(boot1)
                 mean2 = np.mean(boot2)
