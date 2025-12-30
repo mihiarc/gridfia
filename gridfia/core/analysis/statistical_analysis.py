@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class StatisticalConfig:
     """Generic configuration for statistical analysis.
-    
+
     TODO: This is a temporary replacement for the removed ComparisonConfig.
     Should be moved to config.py and integrated with Pydantic models.
     """
@@ -51,6 +51,217 @@ class StatisticalConfig:
     confidence_level: float = 0.95
     min_sample_size: int = 30
     statistical_tests: List[str] = field(default_factory=lambda: ['mannwhitney', 'permutation', 'bootstrap'])
+
+
+@dataclass
+class StatisticalResult:
+    """
+    Result container with statistical context for metric calculations.
+
+    This dataclass provides a standardized way to return calculation results
+    with confidence intervals and uncertainty measures.
+
+    Attributes
+    ----------
+    value : float
+        Point estimate of the calculated metric.
+    confidence_interval : Tuple[float, float]
+        Lower and upper bounds of the confidence interval.
+    standard_error : float
+        Standard error of the estimate.
+    n_samples : int
+        Number of samples used in the calculation.
+    confidence_level : float
+        Confidence level used (e.g., 0.95 for 95% CI).
+    method : str
+        Method used to calculate confidence interval (e.g., 'bootstrap', 'analytical').
+    p_value : Optional[float]
+        P-value if a significance test was performed.
+
+    Examples
+    --------
+    >>> result = StatisticalResult(
+    ...     value=2.45,
+    ...     confidence_interval=(2.31, 2.59),
+    ...     standard_error=0.07,
+    ...     n_samples=1000,
+    ...     confidence_level=0.95,
+    ...     method='bootstrap'
+    ... )
+    >>> print(f"{result.value:.2f} (95% CI: {result.confidence_interval})")
+    2.45 (95% CI: (2.31, 2.59))
+    """
+    value: float
+    confidence_interval: Tuple[float, float]
+    standard_error: float
+    n_samples: int
+    confidence_level: float = 0.95
+    method: str = 'bootstrap'
+    p_value: Optional[float] = None
+
+    def __str__(self) -> str:
+        """Human-readable string representation."""
+        ci_pct = int(self.confidence_level * 100)
+        return (
+            f"{self.value:.4f} ({ci_pct}% CI: [{self.confidence_interval[0]:.4f}, "
+            f"{self.confidence_interval[1]:.4f}], SE: {self.standard_error:.4f}, n={self.n_samples})"
+        )
+
+    def to_dict(self) -> Dict[str, any]:
+        """Convert to dictionary for serialization."""
+        return {
+            'value': self.value,
+            'ci_lower': self.confidence_interval[0],
+            'ci_upper': self.confidence_interval[1],
+            'standard_error': self.standard_error,
+            'n_samples': self.n_samples,
+            'confidence_level': self.confidence_level,
+            'method': self.method,
+            'p_value': self.p_value,
+        }
+
+
+def bootstrap_confidence_interval(
+    data: np.ndarray,
+    statistic_func: callable,
+    n_bootstrap: int = 1000,
+    confidence_level: float = 0.95,
+    seed: Optional[int] = None,
+) -> StatisticalResult:
+    """
+    Calculate bootstrap confidence intervals for any statistic.
+
+    This function uses the percentile bootstrap method to estimate
+    confidence intervals for arbitrary statistics computed from data.
+
+    Parameters
+    ----------
+    data : np.ndarray
+        Input data array. Can be 1D, 2D, or 3D.
+    statistic_func : callable
+        Function that computes the statistic of interest from data.
+        Should accept data array and return a single float value.
+    n_bootstrap : int, default=1000
+        Number of bootstrap resamples.
+    confidence_level : float, default=0.95
+        Confidence level for the interval (e.g., 0.95 for 95% CI).
+    seed : int, optional
+        Random seed for reproducibility. If None, checks SeedManager
+        for global seed.
+
+    Returns
+    -------
+    StatisticalResult
+        Result containing point estimate, confidence interval, and metadata.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> data = np.random.normal(10, 2, 100)
+    >>> result = bootstrap_confidence_interval(
+    ...     data,
+    ...     statistic_func=np.mean,
+    ...     n_bootstrap=1000,
+    ...     confidence_level=0.95,
+    ...     seed=42
+    ... )
+    >>> print(result)
+
+    Notes
+    -----
+    For large datasets, consider using a smaller n_bootstrap or
+    sampling a subset of the data to improve performance.
+    """
+    # Handle seed for reproducibility
+    if seed is not None:
+        rng_seed = seed
+    else:
+        # Check for global seed from SeedManager
+        try:
+            from ..reproducibility import SeedManager
+            rng_seed = SeedManager.get_seed()
+        except ImportError:
+            rng_seed = None
+
+    # Flatten data for resampling if needed
+    flat_data = data.flatten()
+    n_samples = len(flat_data)
+
+    if n_samples == 0:
+        return StatisticalResult(
+            value=np.nan,
+            confidence_interval=(np.nan, np.nan),
+            standard_error=np.nan,
+            n_samples=0,
+            confidence_level=confidence_level,
+            method='bootstrap',
+        )
+
+    # Calculate point estimate
+    point_estimate = statistic_func(data)
+
+    # Generate bootstrap samples
+    bootstrap_stats = []
+    for i in range(n_bootstrap):
+        # Use reproducible random state if seed is set
+        if rng_seed is not None:
+            iter_rng = np.random.RandomState(rng_seed + i)
+            sample_indices = iter_rng.choice(n_samples, size=n_samples, replace=True)
+        else:
+            sample_indices = np.random.choice(n_samples, size=n_samples, replace=True)
+
+        # Resample and compute statistic
+        resampled_flat = flat_data[sample_indices]
+
+        # Try to reshape to original shape if possible
+        if data.ndim > 1:
+            try:
+                resampled = resampled_flat.reshape(data.shape)
+            except ValueError:
+                resampled = resampled_flat
+        else:
+            resampled = resampled_flat
+
+        try:
+            stat = statistic_func(resampled)
+            if np.isfinite(stat):
+                bootstrap_stats.append(stat)
+        except Exception:
+            # Skip failed bootstrap samples
+            continue
+
+    if len(bootstrap_stats) < 10:
+        logger.warning(f"Only {len(bootstrap_stats)} valid bootstrap samples obtained")
+        return StatisticalResult(
+            value=point_estimate,
+            confidence_interval=(np.nan, np.nan),
+            standard_error=np.nan,
+            n_samples=n_samples,
+            confidence_level=confidence_level,
+            method='bootstrap',
+        )
+
+    bootstrap_stats = np.array(bootstrap_stats)
+
+    # Calculate confidence interval using percentile method
+    alpha = 1 - confidence_level
+    lower_percentile = alpha / 2 * 100
+    upper_percentile = (1 - alpha / 2) * 100
+
+    ci_lower = np.percentile(bootstrap_stats, lower_percentile)
+    ci_upper = np.percentile(bootstrap_stats, upper_percentile)
+
+    # Calculate standard error
+    standard_error = np.std(bootstrap_stats, ddof=1)
+
+    return StatisticalResult(
+        value=point_estimate,
+        confidence_interval=(ci_lower, ci_upper),
+        standard_error=standard_error,
+        n_samples=n_samples,
+        confidence_level=confidence_level,
+        method='bootstrap',
+    )
 
 
 class DiversityAnalyzer:

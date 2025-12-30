@@ -6,14 +6,23 @@ and generating reports.
 """
 
 from .species_presence import analyze_species_presence, get_folder_size
-from .statistical_analysis import DiversityAnalyzer, StatisticalTester
+from .statistical_analysis import (
+    DiversityAnalyzer,
+    StatisticalTester,
+    StatisticalResult,
+    StatisticalConfig,
+    bootstrap_confidence_interval,
+)
 
 __all__ = [
     # Species presence analysis
     'analyze_species_presence',
     'get_folder_size',
-    
+
     # Statistical analysis
     'DiversityAnalyzer',
     'StatisticalTester',
+    'StatisticalResult',
+    'StatisticalConfig',
+    'bootstrap_confidence_interval',
 ]

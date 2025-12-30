@@ -635,7 +635,143 @@ class GridFIA:
             )
         
         return results
-    
+
+    def calculate_metrics_with_stats(
+        self,
+        zarr_path: Union[str, Path],
+        calculations: Optional[List[str]] = None,
+        n_bootstrap: int = 1000,
+        confidence_level: float = 0.95,
+    ) -> Dict[str, "StatisticalResult"]:
+        """
+        Calculate forest metrics with bootstrap confidence intervals.
+
+        This method provides statistical context for each calculation,
+        including confidence intervals and standard error estimates.
+
+        Parameters
+        ----------
+        zarr_path : str or Path
+            Path to Zarr store containing biomass data.
+        calculations : List[str], optional
+            Specific calculations to run. If None, runs default calculations:
+            ["species_richness", "shannon_diversity", "simpson_diversity",
+            "total_biomass"].
+        n_bootstrap : int, default=1000
+            Number of bootstrap resamples for confidence intervals.
+        confidence_level : float, default=0.95
+            Confidence level for intervals (e.g., 0.95 for 95% CI).
+
+        Returns
+        -------
+        Dict[str, StatisticalResult]
+            Dictionary mapping calculation names to StatisticalResult objects
+            containing point estimates, confidence intervals, and metadata.
+
+        Examples
+        --------
+        >>> api = GridFIA(seed=42)  # Reproducible results
+        >>> results = api.calculate_metrics_with_stats(
+        ...     "data/forest.zarr",
+        ...     calculations=["shannon_diversity", "species_richness"],
+        ...     n_bootstrap=1000,
+        ...     confidence_level=0.95
+        ... )
+        >>> for name, result in results.items():
+        ...     print(f"{name}:")
+        ...     print(f"  Value: {result.value:.3f}")
+        ...     print(f"  95% CI: [{result.confidence_interval[0]:.3f}, "
+        ...           f"{result.confidence_interval[1]:.3f}]")
+        ...     print(f"  SE: {result.standard_error:.3f}")
+
+        Notes
+        -----
+        This method computes aggregate statistics across all pixels in the
+        Zarr store. For pixel-level confidence intervals, use the underlying
+        ForestCalculation.calculate_with_stats() method directly.
+
+        The bootstrap confidence intervals are computed by resampling the
+        pixel values and computing the mean for each bootstrap sample.
+        """
+        from gridfia.core.analysis.statistical_analysis import StatisticalResult
+        from gridfia.core.calculations.registry import registry
+
+        zarr_path = Path(zarr_path)
+
+        if not zarr_path.exists():
+            raise InvalidZarrStructure(
+                f"Zarr store not found: {zarr_path}",
+                zarr_path=str(zarr_path)
+            )
+
+        # Default calculations if not specified
+        if calculations is None:
+            calculations = [
+                "species_richness",
+                "shannon_diversity",
+                "simpson_diversity",
+                "total_biomass",
+            ]
+
+        # Validate calculations exist
+        all_registered = registry.list_calculations()
+        invalid_calcs = [c for c in calculations if c not in all_registered]
+        if invalid_calcs:
+            raise CalculationFailed(
+                f"Unknown calculations: {invalid_calcs}",
+                calculation_name=invalid_calcs[0] if len(invalid_calcs) == 1 else str(invalid_calcs),
+                available_calculations=all_registered
+            )
+
+        # Load biomass data from Zarr
+        import zarr
+        store = zarr.open(str(zarr_path), mode='r')
+
+        # Find biomass data - look for species arrays
+        species_arrays = []
+        for key in store.array_keys():
+            arr = store[key]
+            if arr.ndim == 2:  # 2D array (height, width)
+                species_arrays.append(arr[:])
+
+        if not species_arrays:
+            raise InvalidZarrStructure(
+                "No valid species arrays found in Zarr store",
+                zarr_path=str(zarr_path)
+            )
+
+        # Stack into 3D array (species, height, width)
+        import numpy as np
+        biomass_data = np.stack(species_arrays, axis=0)
+
+        # Get seed from SeedManager if set
+        seed = self._seed
+
+        # Run calculations with statistics
+        results = {}
+        for calc_name in calculations:
+            try:
+                calc = registry.get(calc_name)
+                result = calc.calculate_with_stats(
+                    biomass_data=biomass_data,
+                    n_bootstrap=n_bootstrap,
+                    confidence_level=confidence_level,
+                    seed=seed,
+                )
+                results[calc_name] = result
+            except Exception as e:
+                logger.warning(f"Calculation {calc_name} failed: {e}")
+                results[calc_name] = StatisticalResult(
+                    value=np.nan,
+                    confidence_interval=(np.nan, np.nan),
+                    standard_error=np.nan,
+                    n_samples=0,
+                    confidence_level=confidence_level,
+                    method='failed',
+                )
+
+        return results
+
     def create_maps(
         self,
         zarr_path: Union[str, Path],

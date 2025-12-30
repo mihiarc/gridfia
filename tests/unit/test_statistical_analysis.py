@@ -16,9 +16,11 @@ from pathlib import Path
 
 from gridfia.core.analysis.statistical_analysis import (
     StatisticalConfig,
+    StatisticalResult,
     DiversityAnalyzer,
     StatisticalTester,
-    compute_spatial_autocorrelation
+    bootstrap_confidence_interval,
+    compute_spatial_autocorrelation,
 )
 
 
@@ -1043,3 +1045,285 @@ class TestPerformanceTests:
         assert 'observed_difference' in result
         assert 'p_value' in result
         assert result['n_permutations'] == 10000
+
+
+class TestStatisticalResult:
+    """Test suite for StatisticalResult dataclass."""
+
+    def test_creation(self):
+        """Test creating a StatisticalResult."""
+        result = StatisticalResult(
+            value=2.45,
+            confidence_interval=(2.31, 2.59),
+            standard_error=0.07,
+            n_samples=1000,
+            confidence_level=0.95,
+            method='bootstrap',
+        )
+
+        assert result.value == 2.45
+        assert result.confidence_interval == (2.31, 2.59)
+        assert result.standard_error == 0.07
+        assert result.n_samples == 1000
+        assert result.confidence_level == 0.95
+        assert result.method == 'bootstrap'
+        assert result.p_value is None
+
+    def test_str_representation(self):
+        """Test string representation of StatisticalResult."""
+        result = StatisticalResult(
+            value=2.45,
+            confidence_interval=(2.31, 2.59),
+            standard_error=0.07,
+            n_samples=1000,
+        )
+
+        str_repr = str(result)
+        assert '2.4500' in str_repr
+        assert '95% CI' in str_repr
+        assert '2.3100' in str_repr
+        assert '2.5900' in str_repr
+
+    def test_to_dict(self):
+        """Test conversion to dictionary."""
+        result = StatisticalResult(
+            value=2.45,
+            confidence_interval=(2.31, 2.59),
+            standard_error=0.07,
+            n_samples=1000,
+            p_value=0.03,
+        )
+
+        d = result.to_dict()
+
+        assert d['value'] == 2.45
+        assert d['ci_lower'] == 2.31
+        assert d['ci_upper'] == 2.59
+        assert d['standard_error'] == 0.07
+        assert d['n_samples'] == 1000
+        assert d['confidence_level'] == 0.95
+        assert d['method'] == 'bootstrap'
+        assert d['p_value'] == 0.03
+
+    def test_default_values(self):
+        """Test default values for optional fields."""
+        result = StatisticalResult(
+            value=1.0,
+            confidence_interval=(0.9, 1.1),
+            standard_error=0.05,
+            n_samples=100,
+        )
+
+        assert result.confidence_level == 0.95
+        assert result.method == 'bootstrap'
+        assert result.p_value is None
+
+
+class TestBootstrapConfidenceInterval:
+    """Test suite for bootstrap_confidence_interval function."""
+
+    def test_basic_bootstrap(self):
+        """Test basic bootstrap confidence interval calculation."""
+        np.random.seed(42)
+        data = np.random.normal(10, 2, 100)
+
+        result = bootstrap_confidence_interval(
+            data=data,
+            statistic_func=np.mean,
+            n_bootstrap=500,
+            confidence_level=0.95,
+            seed=42,
+        )
+
+        assert isinstance(result, StatisticalResult)
+        assert 9 < result.value < 11  # Mean should be close to 10
+        assert result.confidence_interval[0] < result.value
+        assert result.confidence_interval[1] > result.value
+        assert result.standard_error > 0
+        assert result.n_samples == 100
+        assert result.confidence_level == 0.95
+        assert result.method == 'bootstrap'
+
+    def test_reproducibility_with_seed(self):
+        """Test that results are reproducible with same seed."""
+        data = np.random.normal(10, 2, 50)
+
+        result1 = bootstrap_confidence_interval(
+            data=data,
+            statistic_func=np.mean,
+            n_bootstrap=100,
+            seed=42,
+        )
+
+        result2 = bootstrap_confidence_interval(
+            data=data,
+            statistic_func=np.mean,
+            n_bootstrap=100,
+            seed=42,
+        )
+
+        assert result1.value == result2.value
+        assert result1.confidence_interval == result2.confidence_interval
+        assert result1.standard_error == result2.standard_error
+
+    def test_different_seeds_produce_different_results(self):
+        """Test that different seeds produce different results."""
+        data = np.random.normal(10, 2, 50)
+
+        result1 = bootstrap_confidence_interval(
+            data=data,
+            statistic_func=np.mean,
+            n_bootstrap=100,
+            seed=42,
+        )
+
+        result2 = bootstrap_confidence_interval(
+            data=data,
+            statistic_func=np.mean,
+            n_bootstrap=100,
+            seed=123,
+        )
+
+        # Point estimate should be same, but CI bounds differ
+        assert result1.value == result2.value
+        assert result1.confidence_interval != result2.confidence_interval
+
+    def test_custom_statistic_function(self):
+        """Test bootstrap with custom statistic function."""
+        data = np.array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+
+        result = bootstrap_confidence_interval(
+            data=data,
+            statistic_func=np.median,
+            n_bootstrap=200,
+            seed=42,
+        )
+
+        assert isinstance(result, StatisticalResult)
+        assert 4 < result.value < 6.5  # Median should be around 5.5
+
+    def test_empty_data(self):
+        """Test bootstrap with empty data."""
+        data = np.array([])
+
+        result = bootstrap_confidence_interval(
+            data=data,
+            statistic_func=np.mean,
+            n_bootstrap=100,
+        )
+
+        assert np.isnan(result.value)
+        assert np.isnan(result.confidence_interval[0])
+        assert np.isnan(result.confidence_interval[1])
+        assert result.n_samples == 0
+
+    def test_different_confidence_levels(self):
+        """Test bootstrap with different confidence levels."""
+        np.random.seed(42)
+        data = np.random.normal(0, 1, 200)
+
+        result_95 = bootstrap_confidence_interval(
+            data=data,
+            statistic_func=np.mean,
+            n_bootstrap=500,
+            confidence_level=0.95,
+            seed=42,
+        )
+
+        result_99 = bootstrap_confidence_interval(
+            data=data,
+            statistic_func=np.mean,
+            n_bootstrap=500,
+            confidence_level=0.99,
+            seed=42,
+        )
+
+        # 99% CI should be wider than 95% CI
+        ci_width_95 = result_95.confidence_interval[1] - result_95.confidence_interval[0]
+        ci_width_99 = result_99.confidence_interval[1] - result_99.confidence_interval[0]
+
+        assert ci_width_99 > ci_width_95
+        assert result_99.confidence_level == 0.99
+
+    def test_multidimensional_data(self):
+        """Test bootstrap with 2D data."""
+        np.random.seed(42)
+        data = np.random.normal(5, 1, (10, 10))
+
+        result = bootstrap_confidence_interval(
+            data=data,
+            statistic_func=np.mean,
+            n_bootstrap=200,
+            seed=42,
+        )
+
+        assert isinstance(result, StatisticalResult)
+        assert 4.5 < result.value < 5.5
+        assert result.n_samples == 100  # 10x10 = 100
+
+
+class TestCalculateWithStats:
+    """Test suite for ForestCalculation.calculate_with_stats method."""
+
+    @pytest.fixture
+    def sample_biomass_data(self):
+        """Create sample 3D biomass data."""
+        np.random.seed(42)
+        # 5 species, 20x20 pixels
+        return np.random.exponential(scale=10, size=(5, 20, 20))
+
+    def test_calculate_with_stats_basic(self, sample_biomass_data):
+        """Test calculate_with_stats returns StatisticalResult."""
+        from gridfia.core.calculations.registry import registry
+
+        calc = registry.get('species_richness')
+        result = calc.calculate_with_stats(
+            biomass_data=sample_biomass_data,
+            n_bootstrap=100,
+            confidence_level=0.95,
+            seed=42,
+        )
+
+        assert isinstance(result, StatisticalResult)
+        assert result.value > 0
+        assert result.confidence_interval[0] <= result.value
+        assert result.confidence_interval[1] >= result.value
+        assert result.n_samples > 0
+
+    def test_calculate_with_stats_reproducibility(self, sample_biomass_data):
+        """Test that calculate_with_stats is reproducible with seed."""
+        from gridfia.core.calculations.registry import registry
+
+        calc = registry.get('shannon_diversity')
+
+        result1 = calc.calculate_with_stats(
+            biomass_data=sample_biomass_data,
+            n_bootstrap=100,
+            seed=42,
+        )
+
+        result2 = calc.calculate_with_stats(
+            biomass_data=sample_biomass_data,
+            n_bootstrap=100,
+            seed=42,
+        )
+
+        assert result1.value == result2.value
+        assert result1.confidence_interval == result2.confidence_interval
+
+    def test_calculate_with_stats_different_metrics(self, sample_biomass_data):
+        """Test calculate_with_stats with different calculation types."""
+        from gridfia.core.calculations.registry import registry
+
+        calculations = ['species_richness', 'shannon_diversity', 'total_biomass']
+
+        for calc_name in calculations:
+            calc = registry.get(calc_name)
+            result = calc.calculate_with_stats(
+                biomass_data=sample_biomass_data,
+                n_bootstrap=50,
+                seed=42,
+            )
+
+            assert isinstance(result, StatisticalResult), f"Failed for {calc_name}"
+            assert not np.isnan(result.value), f"NaN value for {calc_name}"

@@ -24,9 +24,12 @@ Downstream code should:
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, TYPE_CHECKING
 import numpy as np
 import logging
+
+if TYPE_CHECKING:
+    from gridfia.core.analysis.statistical_analysis import StatisticalResult
 
 logger = logging.getLogger(__name__)
 
@@ -125,7 +128,127 @@ class ForestCalculation(ABC):
     def postprocess_result(self, result: np.ndarray) -> np.ndarray:
         """
         Postprocess calculation result.
-        
+
         Can be overridden by subclasses for custom postprocessing.
         """
         return result
+
+    def calculate_with_stats(
+        self,
+        biomass_data: np.ndarray,
+        n_bootstrap: int = 1000,
+        confidence_level: float = 0.95,
+        seed: Optional[int] = None,
+        **kwargs
+    ) -> "StatisticalResult":
+        """
+        Calculate metric with bootstrap confidence intervals.
+
+        This method provides statistical context for the calculation,
+        including confidence intervals and standard error estimates.
+
+        Parameters
+        ----------
+        biomass_data : np.ndarray
+            3D array (species, height, width) of biomass values.
+        n_bootstrap : int, default=1000
+            Number of bootstrap resamples for confidence interval.
+        confidence_level : float, default=0.95
+            Confidence level for the interval (e.g., 0.95 for 95% CI).
+        seed : int, optional
+            Random seed for reproducibility.
+        **kwargs : dict
+            Additional parameters passed to calculate().
+
+        Returns
+        -------
+        StatisticalResult
+            Result containing point estimate, confidence interval,
+            standard error, and metadata.
+
+        Examples
+        --------
+        >>> calc = ShannonDiversityCalculation()
+        >>> result = calc.calculate_with_stats(biomass_data, n_bootstrap=500)
+        >>> print(f"Shannon: {result.value:.3f} (95% CI: {result.confidence_interval})")
+
+        Notes
+        -----
+        For pixel-level calculations, this method computes a single
+        aggregate statistic (e.g., mean diversity across all pixels)
+        and provides confidence intervals for that aggregate.
+        """
+        from gridfia.core.analysis.statistical_analysis import (
+            bootstrap_confidence_interval,
+            StatisticalResult,
+        )
+
+        # Validate data first
+        if not self.validate_data(biomass_data):
+            return StatisticalResult(
+                value=np.nan,
+                confidence_interval=(np.nan, np.nan),
+                standard_error=np.nan,
+                n_samples=0,
+                confidence_level=confidence_level,
+                method='bootstrap',
+            )
+
+        # Define the statistic function that computes aggregate metric
+        def compute_aggregate(data: np.ndarray) -> float:
+            """Compute aggregate statistic from calculation result."""
+            try:
+                # Reshape if flattened
+                if data.ndim == 1 and biomass_data.ndim == 3:
+                    # Can't easily reshape bootstrap samples for 3D data
+                    # Use the flattened data directly
+                    result = self.calculate(biomass_data, **kwargs)
+                else:
+                    result = self.calculate(data, **kwargs)
+
+                # Get aggregate value (mean of non-NaN values)
+                if isinstance(result, np.ndarray):
+                    valid_values = result[np.isfinite(result)]
+                    if len(valid_values) > 0:
+                        return float(np.mean(valid_values))
+                    return np.nan
+                return float(result)
+            except Exception:
+                return np.nan
+
+        # For 3D biomass data, we bootstrap over the spatial pixels
+        # First compute the actual result to get pixel values
+        full_result = self.calculate(biomass_data, **kwargs)
+
+        if isinstance(full_result, np.ndarray):
+            # Get valid (non-NaN) pixel values for bootstrapping
+            valid_pixels = full_result[np.isfinite(full_result)]
+
+            if len(valid_pixels) == 0:
+                return StatisticalResult(
+                    value=np.nan,
+                    confidence_interval=(np.nan, np.nan),
+                    standard_error=np.nan,
+                    n_samples=0,
+                    confidence_level=confidence_level,
+                    method='bootstrap',
+                )
+
+            # Bootstrap over the pixel values
+            return bootstrap_confidence_interval(
+                data=valid_pixels,
+                statistic_func=np.mean,
+                n_bootstrap=n_bootstrap,
+                confidence_level=confidence_level,
+                seed=seed,
+            )
+        else:
+            # Scalar result - can't bootstrap
+            return StatisticalResult(
+                value=float(full_result),
+                confidence_interval=(float(full_result), float(full_result)),
+                standard_error=0.0,
+                n_samples=1,
+                confidence_level=confidence_level,
+                method='point_estimate',
+            )
