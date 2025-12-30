@@ -47,14 +47,14 @@ from rich.table import Table
 console = Console()
 
 
-def get_endpoint_url(backend: str, account_id: Optional[str] = None) -> str:
+def get_endpoint_url(backend: str, account_id: Optional[str] = None, region: str = "us-west-004") -> str:
     """Get the S3 endpoint URL for the backend."""
     if backend == 'r2':
         if not account_id:
             raise ValueError("account_id required for R2")
         return f"https://{account_id}.r2.cloudflarestorage.com"
     elif backend == 'b2':
-        return "https://s3.us-west-004.backblazeb2.com"  # Default B2 region
+        return f"https://s3.{region}.backblazeb2.com"
     else:
         raise ValueError(f"Unknown backend: {backend}")
 
@@ -150,13 +150,13 @@ def main():
     parser.add_argument(
         '--backend',
         choices=['r2', 'b2'],
-        default='r2',
-        help='Cloud storage backend'
+        default='b2',
+        help='Cloud storage backend (default: b2)'
     )
     parser.add_argument(
         '--bucket',
-        required=True,
-        help='Bucket name'
+        default='gridfia-data',
+        help='Bucket name (default: gridfia-data)'
     )
     parser.add_argument(
         '--account-id',
@@ -164,12 +164,19 @@ def main():
     )
     parser.add_argument(
         '--profile',
-        default='r2',
-        help='AWS CLI profile name (default: r2)'
+        default='b2',
+        help='AWS CLI profile name (default: b2)'
     )
     parser.add_argument(
         '--public-url',
-        help='Public URL for the bucket (e.g., https://pub-xxx.r2.dev)'
+        help='Public URL for the bucket. '
+             'B2: https://f004.backblazeb2.com/file/<bucket>, '
+             'R2: https://pub-xxx.r2.dev'
+    )
+    parser.add_argument(
+        '--region',
+        default='us-west-004',
+        help='B2 region (default: us-west-004)'
     )
     parser.add_argument(
         '--states',
@@ -211,11 +218,21 @@ def main():
         sys.exit(1)
 
     # Get endpoint
-    endpoint_url = get_endpoint_url(args.backend, args.account_id)
+    endpoint_url = get_endpoint_url(args.backend, args.account_id, args.region)
+
+    # Generate default public URL if not provided
+    if not args.public_url:
+        if args.backend == 'b2':
+            # B2 public URL format: https://f004.backblazeb2.com/file/<bucket>
+            region_code = args.region.split('-')[-1]  # e.g., "004" from "us-west-004"
+            args.public_url = f"https://f{region_code}.backblazeb2.com/file/{args.bucket}"
+        else:
+            console.print("[yellow]Warning: No --public-url specified for R2[/yellow]")
 
     console.print(f"[bold]Uploading {len(states_to_upload)} states to {args.backend.upper()}[/bold]")
     console.print(f"  Bucket: {args.bucket}")
     console.print(f"  Endpoint: {endpoint_url}")
+    console.print(f"  Public URL: {args.public_url}")
     console.print(f"  Profile: {args.profile}")
     if args.dry_run:
         console.print(f"  [yellow]DRY RUN MODE[/yellow]")

@@ -817,31 +817,55 @@ class GridFIA:
         """
         return validate_zarr_store(Path(zarr_path))
 
-    # Pre-hosted sample datasets for quick demos
-    SAMPLE_DATASETS = {
+    # Static metadata for sample datasets (URLs generated from config)
+    _SAMPLE_METADATA = {
         "durham_nc": {
             "name": "Durham County, North Carolina",
-            "url": "https://pub-da6f67cd8f9147418258ed71cc130443.r2.dev/samples/durham_nc.zarr",
             "description": "Full Durham County with all species (~263 MB)",
             "num_species": 326,
             "approximate_size_mb": 263
         },
     }
 
-    # Cloud-hosted state datasets (full state coverage)
-    # Base URL for state data on R2
-    STATE_DATA_BASE_URL = "https://pub-da6f67cd8f9147418258ed71cc130443.r2.dev/states"
-
-    STATE_DATASETS = {
+    # Static metadata for state datasets (URLs generated from config)
+    _STATE_METADATA = {
         "RI": {
             "name": "Rhode Island",
-            "url": "https://pub-da6f67cd8f9147418258ed71cc130443.r2.dev/states/ri/ri_forest.zarr",
             "description": "Full Rhode Island state coverage",
             "num_species": 326,
             "shape": [326, 3407, 2264],
             "approximate_size_mb": 646
         },
+        "CT": {
+            "name": "Connecticut",
+            "description": "Full Connecticut state coverage",
+            "num_species": 326,
+            "shape": [326, 4100, 7151],
+            "approximate_size_mb": 2807
+        },
     }
+
+    @property
+    def SAMPLE_DATASETS(self) -> Dict[str, Dict[str, Any]]:
+        """Get sample datasets with URLs from cloud config."""
+        return {
+            key: {
+                **meta,
+                "url": self.settings.cloud.get_sample_url(key)
+            }
+            for key, meta in self._SAMPLE_METADATA.items()
+        }
+
+    @property
+    def STATE_DATASETS(self) -> Dict[str, Dict[str, Any]]:
+        """Get state datasets with URLs from cloud config."""
+        return {
+            key: {
+                **meta,
+                "url": self.settings.cloud.get_state_url(key)
+            }
+            for key, meta in self._STATE_METADATA.items()
+        }
 
     def list_sample_datasets(self) -> List[Dict[str, Any]]:
         """
@@ -903,12 +927,16 @@ class GridFIA:
         you access are downloaded, making it efficient to analyze specific regions
         within a state.
 
+        The cloud storage backend is configured via settings.cloud or environment
+        variables (GRIDFIA_CLOUD_PUBLIC_URL, etc.). See CloudStorageConfig for details.
+
         Parameters
         ----------
         state : str
             State abbreviation (e.g., "NC", "CA", "RI").
         storage_options : Dict[str, Any], optional
-            Options passed to the filesystem backend.
+            Options passed to the filesystem backend. If None, uses settings
+            from cloud configuration.
 
         Returns
         -------
@@ -926,16 +954,31 @@ class GridFIA:
         >>> store = api.load_state("RI")
         >>> print(f"Shape: {store.shape}")
         >>> print(f"Species: {store.num_species}")
+
+        >>> # With custom cloud config
+        >>> from gridfia.config import CloudStorageConfig
+        >>> cloud = CloudStorageConfig(
+        ...     public_url="https://f004.backblazeb2.com/file/my-bucket"
+        ... )
+        >>> api = GridFIA()
+        >>> api.settings.cloud = cloud
+        >>> store = api.load_state("RI")
         """
         state_upper = state.upper()
-        if state_upper not in self.STATE_DATASETS:
-            available = list(self.STATE_DATASETS.keys())
+        if state_upper not in self._STATE_METADATA:
+            available = list(self._STATE_METADATA.keys())
             raise ValueError(
                 f"State '{state}' not available. Available states: {available}"
             )
 
-        url = self.STATE_DATASETS[state_upper]["url"]
-        return self.load_from_cloud(url=url, storage_options=storage_options)
+        url = self.settings.cloud.get_state_url(state_upper)
+
+        # Merge config storage options with user-provided options
+        config_options = self.settings.cloud.get_storage_options()
+        if storage_options:
+            config_options.update(storage_options)
+
+        return self.load_from_cloud(url=url, storage_options=config_options)
 
     def load_from_cloud(
         self,
@@ -1001,14 +1044,14 @@ class GridFIA:
         - Remote stores work best for exploratory analysis of subsets
         """
         if sample:
-            if sample not in self.SAMPLE_DATASETS:
-                available = list(self.SAMPLE_DATASETS.keys())
+            if sample not in self._SAMPLE_METADATA:
+                available = list(self._SAMPLE_METADATA.keys())
                 raise ValueError(
                     f"Unknown sample dataset: '{sample}'. "
                     f"Available: {available}"
                 )
-            url = self.SAMPLE_DATASETS[sample]["url"]
-            logger.info(f"Loading sample dataset: {self.SAMPLE_DATASETS[sample]['name']}")
+            url = self.settings.cloud.get_sample_url(sample)
+            logger.info(f"Loading sample dataset: {self._SAMPLE_METADATA[sample]['name']}")
 
         if not url:
             raise ValueError(
@@ -1016,8 +1059,13 @@ class GridFIA:
                 "Use list_sample_datasets() to see available samples."
             )
 
+        # Merge config storage options with user-provided options
+        config_options = self.settings.cloud.get_storage_options()
+        if storage_options:
+            config_options.update(storage_options)
+
         logger.info(f"Opening cloud Zarr store: {url}")
-        return ZarrStore.from_url(url, storage_options=storage_options)
+        return ZarrStore.from_url(url, storage_options=config_options)
 
     def download_sample(
         self,
@@ -1054,14 +1102,14 @@ class GridFIA:
         import shutil
         import urllib.request
 
-        if sample not in self.SAMPLE_DATASETS:
-            available = list(self.SAMPLE_DATASETS.keys())
+        if sample not in self._SAMPLE_METADATA:
+            available = list(self._SAMPLE_METADATA.keys())
             raise ValueError(
                 f"Unknown sample dataset: '{sample}'. Available: {available}"
             )
 
         output_path = Path(output_path)
-        dataset_info = self.SAMPLE_DATASETS[sample]
+        dataset_info = self._SAMPLE_METADATA[sample]
 
         logger.info(f"Downloading {dataset_info['name']} to {output_path}")
 

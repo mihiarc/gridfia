@@ -9,8 +9,8 @@ from enum import Enum
 from pathlib import Path
 from typing import List, Optional, Tuple, Dict, Any
 
-from pydantic import BaseModel, Field, field_validator, field_serializer, ConfigDict
-from pydantic_settings import BaseSettings
+from pydantic import BaseModel, Field, field_validator, field_serializer
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class OutputFormat(str, Enum):
@@ -18,6 +18,137 @@ class OutputFormat(str, Enum):
     GEOTIFF = "geotiff"
     ZARR = "zarr"
     NETCDF = "netcdf"
+
+
+class CloudStorageBackend(str, Enum):
+    """Supported cloud storage backends."""
+    BACKBLAZE_B2 = "b2"
+    CLOUDFLARE_R2 = "r2"
+    AWS_S3 = "s3"
+    HTTP = "http"  # Generic HTTP/HTTPS URLs
+
+
+class CloudStorageConfig(BaseModel):
+    """Configuration for cloud storage of Zarr datasets.
+
+    Supports multiple backends for storing and streaming forest data:
+    - Backblaze B2: Low-cost S3-compatible storage
+    - Cloudflare R2: Zero egress fees
+    - AWS S3: Standard cloud storage
+    - HTTP: Any publicly accessible HTTP URLs
+
+    Environment variables (with GRIDFIA_ prefix):
+        GRIDFIA_CLOUD_BACKEND: Storage backend (b2, r2, s3, http)
+        GRIDFIA_CLOUD_BUCKET: Bucket name
+        GRIDFIA_CLOUD_PUBLIC_URL: Public URL for data access
+        GRIDFIA_CLOUD_ENDPOINT_URL: S3-compatible endpoint (for b2/r2)
+        GRIDFIA_CLOUD_ACCESS_KEY: Access key (optional, for private buckets)
+        GRIDFIA_CLOUD_SECRET_KEY: Secret key (optional, for private buckets)
+    """
+
+    backend: CloudStorageBackend = Field(
+        default=CloudStorageBackend.BACKBLAZE_B2,
+        description="Cloud storage backend type"
+    )
+    bucket: str = Field(
+        default="gridfia-data",
+        description="Bucket name for storing data"
+    )
+    public_url: str = Field(
+        default="https://f004.backblazeb2.com/file/gridfia-data",
+        description="Public URL base for accessing data (no trailing slash)"
+    )
+    endpoint_url: Optional[str] = Field(
+        default=None,
+        description="S3-compatible endpoint URL (for B2/R2). "
+                    "B2: https://s3.us-west-004.backblazeb2.com, "
+                    "R2: https://<account>.r2.cloudflarestorage.com"
+    )
+    region: str = Field(
+        default="us-west-004",
+        description="Cloud region (for S3-compatible backends)"
+    )
+    access_key: Optional[str] = Field(
+        default=None,
+        description="Access key for authenticated access (optional for public buckets)"
+    )
+    secret_key: Optional[str] = Field(
+        default=None,
+        description="Secret key for authenticated access (optional for public buckets)"
+    )
+
+    # Path prefixes within the bucket
+    states_prefix: str = Field(
+        default="states",
+        description="Path prefix for state datasets (e.g., states/ri/ri_forest.zarr)"
+    )
+    samples_prefix: str = Field(
+        default="samples",
+        description="Path prefix for sample datasets (e.g., samples/durham_nc.zarr)"
+    )
+
+    def get_state_url(self, state_abbr: str) -> str:
+        """Get the public URL for a state's Zarr dataset.
+
+        Args:
+            state_abbr: Two-letter state abbreviation (e.g., 'RI', 'NC')
+
+        Returns:
+            Full URL to the state's Zarr store
+        """
+        state_lower = state_abbr.lower()
+        return f"{self.public_url}/{self.states_prefix}/{state_lower}/{state_lower}_forest.zarr"
+
+    def get_sample_url(self, sample_name: str) -> str:
+        """Get the public URL for a sample dataset.
+
+        Args:
+            sample_name: Name of the sample (e.g., 'durham_nc')
+
+        Returns:
+            Full URL to the sample Zarr store
+        """
+        return f"{self.public_url}/{self.samples_prefix}/{sample_name}.zarr"
+
+    def get_storage_options(self) -> Dict[str, Any]:
+        """Get fsspec storage options for this backend.
+
+        Returns:
+            Dictionary of options to pass to fsspec/zarr for cloud access
+        """
+        options: Dict[str, Any] = {}
+
+        if self.backend == CloudStorageBackend.HTTP:
+            # HTTP needs no special options for public access
+            return options
+
+        # S3-compatible backends (B2, R2, S3)
+        if self.access_key and self.secret_key:
+            options["key"] = self.access_key
+            options["secret"] = self.secret_key
+        else:
+            # Anonymous access for public buckets
+            options["anon"] = True
+
+        if self.endpoint_url:
+            options["client_kwargs"] = {"endpoint_url": self.endpoint_url}
+
+        if self.region:
+            options["client_kwargs"] = options.get("client_kwargs", {})
+            options["client_kwargs"]["region_name"] = self.region
+
+        return options
+
+    def get_s3_url(self, path: str) -> str:
+        """Get S3-style URL for a path (for authenticated access).
+
+        Args:
+            path: Path within the bucket (e.g., 'states/ri/ri_forest.zarr')
+
+        Returns:
+            S3-style URL (s3://bucket/path)
+        """
+        return f"s3://{self.bucket}/{path}"
 
 
 # Removed RasterConfig - not needed for REST API approach
@@ -111,7 +242,7 @@ class GridFIASettings(BaseSettings):
     app_name: str = "GridFIA"
     debug: bool = Field(default=False, description="Enable debug mode")
     verbose: bool = Field(default=False, description="Enable verbose output")
-    
+
     # File paths
     data_dir: Path = Field(
         default=Path("data"),
@@ -125,8 +256,14 @@ class GridFIASettings(BaseSettings):
         default=Path(".cache"),
         description="Directory for caching intermediate results"
     )
-    
-    # Processing configurations  
+
+    # Cloud storage configuration
+    cloud: CloudStorageConfig = Field(
+        default_factory=CloudStorageConfig,
+        description="Cloud storage settings for remote Zarr access"
+    )
+
+    # Processing configurations
     visualization: VisualizationConfig = Field(default_factory=VisualizationConfig)
     processing: ProcessingConfig = Field(default_factory=ProcessingConfig)
     
@@ -156,11 +293,12 @@ class GridFIASettings(BaseSettings):
         description="List of valid species codes"
     )
     
-    model_config = ConfigDict(
-        env_prefix="GRIDFIA_",     # Environment variables start with GRIDFIA_
-        env_file=".env",           # Load from .env file if present
-        case_sensitive=False,      # Case-insensitive environment variables
-        extra="ignore"             # Ignore extra fields in config files
+    model_config = SettingsConfigDict(
+        env_prefix="GRIDFIA_",           # Environment variables start with GRIDFIA_
+        env_file=".env",                 # Load from .env file if present
+        env_nested_delimiter="__",       # Use __ for nested config (e.g., GRIDFIA_CLOUD__BUCKET)
+        case_sensitive=False,            # Case-insensitive environment variables
+        extra="ignore"                   # Ignore extra fields in config files
     )
     
     @field_validator('data_dir', 'output_dir', 'cache_dir')

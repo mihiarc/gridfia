@@ -20,7 +20,13 @@ __license__ = "MIT"
 from gridfia.api import GridFIA
 
 # Configuration management for advanced users
-from gridfia.config import GridFIASettings, load_settings, save_settings
+from gridfia.config import (
+    GridFIASettings,
+    CloudStorageConfig,
+    CloudStorageBackend,
+    load_settings,
+    save_settings,
+)
 
 # Utility classes for advanced users
 from gridfia.utils.zarr_utils import ZarrStore
@@ -47,6 +53,8 @@ __all__ = [
 
     # Configuration management
     "GridFIASettings",
+    "CloudStorageConfig",
+    "CloudStorageBackend",
     "load_settings",
     "save_settings",
 
