@@ -244,7 +244,7 @@ class TestGridFIADownloadSpecies:
         """Test error when no location parameters provided."""
         api = GridFIA()
 
-        with pytest.raises(InvalidLocationConfig, match="Must specify state, bbox, or location_config"):
+        with pytest.raises(InvalidLocationConfig, match="Must specify state, bbox, polygon, or location_config"):
             api.download_species(output_dir=temp_dir, species_codes=['0202'])
 
     def test_download_species_creates_output_directory(self, temp_dir):
