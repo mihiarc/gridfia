@@ -206,7 +206,7 @@ uv run mkdocs serve
 
 ## The FIAtools Ecosystem
 
-GridFIA is part of the [FIAtools Python ecosystem](https://fiatools.org) - a unified suite of open-source tools for forest inventory analysis:
+GridFIA is part of the [FIAtools Python ecosystem](https://fiatools.org) - a unified suite of open-source tools for forest inventory applications:
 
 | Tool | Purpose | Key Features |
 |------|---------|--------------|
@@ -216,6 +216,10 @@ GridFIA is part of the [FIAtools Python ecosystem](https://fiatools.org) - a uni
 | [**askFIA**](https://fiatools.org) | AI interface | Natural language queries for forest data |
 
 **[Explore the full ecosystem at fiatools.org](https://fiatools.org)**
+
+## Affiliation
+
+Developed in collaboration with USDA Forest Service Research & Development. gridFIA provides access to Forest Service spatial data products but is not part of the official FIA Program.
 
 ## Citation
 
@@ -231,6 +235,6 @@ GridFIA is part of the [FIAtools Python ecosystem](https://fiatools.org) - a uni
 ---
 
 <div align="center">
-  <a href="https://fiatools.org"><strong>fiatools.org</strong></a> · Python Ecosystem for Forest Inventory Analysis<br>
+  <a href="https://fiatools.org"><strong>fiatools.org</strong></a> · Python Ecosystem for Forest Inventory Applications<br>
   <sub>Built by <a href="https://github.com/mihiarc">Chris Mihiar</a> · USDA Forest Service Southern Research Station</sub>
 </div>

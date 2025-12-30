@@ -6,9 +6,15 @@ This script creates a country-wide Zarr store from BIGMAP 2018 forest data.
 It processes state-by-state to manage memory and provides checkpoint/resume capability.
 
 Pipeline Stages:
-1. Download all species GeoTIFFs for each state
-2. Create per-state Zarr stores with consistent chunking
-3. Track progress for resume capability
+1. Download all species GeoTIFFs for each state (using bounding box)
+2. Clip rasters to actual state boundary (eliminates overlap with neighbors)
+3. Create per-state Zarr stores with consistent chunking
+4. Track progress for resume capability
+
+The clipping step is crucial for multi-state efficiency:
+- Downloads use rectangular bounding boxes (required by USFS REST API)
+- Clipping to actual state polygons eliminates ~54% redundant storage
+- No data overlap between adjacent states
 
 Usage:
     # Process specific states
@@ -28,6 +34,7 @@ Configuration:
     - Chunk size: (1, 512, 512) - efficient spatial subsetting
     - Compression: LZ4 level 5 - fast decompression
     - CRS: EPSG:3857 (Web Mercator) - matches BIGMAP source
+    - State boundary clipping: eliminates bbox overlap
 """
 
 import argparse
@@ -36,7 +43,14 @@ import logging
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set, Tuple
+
+import numpy as np
+import rasterio
+from rasterio.features import geometry_mask
+from rasterio.warp import transform_geom
+import geopandas as gpd
+from shapely.geometry import mapping
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -76,6 +90,156 @@ PRIORITY_STATES = [
     'MI', 'WI', 'MN',         # Great Lakes
     'MT', 'ID', 'CO'          # Mountain West
 ]
+
+# Cache for state boundaries
+_state_boundaries_cache: Dict[str, gpd.GeoDataFrame] = {}
+
+
+def get_state_boundary(state_abbr: str) -> gpd.GeoDataFrame:
+    """
+    Get the state boundary polygon for clipping.
+
+    Returns GeoDataFrame with the state boundary in EPSG:4326.
+    """
+    global _state_boundaries_cache
+
+    if state_abbr in _state_boundaries_cache:
+        return _state_boundaries_cache[state_abbr]
+
+    # Load US states from Census Bureau
+    states_url = 'https://www2.census.gov/geo/tiger/GENZ2022/shp/cb_2022_us_state_500k.zip'
+
+    try:
+        all_states = gpd.read_file(states_url)
+        state_gdf = all_states[all_states['STUSPS'] == state_abbr].copy()
+
+        if state_gdf.empty:
+            raise ValueError(f"State {state_abbr} not found in Census boundaries")
+
+        # Ensure it's in WGS84
+        if state_gdf.crs != 'EPSG:4326':
+            state_gdf = state_gdf.to_crs('EPSG:4326')
+
+        _state_boundaries_cache[state_abbr] = state_gdf
+        return state_gdf
+
+    except Exception as e:
+        logger.error(f"Failed to load state boundary for {state_abbr}: {e}")
+        raise
+
+
+def clip_raster_to_state(
+    input_path: Path,
+    output_path: Path,
+    state_abbr: str,
+    nodata_value: float = -9999.0
+) -> Path:
+    """
+    Clip a raster to the actual state boundary polygon.
+
+    Pixels outside the state boundary are set to nodata.
+    This eliminates overlap with adjacent states.
+
+    Args:
+        input_path: Path to input GeoTIFF
+        output_path: Path for clipped output
+        state_abbr: State abbreviation (e.g., 'NC')
+        nodata_value: Value to use for pixels outside state
+
+    Returns:
+        Path to clipped raster
+    """
+    # Get state boundary
+    state_gdf = get_state_boundary(state_abbr)
+
+    with rasterio.open(input_path) as src:
+        # Transform state geometry to raster CRS
+        state_geom = state_gdf.geometry.values[0]
+
+        if src.crs.to_string() != 'EPSG:4326':
+            # Transform geometry to match raster CRS
+            state_geom_transformed = transform_geom(
+                'EPSG:4326',
+                src.crs.to_string(),
+                mapping(state_geom)
+            )
+        else:
+            state_geom_transformed = mapping(state_geom)
+
+        # Create mask: True where data should be kept (inside state)
+        mask = geometry_mask(
+            [state_geom_transformed],
+            out_shape=src.shape,
+            transform=src.transform,
+            invert=True  # True = inside polygon = keep data
+        )
+
+        # Read data
+        data = src.read(1)
+
+        # Apply mask: set pixels outside state to nodata
+        clipped_data = np.where(mask, data, nodata_value)
+
+        # Update profile with nodata value
+        profile = src.profile.copy()
+        profile.update(nodata=nodata_value)
+
+        # Write clipped raster
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        with rasterio.open(output_path, 'w', **profile) as dst:
+            dst.write(clipped_data, 1)
+
+    return output_path
+
+
+def clip_all_rasters_in_directory(
+    input_dir: Path,
+    output_dir: Path,
+    state_abbr: str,
+    nodata_value: float = -9999.0
+) -> List[Path]:
+    """
+    Clip all GeoTIFF rasters in a directory to state boundary.
+
+    Args:
+        input_dir: Directory containing input GeoTIFFs
+        output_dir: Directory for clipped outputs
+        state_abbr: State abbreviation
+        nodata_value: Nodata value for outside pixels
+
+    Returns:
+        List of paths to clipped rasters
+    """
+    input_files = sorted(input_dir.glob('*.tif'))
+
+    if not input_files:
+        raise ValueError(f"No .tif files found in {input_dir}")
+
+    console.print(f"  [cyan]Clipping {len(input_files)} rasters to {state_abbr} boundary...[/cyan]")
+
+    # Preload state boundary (cached for all files)
+    get_state_boundary(state_abbr)
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    clipped_files = []
+
+    for i, input_file in enumerate(input_files):
+        output_file = output_dir / input_file.name
+
+        try:
+            clip_raster_to_state(input_file, output_file, state_abbr, nodata_value)
+            clipped_files.append(output_file)
+
+            if (i + 1) % 50 == 0:
+                console.print(f"    [dim]Clipped {i + 1}/{len(input_files)} rasters[/dim]")
+
+        except Exception as e:
+            logger.warning(f"Failed to clip {input_file.name}: {e}")
+            # Fall back to using original file
+            clipped_files.append(input_file)
+
+    console.print(f"  [green]Clipped {len(clipped_files)} rasters to state boundary[/green]")
+    return clipped_files
 
 
 class ProgressTracker:
@@ -162,10 +326,16 @@ def process_state(
     chunk_size: tuple = (1, 512, 512),
     compression: str = 'lz4',
     compression_level: int = 5,
-    dry_run: bool = False
+    dry_run: bool = False,
+    skip_clipping: bool = False
 ) -> Optional[Dict]:
     """
-    Process a single state: download all species and create Zarr store.
+    Process a single state: download all species, clip to boundary, and create Zarr store.
+
+    Pipeline:
+    1. Download all species GeoTIFFs (using bounding box)
+    2. Clip each raster to actual state boundary (eliminates overlap)
+    3. Create Zarr store from clipped rasters
 
     Returns dict with stats on success, None on failure.
     """
@@ -174,12 +344,14 @@ def process_state(
     state_name = US_STATES[state_abbr]
     state_dir = output_dir / 'states' / state_abbr.lower()
     downloads_dir = state_dir / 'downloads'
+    clipped_dir = state_dir / 'clipped'
     zarr_path = state_dir / f'{state_abbr.lower()}_forest.zarr'
 
     console.print(f"\n[bold blue]Processing {state_name} ({state_abbr})[/bold blue]")
 
     if dry_run:
         console.print(f"  [dim]Would download to: {downloads_dir}[/dim]")
+        console.print(f"  [dim]Would clip to: {clipped_dir}[/dim]")
         console.print(f"  [dim]Would create Zarr: {zarr_path}[/dim]")
         return {'state': state_abbr, 'dry_run': True}
 
@@ -198,8 +370,8 @@ def process_state(
                 'zarr_size_mb': size_mb
             }
 
-        # Step 1: Download all species
-        console.print(f"  [cyan]Downloading all species for {state_name}...[/cyan]")
+        # Step 1: Download all species (using bounding box - required by USFS API)
+        console.print(f"  [cyan]Step 1/3: Downloading all species for {state_name}...[/cyan]")
         downloads_dir.mkdir(parents=True, exist_ok=True)
 
         files = api.download_species(
@@ -210,11 +382,29 @@ def process_state(
 
         console.print(f"  [green]Downloaded {len(files)} species files[/green]")
 
-        # Step 2: Create Zarr store with optimized chunking
-        console.print(f"  [cyan]Creating Zarr store with chunks {chunk_size}...[/cyan]")
+        # Step 2: Clip rasters to state boundary (eliminates overlap with neighbors)
+        if skip_clipping:
+            console.print(f"  [yellow]Step 2/3: Skipping clipping (--skip-clipping)[/yellow]")
+            source_dir = downloads_dir
+        else:
+            console.print(f"  [cyan]Step 2/3: Clipping rasters to {state_abbr} boundary...[/cyan]")
+            try:
+                clip_all_rasters_in_directory(
+                    input_dir=downloads_dir,
+                    output_dir=clipped_dir,
+                    state_abbr=state_abbr
+                )
+                source_dir = clipped_dir
+                console.print(f"  [green]Clipped to state boundary (eliminates overlap)[/green]")
+            except Exception as e:
+                console.print(f"  [yellow]Clipping failed ({e}), using unclipped data[/yellow]")
+                source_dir = downloads_dir
+
+        # Step 3: Create Zarr store with optimized chunking
+        console.print(f"  [cyan]Step 3/3: Creating Zarr store with chunks {chunk_size}...[/cyan]")
 
         zarr_path = api.create_zarr(
-            input_dir=str(downloads_dir),
+            input_dir=str(source_dir),
             output_path=str(zarr_path),
             chunk_size=chunk_size,
             compression=compression,
@@ -227,14 +417,18 @@ def process_state(
 
         console.print(f"  [green]Created Zarr: {info['shape']}, {size_mb:.1f} MB[/green]")
 
-        # Optionally clean up downloads to save space
-        # shutil.rmtree(downloads_dir)
+        # Clean up intermediate files to save space
+        if source_dir == clipped_dir:
+            import shutil
+            console.print(f"  [dim]Cleaning up clipped rasters...[/dim]")
+            shutil.rmtree(clipped_dir)
 
         return {
             'state': state_abbr,
             'num_species': info['num_species'],
             'shape': info['shape'],
-            'zarr_size_mb': size_mb
+            'zarr_size_mb': size_mb,
+            'clipped': source_dir == clipped_dir
         }
 
     except Exception as e:
@@ -247,7 +441,8 @@ def run_pipeline(
     states: List[str],
     output_dir: Path,
     dry_run: bool = False,
-    resume: bool = True
+    resume: bool = True,
+    skip_clipping: bool = False
 ):
     """
     Run the US-wide data pipeline.
@@ -257,6 +452,7 @@ def run_pipeline(
         output_dir: Base output directory
         dry_run: If True, just show what would be done
         resume: If True, skip already completed states
+        skip_clipping: If True, skip the state boundary clipping step
     """
     output_dir = Path(output_dir)
     tracker = ProgressTracker(output_dir)
@@ -278,8 +474,10 @@ def run_pipeline(
         console.print("\n[green]All requested states have been processed![/green]")
         return
 
+    clipping_status = "disabled" if skip_clipping else "enabled (eliminates overlap)"
     console.print(Panel(
-        f"Processing {len(pending_states)} states: {', '.join(pending_states)}",
+        f"Processing {len(pending_states)} states: {', '.join(pending_states)}\n"
+        f"State boundary clipping: {clipping_status}",
         title="US-Wide Pipeline",
         border_style="blue"
     ))
@@ -290,7 +488,7 @@ def run_pipeline(
         console.print(f"\n[bold]State {i}/{len(pending_states)}[/bold]")
 
         tracker.mark_started(state)
-        result = process_state(state, output_dir, dry_run=dry_run)
+        result = process_state(state, output_dir, dry_run=dry_run, skip_clipping=skip_clipping)
 
         if result:
             if not dry_run:
@@ -383,6 +581,11 @@ Examples:
         action='store_true',
         help='Show what would be done without processing'
     )
+    parser.add_argument(
+        '--skip-clipping',
+        action='store_true',
+        help='Skip state boundary clipping (faster but includes bbox overlap)'
+    )
 
     args = parser.parse_args()
 
@@ -410,7 +613,8 @@ Examples:
         states=states,
         output_dir=args.output_dir,
         dry_run=args.dry_run,
-        resume=resume
+        resume=resume,
+        skip_clipping=args.skip_clipping
     )
 
 

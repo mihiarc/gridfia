@@ -152,5 +152,5 @@ GridFIA is released under the MIT License.
 ---
 
 <div align="center">
-<strong><a href="https://fiatools.org">fiatools.org</a></strong> · Python Ecosystem for Forest Inventory Analysis
+<strong><a href="https://fiatools.org">fiatools.org</a></strong> · Python Ecosystem for Forest Inventory Applications
 </div>
