@@ -350,21 +350,37 @@ def add_basemap(
     elif isinstance(crs, CRS):
         crs = crs.to_string()
     
-    # Get tile provider
+    # Get tile provider using safe whitelist approach
+    # Security: Never use eval() with user-supplied input
+    BASEMAP_PROVIDERS = {
+        'OpenStreetMap': lambda: ctx.providers.OpenStreetMap.Mapnik,
+        'OpenStreetMap.Mapnik': lambda: ctx.providers.OpenStreetMap.Mapnik,
+        'OpenStreetMap.HOT': lambda: ctx.providers.OpenStreetMap.HOT,
+        'CartoDB': lambda: ctx.providers.CartoDB.Positron,
+        'CartoDB.Positron': lambda: ctx.providers.CartoDB.Positron,
+        'CartoDB.DarkMatter': lambda: ctx.providers.CartoDB.DarkMatter,
+        'CartoDB_dark': lambda: ctx.providers.CartoDB.DarkMatter,
+        'Stamen': lambda: ctx.providers.Stamen.Terrain,
+        'Stamen.Terrain': lambda: ctx.providers.Stamen.Terrain,
+        'Stamen.Toner': lambda: ctx.providers.Stamen.Toner,
+        'Stamen.TonerLite': lambda: ctx.providers.Stamen.TonerLite,
+        'Stamen.Watercolor': lambda: ctx.providers.Stamen.Watercolor,
+        'ESRI': lambda: ctx.providers.Esri.WorldImagery,
+        'Esri.WorldImagery': lambda: ctx.providers.Esri.WorldImagery,
+        'Esri.WorldStreetMap': lambda: ctx.providers.Esri.WorldStreetMap,
+        'Esri.WorldTopoMap': lambda: ctx.providers.Esri.WorldTopoMap,
+        'Esri.NatGeoWorldMap': lambda: ctx.providers.Esri.NatGeoWorldMap,
+    }
+
     if isinstance(source, str):
-        if source == 'OpenStreetMap':
-            provider = ctx.providers.OpenStreetMap.Mapnik
-        elif source == 'CartoDB':
-            provider = ctx.providers.CartoDB.Positron
-        elif source == 'CartoDB_dark':
-            provider = ctx.providers.CartoDB.DarkMatter
-        elif source == 'Stamen':
-            provider = ctx.providers.Stamen.Terrain
-        elif source == 'ESRI':
-            provider = ctx.providers.Esri.WorldImagery
+        if source in BASEMAP_PROVIDERS:
+            provider = BASEMAP_PROVIDERS[source]()
         else:
-            # Try to get from ctx.providers
-            provider = eval(f"ctx.providers.{source}")
+            available = ', '.join(sorted(BASEMAP_PROVIDERS.keys()))
+            raise ValueError(
+                f"Unknown basemap source: '{source}'. "
+                f"Available options: {available}"
+            )
     else:
         provider = source
     
