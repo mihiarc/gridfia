@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "gridfia"
-version = "0.5.0"
+version = "0.5.1"
 description = "Spatial raster analysis for USDA Forest Service BIGMAP data - Part of the FIA Python Ecosystem"
 readme = "README.md"
 license = {text = "MIT"}
@@ -124,6 +124,15 @@ Repository = "https://github.com/mihiarc/gridfia.git"
 Changelog = "https://github.com/mihiarc/gridfia/releases"
 "Source Code" = "https://github.com/mihiarc/gridfia"
 "FIA Ecosystem" = "https://fiatools.org"
+
+[tool.hatch.build.targets.sdist]
+exclude = [
+    ".claude/",
+    ".env",
+    ".env.*",
+    "*.local.json",
+    "conus_pipeline_*",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["gridfia"]
