@@ -227,7 +227,7 @@ class TileProcessor:
             # Check dimensions match
             biomass = store["biomass"]
             species_codes = store["species_codes"]
-            if biomass.shape[0] != len(species_codes):
+            if biomass.shape[0] != species_codes.shape[0]:
                 logger.error("Species count mismatch")
                 return False
 

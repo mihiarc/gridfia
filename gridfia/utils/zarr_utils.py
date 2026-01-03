@@ -34,6 +34,43 @@ from ..exceptions import InvalidZarrStructure, SpeciesNotFound
 console = Console()
 
 
+def create_blosc_codec(
+    compression: str = 'zstd',
+    compression_level: int = 3,
+    shuffle: str = 'shuffle'
+) -> zarr.codecs.BloscCodec:
+    """
+    Create a BloscCodec for Zarr v3 compression.
+
+    This factory function provides a consistent way to create Blosc compression
+    codecs across the codebase, handling the 'lz4' compression name mapping.
+
+    Parameters
+    ----------
+    compression : str
+        Compression algorithm name. Supported values:
+        - 'lz4': LZ4 compression (fast, good compression ratio)
+        - 'zstd': Zstandard compression (best compression ratio)
+        - 'blosclz': BloscLZ compression
+        - 'snappy': Snappy compression
+    compression_level : int
+        Compression level (0-9). Higher values = better compression but slower.
+    shuffle : str
+        Shuffle filter type. Options: 'shuffle', 'bitshuffle', 'noshuffle'
+
+    Returns
+    -------
+    zarr.codecs.BloscCodec
+        Configured Blosc codec for use with Zarr v3 arrays.
+
+    Examples
+    --------
+    >>> codec = create_blosc_codec('zstd', compression_level=5)
+    >>> array = root.create_array('data', shape=(100, 100), compressors=[codec])
+    """
+    return zarr.codecs.BloscCodec(cname=compression, clevel=compression_level, shuffle=shuffle)
+
+
 class ZarrStore:
     """
     Unified interface for reading GridFIA Zarr stores.
@@ -789,13 +826,9 @@ def create_expandable_zarr_from_base_raster(
     store = zarr.storage.LocalStore(zarr_path)
     root = zarr.open_group(store=store, mode='w')
     
-    # Create the main data array
-    # Use Zarr v3 codec instead of numcodecs
-    if compression == 'lz4':
-        codec = zarr.codecs.BloscCodec(cname='lz4', clevel=compression_level, shuffle='shuffle')
-    else:
-        codec = zarr.codecs.BloscCodec(cname=compression, clevel=compression_level, shuffle='shuffle')
-    
+    # Create the main data array with compression
+    codec = create_blosc_codec(compression, compression_level)
+
     # Initialize with zeros
     data_array = root.create_array(
         'biomass',
@@ -1022,13 +1055,9 @@ def create_zarr_from_geotiffs(
     store = zarr.storage.LocalStore(output_zarr_path)
     root = zarr.open_group(store=store, mode='w')
     
-    # Create main data array
-    # Use Zarr v3 codec
-    if compression == 'lz4':
-        codec = zarr.codecs.BloscCodec(cname='lz4', clevel=compression_level, shuffle='shuffle')
-    else:
-        codec = zarr.codecs.BloscCodec(cname=compression, clevel=compression_level, shuffle='shuffle')
-    
+    # Create main data array with compression
+    codec = create_blosc_codec(compression, compression_level)
+
     data_array = root.create_array(
         'biomass',
         shape=(num_layers, height, width),

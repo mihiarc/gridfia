@@ -41,13 +41,11 @@ class SpeciesRichness(ForestCalculation):
         """Count non-zero species per pixel."""
         threshold = kwargs.get('biomass_threshold', self.config['biomass_threshold'])
         exclude_total = kwargs.get('exclude_total_layer', self.config['exclude_total_layer'])
-        
-        if exclude_total and biomass_data.shape[0] > 1:
-            # Exclude first layer (pre-calculated total) and count individual species
-            return np.count_nonzero(biomass_data[1:] > threshold, axis=0)
-        else:
-            # Count all layers
-            return np.count_nonzero(biomass_data > threshold, axis=0)
+
+        # Use helper to get species data
+        species_data = self.get_species_data(biomass_data, exclude_total=exclude_total)
+
+        return np.count_nonzero(species_data > threshold, axis=0)
     
     def validate_data(self, biomass_data: np.ndarray) -> bool:
         return biomass_data.ndim == 3 and biomass_data.shape[0] > 0
@@ -82,18 +80,15 @@ class ShannonDiversity(ForestCalculation):
     def calculate(self, biomass_data: np.ndarray, **kwargs) -> np.ndarray:
         """
         Calculate Shannon diversity index.
-        
+
         H' = -Σ(pi * ln(pi)) where pi is proportion of species i
         """
         exclude_total = kwargs.get('exclude_total_layer', self.config['exclude_total_layer'])
         base = kwargs.get('base', self.config['base'])
-        
-        # Select appropriate data
-        if exclude_total and biomass_data.shape[0] > 1:
-            species_data = biomass_data[1:]
-        else:
-            species_data = biomass_data
-        
+
+        # Use helper to get species data
+        species_data = self.get_species_data(biomass_data, exclude_total=exclude_total)
+
         # Calculate total biomass per pixel
         total_biomass = np.sum(species_data, axis=0)
         
@@ -155,19 +150,16 @@ class SimpsonDiversity(ForestCalculation):
     def calculate(self, biomass_data: np.ndarray, **kwargs) -> np.ndarray:
         """
         Calculate Simpson diversity index.
-        
+
         D = Σ(pi^2) where pi is proportion of species i
         Returns 1/D if inverse=True (inverse Simpson index)
         """
         exclude_total = kwargs.get('exclude_total_layer', self.config['exclude_total_layer'])
         inverse = kwargs.get('inverse', self.config['inverse'])
-        
-        # Select appropriate data
-        if exclude_total and biomass_data.shape[0] > 1:
-            species_data = biomass_data[1:]
-        else:
-            species_data = biomass_data
-        
+
+        # Use helper to get species data
+        species_data = self.get_species_data(biomass_data, exclude_total=exclude_total)
+
         # Calculate total biomass per pixel
         total_biomass = np.sum(species_data, axis=0)
         

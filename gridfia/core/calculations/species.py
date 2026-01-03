@@ -206,31 +206,28 @@ class RareSpecies(ForestCalculation):
     
     def calculate(self, biomass_data: np.ndarray, **kwargs) -> np.ndarray:
         """Count rare species at each pixel."""
-        occurrence_threshold = kwargs.get('occurrence_threshold', 
+        occurrence_threshold = kwargs.get('occurrence_threshold',
                                         self.config['occurrence_threshold'])
-        biomass_threshold = kwargs.get('biomass_threshold', 
+        biomass_threshold = kwargs.get('biomass_threshold',
                                      self.config['biomass_threshold'])
-        
-        # Skip total layer
-        species_data = biomass_data[1:] if biomass_data.shape[0] > 1 else biomass_data
-        
+
+        # Use helper to get species data (excludes total layer)
+        species_data = self.get_species_data(biomass_data, exclude_total=True)
+
         n_species, height, width = species_data.shape
-        total_pixels = height * width
-        
-        # Calculate occurrence frequency for each species
-        occurrence_freq = np.zeros(n_species)
-        for i in range(n_species):
-            occurrence_freq[i] = np.sum(species_data[i] > biomass_threshold) / total_pixels
-        
+
+        # Use helper for vectorized occurrence frequency calculation
+        occurrence_freq = self.calculate_occurrence_frequency(species_data, biomass_threshold)
+
         # Identify rare species
         rare_species_mask = occurrence_freq < occurrence_threshold
-        
+
         # Count rare species at each pixel
         rare_count = np.zeros((height, width), dtype=np.uint8)
         for i in range(n_species):
             if rare_species_mask[i]:
                 rare_count += (species_data[i] > biomass_threshold).astype(np.uint8)
-        
+
         return rare_count
     
     def validate_data(self, biomass_data: np.ndarray) -> bool:
@@ -266,31 +263,28 @@ class CommonSpecies(ForestCalculation):
     
     def calculate(self, biomass_data: np.ndarray, **kwargs) -> np.ndarray:
         """Count common species at each pixel."""
-        occurrence_threshold = kwargs.get('occurrence_threshold', 
+        occurrence_threshold = kwargs.get('occurrence_threshold',
                                         self.config['occurrence_threshold'])
-        biomass_threshold = kwargs.get('biomass_threshold', 
+        biomass_threshold = kwargs.get('biomass_threshold',
                                      self.config['biomass_threshold'])
-        
-        # Skip total layer
-        species_data = biomass_data[1:] if biomass_data.shape[0] > 1 else biomass_data
-        
+
+        # Use helper to get species data (excludes total layer)
+        species_data = self.get_species_data(biomass_data, exclude_total=True)
+
         n_species, height, width = species_data.shape
-        total_pixels = height * width
-        
-        # Calculate occurrence frequency for each species
-        occurrence_freq = np.zeros(n_species)
-        for i in range(n_species):
-            occurrence_freq[i] = np.sum(species_data[i] > biomass_threshold) / total_pixels
-        
+
+        # Use helper for vectorized occurrence frequency calculation
+        occurrence_freq = self.calculate_occurrence_frequency(species_data, biomass_threshold)
+
         # Identify common species
         common_species_mask = occurrence_freq >= occurrence_threshold
-        
+
         # Count common species at each pixel
         common_count = np.zeros((height, width), dtype=np.uint8)
         for i in range(n_species):
             if common_species_mask[i]:
                 common_count += (species_data[i] > biomass_threshold).astype(np.uint8)
-        
+
         return common_count
     
     def validate_data(self, biomass_data: np.ndarray) -> bool:

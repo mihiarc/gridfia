@@ -120,10 +120,82 @@ class ForestCalculation(ABC):
     def preprocess_data(self, biomass_data: np.ndarray) -> np.ndarray:
         """
         Preprocess data before calculation.
-        
+
         Can be overridden by subclasses for custom preprocessing.
         """
         return biomass_data
+
+    def get_species_data(
+        self, biomass_data: np.ndarray, exclude_total: bool = True
+    ) -> np.ndarray:
+        """
+        Extract species data, optionally excluding the total layer.
+
+        The first layer (index 0) in GridFIA Zarr stores is typically a
+        pre-calculated total biomass. This helper provides consistent
+        handling of that convention across all calculations.
+
+        Parameters
+        ----------
+        biomass_data : np.ndarray
+            3D array (species, height, width) of biomass values.
+        exclude_total : bool, default=True
+            Whether to exclude the first layer (pre-calculated total).
+            Set to False to include all layers.
+
+        Returns
+        -------
+        np.ndarray
+            Species data array. If exclude_total=True and data has >1 layer,
+            returns biomass_data[1:]. Otherwise returns the full array.
+
+        Examples
+        --------
+        >>> calc = SomeCalculation()
+        >>> species_only = calc.get_species_data(biomass_data, exclude_total=True)
+        >>> all_layers = calc.get_species_data(biomass_data, exclude_total=False)
+        """
+        if exclude_total and biomass_data.shape[0] > 1:
+            return biomass_data[1:]
+        return biomass_data
+
+    @staticmethod
+    def calculate_occurrence_frequency(
+        species_data: np.ndarray, biomass_threshold: float = 0.0
+    ) -> np.ndarray:
+        """
+        Calculate occurrence frequency for each species.
+
+        Computes the fraction of pixels where each species has biomass
+        exceeding the threshold. Uses vectorized operations for efficiency.
+
+        Parameters
+        ----------
+        species_data : np.ndarray
+            3D array (n_species, height, width) of biomass values.
+        biomass_threshold : float, default=0.0
+            Minimum biomass to count species as present.
+
+        Returns
+        -------
+        np.ndarray
+            1D array of shape (n_species,) containing occurrence frequencies
+            in range [0.0, 1.0] for each species.
+
+        Examples
+        --------
+        >>> freq = ForestCalculation.calculate_occurrence_frequency(species_data)
+        >>> rare_mask = freq < 0.01  # Species in <1% of pixels
+        >>> common_mask = freq >= 0.10  # Species in >=10% of pixels
+        """
+        n_species, height, width = species_data.shape
+        total_pixels = height * width
+
+        # Vectorized: create presence mask and sum across spatial dimensions
+        presence = species_data > biomass_threshold
+        occurrence_freq = np.sum(presence, axis=(1, 2)) / total_pixels
+
+        return occurrence_freq
     
     def postprocess_result(self, result: np.ndarray) -> np.ndarray:
         """
