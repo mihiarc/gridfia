@@ -1,7 +1,7 @@
 """
 Cloud Storage for CONUS Tile System.
 
-Handles upload/download of tiles to/from Cloudflare R2.
+Handles upload/download of tiles to/from Backblaze B2.
 """
 
 from pathlib import Path
@@ -10,6 +10,8 @@ import logging
 import hashlib
 import json
 import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import threading
 
 import boto3
 from botocore.config import Config
@@ -93,20 +95,22 @@ class CloudStorage:
         tile_id: str,
         zarr_path: Path,
         show_progress: bool = True,
+        max_workers: int = 32,
     ) -> Dict[str, Any]:
         """
-        Upload a tile Zarr store to R2.
+        Upload a tile Zarr store to B2 using parallel uploads.
 
         Args:
             tile_id: Tile identifier
             zarr_path: Local path to Zarr store
             show_progress: Show progress bar
+            max_workers: Number of parallel upload threads (default 32)
 
         Returns:
             Upload metadata including checksums
         """
         if self.client is None:
-            raise RuntimeError("R2 client not configured")
+            raise RuntimeError("B2 client not configured")
 
         if not zarr_path.exists():
             raise FileNotFoundError(f"Zarr store not found: {zarr_path}")
@@ -115,9 +119,36 @@ class CloudStorage:
         files = list(zarr_path.rglob("*"))
         files = [f for f in files if f.is_file()]
 
-        uploaded_files = []
-        total_size = 0
-        checksums = {}
+        # Thread-safe counters
+        lock = threading.Lock()
+        results = {
+            "uploaded_files": [],
+            "total_size": 0,
+            "checksums": {},
+            "errors": [],
+        }
+
+        def upload_single_file(file_path: Path) -> bool:
+            """Upload a single file to B2."""
+            try:
+                relative_path = file_path.relative_to(zarr_path)
+                key = self._get_tile_key(tile_id, f"biomass.zarr/{relative_path}")
+                file_size = file_path.stat().st_size
+
+                # Upload file
+                with open(file_path, "rb") as f:
+                    self.client.upload_fileobj(f, self.bucket, key)
+
+                # Update results thread-safely
+                with lock:
+                    results["uploaded_files"].append(key)
+                    results["total_size"] += file_size
+
+                return True
+            except Exception as e:
+                with lock:
+                    results["errors"].append(f"{file_path}: {e}")
+                return False
 
         if show_progress:
             with Progress(
@@ -125,48 +156,38 @@ class CloudStorage:
                 TextColumn("[progress.description]{task.description}"),
                 BarColumn(),
                 TaskProgressColumn(),
+                TextColumn("[cyan]{task.completed}/{task.total}"),
                 console=console,
             ) as progress:
                 task = progress.add_task(
-                    f"[blue]Uploading {tile_id}",
+                    f"[blue]Uploading {tile_id} ({max_workers} threads)",
                     total=len(files),
                 )
 
-                for file_path in files:
-                    relative_path = file_path.relative_to(zarr_path)
-                    key = self._get_tile_key(tile_id, f"biomass.zarr/{relative_path}")
+                with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                    futures = {executor.submit(upload_single_file, f): f for f in files}
 
-                    # Calculate checksum for verification
-                    md5_hash = self._calculate_md5(file_path)
-                    checksums[str(relative_path)] = md5_hash
-
-                    # Upload (S3 Transfer Manager handles integrity automatically)
-                    with open(file_path, "rb") as f:
-                        self.client.upload_fileobj(f, self.bucket, key)
-
-                    uploaded_files.append(key)
-                    total_size += file_path.stat().st_size
-                    progress.update(task, advance=1)
+                    for future in as_completed(futures):
+                        future.result()  # Raises exception if upload failed
+                        progress.update(task, advance=1)
         else:
-            for file_path in files:
-                relative_path = file_path.relative_to(zarr_path)
-                key = self._get_tile_key(tile_id, f"biomass.zarr/{relative_path}")
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = {executor.submit(upload_single_file, f): f for f in files}
 
-                md5_hash = self._calculate_md5(file_path)
-                checksums[str(relative_path)] = md5_hash
+                for future in as_completed(futures):
+                    future.result()
 
-                with open(file_path, "rb") as f:
-                    self.client.upload_fileobj(f, self.bucket, key)
-
-                uploaded_files.append(key)
-                total_size += file_path.stat().st_size
+        if results["errors"]:
+            logger.warning(f"Upload errors: {len(results['errors'])}")
+            for error in results["errors"][:5]:
+                logger.warning(f"  {error}")
 
         return {
             "tile_id": tile_id,
-            "files_uploaded": len(uploaded_files),
-            "total_size_bytes": total_size,
-            "total_size_mb": total_size / (1024 * 1024),
-            "checksums": checksums,
+            "files_uploaded": len(results["uploaded_files"]),
+            "total_size_bytes": results["total_size"],
+            "total_size_mb": results["total_size"] / (1024 * 1024),
+            "errors": len(results["errors"]),
         }
 
     def verify_tile(self, tile_id: str) -> bool:
