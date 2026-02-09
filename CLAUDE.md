@@ -6,12 +6,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 GridFIA is a Python API for forest biomass and species diversity analysis that processes BIGMAP 2018 forest data at 30m resolution for any US state, county, or custom region. It provides a clean programmatic interface for analyzing forest metrics, calculating species diversity indices, and downloading data from the FIA BIGMAP ImageServer.
 
-**Part of the FIA Python Ecosystem:**
-- **PyFIA**: Survey/plot data analysis (https://github.com/mihiarc/pyfia)
-- **GridFIA**: Spatial raster analysis (this package)
-- **PyFVS**: Growth/yield simulation (https://github.com/mihiarc/pyfvs)
-- **AskFIA**: AI conversational interface (https://github.com/mihiarc/askfia)
-
 ## Architecture
 
 ### API-First Design

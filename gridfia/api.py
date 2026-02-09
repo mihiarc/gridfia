@@ -1,12 +1,6 @@
 """
 GridFIA API - Spatial raster analysis for USDA Forest Service BIGMAP data.
 
-Part of the FIA Python Ecosystem:
-- PyFIA: Survey/plot data analysis
-- GridFIA: Spatial raster analysis (this package)
-- PyFVS: Growth/yield simulation
-- AskFIA: AI conversational interface
-
 This module provides the primary API for GridFIA functionality.
 """
 
@@ -60,9 +54,6 @@ class GridFIA:
 
     GridFIA provides spatial raster analysis of USDA Forest Service BIGMAP data,
     including species biomass mapping, diversity metrics, and visualization.
-
-    Part of the FIA Python Ecosystem - use with PyFIA for survey data,
-    PyFVS for growth simulation, and AskFIA for AI-powered queries.
 
     Examples
     --------

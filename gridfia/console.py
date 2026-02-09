@@ -292,7 +292,6 @@ def print_package_info() -> None:
         f"""[bold blue]GridFIA[/bold blue] v{__version__}
 
 Spatial Raster Analysis for USDA Forest Service BIGMAP Data
-Part of the FIA Python Ecosystem
 
 [dim]Author:[/dim] {__author__}
 [dim]Email:[/dim] {__email__}

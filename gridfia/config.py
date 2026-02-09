@@ -2,7 +2,7 @@
 Configuration management for GridFIA using Pydantic.
 
 This module defines configuration schemas and settings management
-for the GridFIA package, part of the FIA Python Ecosystem.
+for the GridFIA package.
 """
 
 from enum import Enum

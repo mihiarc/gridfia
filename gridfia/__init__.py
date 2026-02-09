@@ -1,12 +1,6 @@
 """
 GridFIA: Spatial Raster Analysis for USDA Forest Service BIGMAP Data
 
-Part of the FIA Python Ecosystem:
-- PyFIA: Survey/plot data analysis (https://github.com/mihiarc/pyfia)
-- GridFIA: Spatial raster analysis (this package)
-- PyFVS: Growth/yield simulation (https://github.com/mihiarc/pyfvs)
-- AskFIA: AI conversational interface (https://github.com/mihiarc/askfia)
-
 GridFIA provides efficient access to BIGMAP 2018 forest biomass data at 30m
 resolution, with Zarr-based storage and comprehensive diversity metrics.
 """
@@ -96,5 +90,4 @@ def get_package_info() -> dict:
         "email": __email__,
         "license": __license__,
         "description": "Spatial raster analysis for USDA Forest Service BIGMAP data",
-        "ecosystem": "FIA Python Ecosystem",
     }

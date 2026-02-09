@@ -1,23 +1,14 @@
 <div align="center">
-  <a href="https://fiatools.org"><img src="https://fiatools.org/logos/gridfia_logo.png" alt="gridFIA" width="400"></a>
+  <h1>gridFIA</h1>
 
   <p><strong>Spatial raster analysis for USDA Forest Service BIGMAP data</strong></p>
 
   <p>
-    <a href="https://fiatools.org"><img src="https://img.shields.io/badge/FIAtools-Ecosystem-2E7D32" alt="FIAtools Ecosystem"></a>
     <a href="https://pypi.org/project/gridfia/"><img src="https://img.shields.io/pypi/v/gridfia?color=006D6D&label=PyPI" alt="PyPI"></a>
     <a href="https://pypi.org/project/gridfia/"><img src="https://img.shields.io/pypi/dm/gridfia?color=006D6D&label=Downloads" alt="PyPI Downloads"></a>
     <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-006D6D" alt="License: MIT"></a>
     <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.9+-006D6D" alt="Python 3.9+"></a>
     <a href="https://mihiarc.github.io/gridfia/"><img src="https://img.shields.io/badge/docs-GitHub%20Pages-006D6D" alt="Documentation"></a>
-  </p>
-
-  <p>
-    <strong>Part of the <a href="https://fiatools.org">FIAtools Python Ecosystem</a></strong><br>
-    <a href="https://fiatools.org/tools/pyfia/">pyFIA</a> ·
-    <a href="https://fiatools.org/tools/gridfia/">gridFIA</a> ·
-    <a href="https://fiatools.org/tools/pyfvs/">pyFVS</a> ·
-    <a href="https://fiatools.org/tools/askfia/">askFIA</a>
   </p>
 </div>
 
@@ -169,24 +160,6 @@ api = GridFIA(config=settings)
 | `validate_zarr()` | Validate a Zarr store |
 | `get_location_config()` | Get location configuration |
 
-## Integration with pyFIA
-
-```python
-from pyfia import FIA
-from gridfia import GridFIA
-
-# Get species information from pyFIA
-with FIA() as fia:
-    species_info = fia.species()
-
-# Use species codes with GridFIA
-api = GridFIA()
-files = api.download_species(
-    state="Oregon",
-    species_codes=species_info["spcd"].tolist()
-)
-```
-
 ## Development
 
 ```bash
@@ -204,19 +177,6 @@ uv run mypy gridfia/
 uv run mkdocs serve
 ```
 
-## The FIAtools Ecosystem
-
-GridFIA is part of the [FIAtools Python ecosystem](https://fiatools.org) - a unified suite of open-source tools for forest inventory applications:
-
-| Tool | Purpose | Key Features |
-|------|---------|--------------|
-| [**pyFIA**](https://fiatools.org) | Survey & plot data | DuckDB backend, 10-100x faster than EVALIDator |
-| [**gridFIA**](https://fiatools.org) | Spatial raster analysis | 327 species at 30m resolution, Zarr storage |
-| [**pyFVS**](https://fiatools.org) | Growth simulation | Chapman-Richards curves, yield projections |
-| [**askFIA**](https://fiatools.org) | AI interface | Natural language queries for forest data |
-
-**[Explore the full ecosystem at fiatools.org](https://fiatools.org)**
-
 ## Affiliation
 
 Developed in collaboration with USDA Forest Service Research & Development. gridFIA provides access to Forest Service spatial data products but is not part of the official FIA Program.
@@ -228,13 +188,12 @@ Developed in collaboration with USDA Forest Service Research & Development. grid
   title = {GridFIA: Spatial Raster Analysis for USDA Forest Service BIGMAP Data},
   author = {Mihiar, Christopher},
   year = {2025},
-  url = {https://fiatools.org}
+  url = {https://github.com/mihiarc/gridfia}
 }
 ```
 
 ---
 
 <div align="center">
-  <a href="https://fiatools.org"><strong>fiatools.org</strong></a> · Python Ecosystem for Forest Inventory Applications<br>
   <sub>Built by <a href="https://github.com/mihiarc">Chris Mihiar</a> · USDA Forest Service Southern Research Station</sub>
 </div>
