@@ -5,7 +5,7 @@ GridFIA provides efficient access to BIGMAP 2018 forest biomass data at 30m
 resolution, with Zarr-based storage and comprehensive diversity metrics.
 """
 
-__version__ = "0.5.0"
+__version__ = "0.5.2"
 __author__ = "Christopher Mihiar"
 __email__ = "christopher.mihiar@usda.gov"
 __license__ = "MIT"
