@@ -44,9 +44,6 @@ jobs:
       - name: Build documentation
         run: mkdocs build
 
-      - name: Copy CNAME for custom domain
-        run: cp docs/CNAME site/CNAME
-
       - name: Setup Pages
         uses: actions/configure-pages@v4
 
