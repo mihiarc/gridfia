@@ -1364,9 +1364,6 @@ class GridFIA:
         >>> local_path = api.download_sample("durham_nc", "data/durham.zarr")
         >>> results = api.calculate_metrics(local_path)
         """
-        import shutil
-        import urllib.request
-
         if sample not in self._SAMPLE_METADATA:
             available = list(self._SAMPLE_METADATA.keys())
             raise ValueError(
@@ -1378,26 +1375,38 @@ class GridFIA:
 
         logger.info(f"Downloading {dataset_info['name']} to {output_path}")
 
-        # For now, use the cloud loading and copy approach
-        # A more efficient implementation would use streaming download
         store = self.load_from_cloud(sample=sample)
 
-        # Copy to local zarr
+        # Copy to local zarr using chunked writes to avoid loading
+        # the entire dataset into memory at once
         output_path.mkdir(parents=True, exist_ok=True)
 
         import zarr
         local_store = zarr.storage.LocalStore(output_path)
         local_root = zarr.open_group(store=local_store, mode='w')
 
-        # Copy arrays and attributes
+        # Copy root attributes
         local_root.attrs.update(store.attrs)
 
-        # Copy biomass array - Zarr v3 doesn't allow both data and dtype
-        import numpy as np
-        biomass_data = np.array(store.biomass[:], dtype=store.dtype)
-        local_root.create_array('biomass', data=biomass_data, chunks=store.chunks)
+        # Pre-allocate the local biomass array with the same shape/chunks/dtype
+        n_species, height, width = store.shape
+        local_biomass = local_root.create_array(
+            'biomass',
+            shape=(n_species, height, width),
+            chunks=store.chunks,
+            dtype=store.dtype,
+        )
 
-        # Copy species metadata - convert to numpy arrays for Zarr v3 compatibility
+        # Copy biomass data one species slice at a time to bound memory usage
+        # Each slice is (1, height, width) which is manageable even for large rasters
+        chunk_size = store.chunks[0] if store.chunks else 1
+        for start in range(0, n_species, chunk_size):
+            end = min(start + chunk_size, n_species)
+            local_biomass[start:end] = store.biomass[start:end]
+            if show_progress:
+                logger.debug(f"Copied species {start}-{end} of {n_species}")
+
+        # Copy species metadata — these are small 1D arrays, safe to materialize
         codes_array = np.array(store.species_codes, dtype='U10')
         names_array = np.array(store.species_names, dtype='U100')
         local_root.create_array('species_codes', data=codes_array)

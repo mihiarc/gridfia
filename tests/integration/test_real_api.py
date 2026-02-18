@@ -154,9 +154,9 @@ class TestRealAPIExport:
 
         result = client.identify_pixel_value("0316", x, y)  # Red maple
 
-        # Result should be a float or None/0.0 if no data
+        # Result should be a float (possibly NaN for NoData) or None
         assert result is None or isinstance(result, (int, float))
-        if result is not None and result != 0.0:
+        if result is not None and not np.isnan(result):
             assert result >= 0  # Biomass should be non-negative
 
     def test_real_total_biomass_export(self, client, temp_dir):

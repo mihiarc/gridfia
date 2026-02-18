@@ -291,11 +291,12 @@ class ZarrStore:
         storage_options = storage_options or {}
 
         try:
-            # Create filesystem mapper for the URL
-            fs_map = fsspec.get_mapper(url, **storage_options)
+            # Use Zarr v3 FsspecStore instead of deprecated fsspec.get_mapper()
+            fsspec_store = zarr.storage.FsspecStore.from_url(
+                url, storage_options=storage_options, read_only=True
+            )
 
-            # Open as Zarr group with consolidated metadata for efficiency
-            root = zarr.open_group(fs_map, mode='r')
+            root = zarr.open_group(store=fsspec_store, mode='r')
 
             return cls(root, store=None, path=None)
 

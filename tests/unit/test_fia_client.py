@@ -689,7 +689,7 @@ class TestBigMapRestClientIdentifyPixelValue:
                 assert params['sr'] == '4326'
 
     def test_identify_pixel_value_no_data(self):
-        """Test handling of NoData pixel values."""
+        """Test handling of NoData pixel values returns NaN."""
         client = BigMapRestClient()
 
         with patch.object(client, '_get_function_name', return_value='SPCD_0131_Abies_balsamea'):
@@ -701,10 +701,10 @@ class TestBigMapRestClientIdentifyPixelValue:
 
                 result = client.identify_pixel_value('0131', -11500000, 5500000)
 
-                assert result == 0.0  # NoData should return 0.0
+                assert np.isnan(result)  # NoData should return NaN
 
     def test_identify_pixel_value_none_value(self):
-        """Test handling of None pixel values."""
+        """Test handling of None pixel values returns NaN."""
         client = BigMapRestClient()
 
         with patch.object(client, '_get_function_name', return_value='SPCD_0131_Abies_balsamea'):
@@ -716,7 +716,7 @@ class TestBigMapRestClientIdentifyPixelValue:
 
                 result = client.identify_pixel_value('0131', -11500000, 5500000)
 
-                assert result == 0.0  # None should return 0.0
+                assert np.isnan(result)  # None should return NaN
 
     def test_identify_pixel_value_no_value_key(self):
         """Test handling when response has no value key."""
@@ -1204,7 +1204,7 @@ class TestBigMapRestClientRealAPIIntegration:
         try:
             result = client.identify_pixel_value('0131', x, y)
 
-            # Result could be a float value or None/0.0 if no data at location
+            # Result could be a float (possibly NaN for NoData) or None
             assert result is None or isinstance(result, (int, float))
         except Exception as e:
             # Real API tests may fail due to network/service issues

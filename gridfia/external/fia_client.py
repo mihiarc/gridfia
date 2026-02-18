@@ -606,23 +606,32 @@ class BigMapRestClient:
             )
     
     def identify_pixel_value(
-        self, 
-        species_code: str, 
-        x: float, 
-        y: float, 
+        self,
+        species_code: str,
+        x: float,
+        y: float,
         spatial_ref: str = "102100"
-    ) -> float:
+    ) -> Optional[float]:
         """
         Get biomass value for a species at a specific coordinate.
-        
-        Args:
-            species_code: FIA species code
-            x: X coordinate
-            y: Y coordinate
-            spatial_ref: Spatial reference system (default: Web Mercator)
-            
-        Returns:
-            Biomass value at the location
+
+        Parameters
+        ----------
+        species_code : str
+            FIA species code (e.g., "0131").
+        x : float
+            X coordinate in the specified spatial reference.
+        y : float
+            Y coordinate in the specified spatial reference.
+        spatial_ref : str, default="102100"
+            Spatial reference system (default: Web Mercator).
+
+        Returns
+        -------
+        Optional[float]
+            Biomass value at the location, np.nan if the pixel is NoData
+            (e.g., non-forest or outside coverage), or None if the API
+            response is missing the value key entirely.
         """
         function_name = self._get_function_name(species_code)
         if not function_name:
@@ -640,19 +649,19 @@ class BigMapRestClient:
                 'rasterFunction': function_name
             })
         }
-        
+
         try:
             response = self._rate_limited_request("GET", f"{self.base_url}/identify", params=params)
             response.raise_for_status()
             result = response.json()
-            
+
             if 'value' in result:
                 value = result['value']
                 if value == 'NoData' or value is None:
-                    return 0.0  # No biomass at this location
+                    return float('nan')
                 return float(value)
             return None
-            
+
         except requests.RequestException as e:
             print_error(f"Failed to identify pixel: {e}")
             raise APIConnectionError(
@@ -804,21 +813,44 @@ class BigMapRestClient:
         return None
     
     def _calculate_image_size(
-        self, 
-        bbox: Tuple[float, float, float, float], 
+        self,
+        bbox: Tuple[float, float, float, float],
         pixel_size: float
     ) -> str:
-        """Calculate image size based on bbox and pixel size."""
+        """
+        Calculate image size based on bbox and pixel size.
+
+        If the requested dimensions exceed service limits, the image is
+        clamped and a warning is emitted so users know the effective
+        resolution is coarser than the requested pixel size.
+        """
         width = int((bbox[2] - bbox[0]) / pixel_size)
         height = int((bbox[3] - bbox[1]) / pixel_size)
-        
+
         # Limit to service maximums
         max_width = 15000
         max_height = 4100
-        
+
+        clamped = False
         if width > max_width:
+            clamped = True
+            effective_x_res = (bbox[2] - bbox[0]) / max_width
             width = max_width
         if height > max_height:
+            clamped = True
+            effective_y_res = (bbox[3] - bbox[1]) / max_height
             height = max_height
-            
+
+        if clamped:
+            effective_res = max(
+                (bbox[2] - bbox[0]) / width,
+                (bbox[3] - bbox[1]) / height,
+            )
+            print_warning(
+                f"Requested area exceeds service limits. "
+                f"Image clamped to {width}x{height} pixels "
+                f"(effective resolution ~{effective_res:.1f}m instead of {pixel_size}m). "
+                f"Consider tiling the request for full resolution."
+            )
+
         return f"{width},{height}" 
