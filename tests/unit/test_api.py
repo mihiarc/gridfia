@@ -942,10 +942,10 @@ class TestGridFIAEdgeCasesAndMissingCoverage:
 
             results = api.calculate_metrics(zarr_path, config=custom_settings)
 
-        # Verify custom settings were used
+        # Verify custom settings values were used (deep-copied, not same object)
         processor_call_args = mock_processor_class.call_args[0]
         used_settings = processor_call_args[0]
-        assert used_settings is custom_settings
+        assert used_settings == custom_settings
 
     def test_create_maps_default_cmap_fallback(self, temp_dir):
         """Test that default colormap is used for unknown map types."""

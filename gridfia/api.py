@@ -578,19 +578,19 @@ class GridFIA:
                 zarr_path=str(zarr_path)
             )
 
-        # Load configuration if provided
+        # Load configuration — always copy to avoid mutating shared state
         if config:
             if isinstance(config, (str, Path)):
                 settings = load_settings(Path(config))
             else:
-                settings = config
+                settings = config.model_copy(deep=True)
         else:
-            settings = self.settings
-        
+            settings = self.settings.model_copy(deep=True)
+
         # Override output directory if specified
         if output_dir:
             settings.output_dir = Path(output_dir)
-        
+
         # Override calculations if specified
         if calculations:
             # Validate calculations exist
@@ -602,7 +602,7 @@ class GridFIA:
                     calculation_name=invalid_calcs[0] if len(invalid_calcs) == 1 else str(invalid_calcs),
                     available_calculations=all_registered
                 )
-            
+
             # Create calculation configs
             settings.calculations = [
                 CalculationConfig(name=calc_name, enabled=True)
@@ -714,26 +714,9 @@ class GridFIA:
                 available_calculations=all_registered
             )
 
-        # Load biomass data from Zarr
-        import zarr
-        store = zarr.open(str(zarr_path), mode='r')
-
-        # Find biomass data - look for species arrays
-        species_arrays = []
-        for key in store.array_keys():
-            arr = store[key]
-            if arr.ndim == 2:  # 2D array (height, width)
-                species_arrays.append(arr[:])
-
-        if not species_arrays:
-            raise InvalidZarrStructure(
-                "No valid species arrays found in Zarr store",
-                zarr_path=str(zarr_path)
-            )
-
-        # Stack into 3D array (species, height, width)
-        import numpy as np
-        biomass_data = np.stack(species_arrays, axis=0)
+        # Load biomass data using the same ZarrStore interface as calculate_metrics
+        store = ZarrStore.from_path(zarr_path)
+        biomass_data = store.biomass[:]
 
         # Get seed from SeedManager if set
         seed = self._seed
