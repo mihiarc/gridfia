@@ -116,8 +116,29 @@ Each `CalculationResult` contains:
 |-------|------|-------------|
 | `name` | `str` | Name of the calculation (e.g., "species_richness") |
 | `output_path` | `Path` | Absolute path to the output file |
-| `statistics` | `dict[str, float]` | Summary statistics (mean, std, min, max) |
+| `statistics` | `dict[str, float]` | Summary statistics (empty dict from `calculate_metrics()`) |
 | `metadata` | `dict[str, Any]` | Additional metadata (source zarr, parameters) |
+
+!!! note "Statistics and `calculate_metrics_with_stats()`"
+    The `statistics` field on `CalculationResult` is an empty dict when using
+    `calculate_metrics()`. For statistical context (confidence intervals, standard
+    error, bootstrap estimates), use `calculate_metrics_with_stats()` instead, which
+    returns `Dict[str, StatisticalResult]` with full statistical metadata:
+
+    ```python
+    api = GridFIA(seed=42)
+    results = api.calculate_metrics_with_stats(
+        "data/forest.zarr",
+        calculations=["shannon_diversity"],
+        n_bootstrap=1000,
+        confidence_level=0.95
+    )
+    for name, result in results.items():
+        print(f"{name}: {result.value:.3f}")
+        print(f"  95% CI: [{result.confidence_interval[0]:.3f}, "
+              f"{result.confidence_interval[1]:.3f}]")
+        print(f"  SE: {result.standard_error:.3f}")
+    ```
 
 ## Working with Models
 

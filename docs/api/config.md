@@ -1,7 +1,10 @@
-# Configuration
+# Configuration API Reference
 
-GridFIA uses Pydantic v2 for type-safe configuration management. Settings can be
-loaded from files, environment variables, or created programmatically.
+Auto-generated reference for GridFIA configuration classes.
+
+!!! tip "User Guide"
+    For practical usage examples, YAML configuration files, environment variables,
+    and cloud storage setup, see the [Configuration User Guide](../user-guide/configuration.md).
 
 ## Overview
 

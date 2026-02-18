@@ -55,18 +55,31 @@ maps = api.create_maps(zarr_path, map_type="diversity", state="MT")
 
 ### Simple API
 
-One class, eight methods - that's all you need:
+One class with a clean, discoverable interface:
 
 ```python
 api = GridFIA()
-api.list_species()        # See available species
-api.download_species()    # Download raster data
-api.create_zarr()         # Convert to Zarr format
-api.calculate_metrics()   # Run forest calculations
-api.create_maps()         # Generate visualizations
-api.get_location_config() # Configure geographic extents
-api.list_calculations()   # See available metrics
-api.validate_zarr()       # Validate data stores
+
+# Core workflow
+api.list_species()                # See available species
+api.download_species()            # Download raster data
+api.create_zarr()                 # Convert to Zarr format
+api.calculate_metrics()           # Run forest calculations
+api.calculate_metrics_with_stats()  # Metrics with confidence intervals
+api.create_maps()                 # Generate visualizations
+
+# Cloud & sample data
+api.load_from_cloud()             # Stream data from cloud storage
+api.load_state()                  # Load pre-hosted state data
+api.download_sample()             # Download sample datasets
+api.list_sample_datasets()        # List available samples
+api.list_state_datasets()         # List available states
+
+# Configuration & utilities
+api.get_location_config()         # Configure geographic extents
+api.list_calculations()           # See available metrics
+api.validate_zarr()               # Validate data stores
+api.set_seed()                    # Set seed for reproducibility
 ```
 
 ### 15+ Forest Metrics
@@ -80,6 +93,18 @@ api.validate_zarr()       # Validate data stores
 ### Cloud-Optimized Storage
 
 GridFIA uses [Zarr](https://zarr.dev/) for efficient storage and processing of large raster datasets with configurable chunking and compression.
+
+### Cloud Data Access
+
+Stream pre-hosted forest data directly from cloud storage -- no downloads required:
+
+```python
+# Load a pre-hosted state dataset (streaming, only fetches chunks you access)
+store = api.load_state("RI")
+
+# Load a sample dataset for quick testing
+store = api.load_from_cloud(sample="durham_nc")
+```
 
 ### Any Geographic Extent
 
@@ -98,13 +123,15 @@ api.download_species(bbox=(-123.5, 45.0, -122.0, 46.5), crs="EPSG:4326")
 
 ## Documentation
 
-- **[Getting Started](user-guide/getting-started.md)** - Installation and first steps
+- **[Installation](getting-started/installation.md)** - Setup and requirements
+- **[Quick Start](user-guide/getting-started.md)** - First steps with GridFIA
+- **User Guide**
+  - [Configuration](user-guide/configuration.md) - Settings and options
+  - [Cloud Data Access](user-guide/cloud-data.md) - Stream pre-hosted data
+  - [Data Pipeline](user-guide/data-pipeline.md) - Download, convert, and process
 - **[API Reference](api/index.md)** - Complete API documentation
-  - [GridFIA Class](api/gridfia.md) - Main API interface
-  - [Data Models](api/models.md) - SpeciesInfo, CalculationResult
-  - [Configuration](api/config.md) - Settings and options
-  - [Calculations](api/calculations.md) - Available metrics
 - **[Tutorials](tutorials/species-diversity-analysis.md)** - Step-by-step guides
+- **[Contributing](contributing.md)** - Development setup and guidelines
 
 ## About BIGMAP Data
 
@@ -119,11 +146,7 @@ Species-level biomass estimates are available for 300+ tree species. See the [FI
 
 ## Contributing
 
-We welcome contributions! See our [GitHub repository](https://github.com/mihiarc/gridfia) to:
-
-- Report issues
-- Submit pull requests
-- Request features
+We welcome contributions! See our [Contributing Guide](contributing.md) for development setup and guidelines, or visit our [GitHub repository](https://github.com/mihiarc/gridfia) to report issues and submit pull requests.
 
 ## Learn More
 

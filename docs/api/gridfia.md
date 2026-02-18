@@ -203,6 +203,63 @@ maps = api.create_maps(
 )
 ```
 
+### Downloading with Custom Polygon
+
+```python
+# Download data clipped to a custom study area polygon
+files = api.download_species(
+    polygon="study_area.geojson",
+    species_codes=["0131", "0068"],
+    output_dir="data/study_area"
+)
+
+# Create Zarr with polygon clipping
+zarr_path = api.create_zarr(
+    input_dir="data/study_area",
+    output_path="data/study_area.zarr",
+    clip_to_polygon=True  # Auto-detect from saved config
+)
+```
+
+### Cloud and Sample Data
+
+Load pre-hosted datasets without downloading from the FIA API:
+
+```python
+# Load a pre-hosted state dataset (streaming access)
+store = api.load_state("RI")
+print(f"Shape: {store.shape}, Species: {store.num_species}")
+
+# Load a sample dataset for quick testing
+store = api.load_from_cloud(sample="durham_nc")
+
+# Download a sample for faster repeated local access
+local_path = api.download_sample("durham_nc", output_path="data/durham.zarr")
+
+# List available datasets
+print(api.list_sample_datasets())
+print(api.list_state_datasets())
+```
+
+### Reproducibility
+
+Set a random seed for reproducible bootstrap confidence intervals:
+
+```python
+# Set seed at initialization
+api = GridFIA(seed=42)
+
+# Or set seed later
+api.set_seed(42)
+
+# calculate_metrics_with_stats uses the seed for bootstrap sampling
+results = api.calculate_metrics_with_stats(
+    "data/forest.zarr",
+    calculations=["shannon_diversity"],
+    n_bootstrap=1000
+)
+```
+
 ## Configuration
 
 The `GridFIA` class accepts an optional configuration:

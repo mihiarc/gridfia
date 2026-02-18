@@ -174,8 +174,11 @@ Geographic extent management:
 ```python
 from gridfia.utils.location_config import LocationConfig
 
-# From state/county names
-config = LocationConfig.from_state_county("North Carolina", "Wake")
+# From state name
+config = LocationConfig.from_state("North Carolina")
+
+# From county name
+config = LocationConfig.from_county("Wake", "North Carolina")
 
 # From bounding box
 config = LocationConfig.from_bbox(
@@ -184,9 +187,8 @@ config = LocationConfig.from_bbox(
 )
 
 # Access properties
-print(config.bbox)       # Bounding box
-print(config.crs)        # Coordinate reference system
-print(config.state_fips) # State FIPS code
+print(config.location_name)     # Location name
+print(config.web_mercator_bbox) # Bounding box in Web Mercator
 ```
 
 ### Visualization (`visualization/`)
@@ -298,9 +300,10 @@ classDiagram
     }
 
     class LocationConfig {
-        +bbox: tuple
-        +crs: CRS
-        +from_state_county()
+        +location_name: str
+        +web_mercator_bbox: tuple
+        +from_state()
+        +from_county()
         +from_bbox()
     }
 
@@ -364,6 +367,10 @@ results = api.calculate_metrics(
     calculations=["custom_metric"]
 )
 ```
+
+### CONUS-Scale Processing
+
+The `gridfia.conus` module provides tiled download and processing for contiguous US (CONUS)-scale analyses, breaking the US into manageable geographic tiles.
 
 ### Adding New Data Sources
 

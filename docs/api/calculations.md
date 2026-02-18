@@ -269,10 +269,8 @@ class BiomassDensityRatio(ForestCalculation):
             return False
         return True
 
-# Register the custom calculation
-@registry.register("biomass_density_ratio")
-def create_biomass_ratio(**kwargs):
-    return BiomassDensityRatio(**kwargs)
+# Register the custom calculation (call pattern, not a decorator)
+registry.register("biomass_density_ratio", BiomassDensityRatio)
 ```
 
 ## Base Class Reference

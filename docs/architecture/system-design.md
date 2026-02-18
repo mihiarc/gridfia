@@ -149,23 +149,17 @@ class CalculationRegistry:
 
     _calculations: dict[str, Type[ForestCalculation]] = {}
 
-    @classmethod
-    def register(cls, name: str):
-        """Decorator to register calculations."""
-        def decorator(calc_class):
-            cls._calculations[name] = calc_class
-            return calc_class
-        return decorator
+    def register(self, name: str, calculation_class: Type[ForestCalculation]):
+        """Register a calculation class by name."""
+        self._calculations[name] = calculation_class
 
-    @classmethod
-    def get(cls, name: str) -> Type[ForestCalculation]:
-        """Retrieve a calculation class by name."""
-        return cls._calculations[name]
+    def get(self, name: str, **kwargs) -> ForestCalculation:
+        """Retrieve and instantiate a calculation by name."""
+        return self._calculations[name](**kwargs)
 
-    @classmethod
-    def list_calculations(cls) -> list[str]:
+    def list_calculations(self) -> list[str]:
         """List all registered calculations."""
-        return list(cls._calculations.keys())
+        return list(self._calculations.keys())
 ```
 
 **Built-in Calculations:**
@@ -339,13 +333,13 @@ class LocationConfig:
     county_fips: str | None
 
     @classmethod
-    def from_state_county(
-        cls,
-        state: str,
-        county: str | None = None
-    ) -> "LocationConfig":
-        """Create config from state/county names."""
-        # Fetches boundaries from Census TIGER data
+    def from_state(cls, state: str) -> "LocationConfig":
+        """Create config from state name."""
+        pass
+
+    @classmethod
+    def from_county(cls, county: str, state: str) -> "LocationConfig":
+        """Create config from county and state names."""
         pass
 
     @classmethod
@@ -632,20 +626,19 @@ class TestWorkflow:
         assert len(results) == 2
         for result in results:
             assert result.output_path.exists()
-            assert result.stats is not None
+            assert result.statistics is not None
 ```
 
 ## Extension Points
 
 ### Adding Custom Calculations
 
-1. Create a class inheriting from `ForestCalculation`:
+1. Create a class inheriting from `ForestCalculation` and register it:
 
 ```python
 from gridfia.core.calculations.base import ForestCalculation
 from gridfia.core.calculations.registry import registry
 
-@registry.register("custom_metric")
 class CustomMetric(ForestCalculation):
     name = "custom_metric"
     description = "My custom forest metric"
@@ -657,7 +650,14 @@ class CustomMetric(ForestCalculation):
 
     def get_stats(self, result: np.ndarray) -> dict:
         return {"mean": float(result.mean())}
+
+# Register with the registry (call pattern, not a decorator)
+registry.register("custom_metric", CustomMetric)
 ```
+
+!!! note
+    The code snippets in this section are simplified/schematic representations
+    of the actual implementation. See the source code for full details.
 
 2. Use via the API:
 

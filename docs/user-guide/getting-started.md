@@ -200,18 +200,14 @@ api = GridFIA()
 # List available sample datasets
 samples = api.list_sample_datasets()
 for sample in samples:
-    print(f"{sample['name']}: {sample['description']}")
+    print(f"{sample['key']}: {sample['name']} ({sample['approximate_size_mb']} MB)")
 
-# Download a sample dataset
-zarr_path = api.download_sample(
-    name="wake_county_nc",
-    output_dir="samples"
-)
+# Download a sample dataset locally
+local_path = api.download_sample("durham_nc", output_path="data/durham.zarr")
 
-# Or load directly from cloud (no download)
-store = api.load_from_cloud(
-    url="https://data.example.com/samples/wake_county.zarr"
-)
+# Or load directly from cloud (streaming, no full download)
+store = api.load_from_cloud(sample="durham_nc")
+print(f"Shape: {store.shape}, Species: {store.num_species}")
 ```
 
 ## Configuration
@@ -296,5 +292,6 @@ calculations:
 ## Next Steps
 
 - [API Reference](../api/index.md) - Complete API documentation
+- [Cloud Data Access](cloud-data.md) - Stream pre-hosted datasets
 - [Tutorials](../tutorials/species-diversity-analysis.md) - Step-by-step guides
-- [Configuration](../api/config.md) - Advanced configuration options
+- [Configuration](configuration.md) - Advanced configuration options

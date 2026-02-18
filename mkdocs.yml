@@ -10,17 +10,19 @@ edit_uri: edit/main/docs/
 nav:
   - Home: index.md
   - Getting Started:
-    - Quick Start: user-guide/getting-started.md
     - Installation: getting-started/installation.md
+    - Quick Start: user-guide/getting-started.md
   - User Guide:
-    - Configuration: api/config.md
+    - Configuration: user-guide/configuration.md
+    - Cloud Data Access: user-guide/cloud-data.md
+    - Data Pipeline: user-guide/data-pipeline.md
   - API Reference:
     - Overview: api/index.md
     - GridFIA Class: api/gridfia.md
     - Data Models: api/models.md
     - Configuration: api/config.md
-    - Processors: api/processors.md
     - Calculations: api/calculations.md
+    - Processors: api/processors.md
     - Utilities: api/utilities.md
     - Exceptions: api/exceptions.md
   - Tutorials:
@@ -28,9 +30,7 @@ nav:
   - Architecture:
     - Overview: architecture/overview.md
     - System Design: architecture/system-design.md
-  - Data Pipeline:
-    - REST API Download: data-pipeline/rest-api-download.md
-    - Zarr Construction: data-pipeline/zarr-construction.md
+  - Contributing: contributing.md
 
 theme:
   name: material
@@ -131,9 +131,7 @@ markdown_extensions:
       repo: gridfia
   - pymdownx.mark
   - pymdownx.smartsymbols
-  - pymdownx.snippets:
-      auto_append:
-        - includes/mkdocs.md
+  - pymdownx.snippets
   - pymdownx.superfences:
       custom_fences:
         - name: mermaid
@@ -150,8 +148,6 @@ markdown_extensions:
   - pymdownx.tilde
 
 extra:
-  version:
-    provider: mike
   social:
     - icon: fontawesome/brands/github
       link: https://github.com/mihiarc/gridfia
@@ -185,5 +181,4 @@ extra_css:
 
 extra_javascript:
   - javascripts/mathjax.js
-  - https://polyfill.io/v3/polyfill.min.js?features=es6
   - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js 
