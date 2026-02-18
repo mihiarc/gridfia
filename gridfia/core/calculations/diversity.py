@@ -51,7 +51,7 @@ class SpeciesRichness(ForestCalculation):
         return biomass_data.ndim == 3 and biomass_data.shape[0] > 0
     
     def get_output_dtype(self) -> np.dtype:
-        return np.uint8
+        return np.uint16
 
 
 class ShannonDiversity(ForestCalculation):

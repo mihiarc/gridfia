@@ -487,7 +487,7 @@ class ZarrMapper:
         start_idx = 1 if str(self.species_codes[0]) == '0000' else 0
         
         # Calculate richness
-        richness = np.zeros((self.biomass.shape[1], self.biomass.shape[2]), dtype=np.uint8)
+        richness = np.zeros((self.biomass.shape[1], self.biomass.shape[2]), dtype=np.uint16)
         
         # Process in chunks
         chunk_size = 1000

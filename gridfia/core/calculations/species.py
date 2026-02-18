@@ -57,16 +57,16 @@ class DominantSpecies(ForestCalculation):
         
         # Apply minimum biomass threshold
         mask = max_biomass > min_biomass
-        result = np.zeros(dominant.shape, dtype=np.uint8)
+        result = np.zeros(dominant.shape, dtype=np.uint16)
         result[mask] = dominant[mask] + index_offset
-        
+
         return result
-    
+
     def validate_data(self, biomass_data: np.ndarray) -> bool:
         return biomass_data.ndim == 3 and biomass_data.shape[0] > 0
-    
+
     def get_output_dtype(self) -> np.dtype:
-        return np.uint8
+        return np.uint16
 
 
 class SpeciesPresence(ForestCalculation):
@@ -223,18 +223,18 @@ class RareSpecies(ForestCalculation):
         rare_species_mask = occurrence_freq < occurrence_threshold
 
         # Count rare species at each pixel
-        rare_count = np.zeros((height, width), dtype=np.uint8)
+        rare_count = np.zeros((height, width), dtype=np.uint16)
         for i in range(n_species):
             if rare_species_mask[i]:
-                rare_count += (species_data[i] > biomass_threshold).astype(np.uint8)
+                rare_count += (species_data[i] > biomass_threshold).astype(np.uint16)
 
         return rare_count
-    
+
     def validate_data(self, biomass_data: np.ndarray) -> bool:
         return biomass_data.ndim == 3 and biomass_data.shape[0] > 0
-    
+
     def get_output_dtype(self) -> np.dtype:
-        return np.uint8
+        return np.uint16
 
 
 class CommonSpecies(ForestCalculation):
@@ -280,15 +280,15 @@ class CommonSpecies(ForestCalculation):
         common_species_mask = occurrence_freq >= occurrence_threshold
 
         # Count common species at each pixel
-        common_count = np.zeros((height, width), dtype=np.uint8)
+        common_count = np.zeros((height, width), dtype=np.uint16)
         for i in range(n_species):
             if common_species_mask[i]:
-                common_count += (species_data[i] > biomass_threshold).astype(np.uint8)
+                common_count += (species_data[i] > biomass_threshold).astype(np.uint16)
 
         return common_count
-    
+
     def validate_data(self, biomass_data: np.ndarray) -> bool:
         return biomass_data.ndim == 3 and biomass_data.shape[0] > 0
-    
+
     def get_output_dtype(self) -> np.dtype:
-        return np.uint8
+        return np.uint16

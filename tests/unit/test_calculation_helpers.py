@@ -207,7 +207,7 @@ class TestHelperIntegration:
         # [0,1]: species 2,3 present = 2
         # [1,0]: species 1 present = 1
         # [1,1]: species 3 present = 1
-        expected = np.array([[2, 2], [1, 1]], dtype=np.uint8)
+        expected = np.array([[2, 2], [1, 1]], dtype=np.uint16)
         np.testing.assert_array_equal(result, expected)
 
     def test_helpers_consistent_with_original_behavior(self):

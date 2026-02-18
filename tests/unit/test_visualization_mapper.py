@@ -771,7 +771,7 @@ class TestRichnessMapCreation:
         # The richness data should be passed to imshow
         richness_data = args[0]
         assert isinstance(richness_data, np.ndarray)
-        assert richness_data.dtype == np.uint8
+        assert richness_data.dtype == np.uint16
 
     def test_create_richness_map_custom_parameters(self, mock_tight_layout, mock_colorbar, mock_subplots, complete_zarr_store):
         """Test richness map with all custom parameters."""
@@ -1212,7 +1212,7 @@ class TestErrorHandlingAndEdgeCases:
         imshow_call = mock_ax.imshow.call_args
         richness_data = imshow_call[0][0]
         assert np.all(richness_data == 0)
-        assert richness_data.dtype == np.uint8
+        assert richness_data.dtype == np.uint16
 
     def test_comparison_map_empty_species_list(self, complete_zarr_store):
         """Test comparison map with empty species list."""

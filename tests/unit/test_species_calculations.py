@@ -100,10 +100,10 @@ class TestDominantSpecies:
         result = calc.calculate(data)
 
         # All zeros should result in index 0 everywhere
-        np.testing.assert_array_equal(result, np.zeros((2, 2), dtype=np.uint8))
+        np.testing.assert_array_equal(result, np.zeros((2, 2), dtype=np.uint16))
 
     def test_dominant_species_dtype_output(self):
-        """Test that dominant species returns uint8."""
+        """Test that dominant species returns uint16."""
         data = np.array([
             [[10]],
             [[20]]
@@ -112,8 +112,8 @@ class TestDominantSpecies:
         calc = DominantSpecies()
         result = calc.calculate(data)
 
-        assert result.dtype == np.uint8
-        assert calc.get_output_dtype() == np.uint8
+        assert result.dtype == np.uint16
+        assert calc.get_output_dtype() == np.uint16
 
     def test_dominant_species_validation(self):
         """Test data validation for dominant species."""
@@ -158,7 +158,7 @@ class TestDominantSpecies:
         assert metadata['description'] == 'Index of species with maximum biomass'
         assert metadata['units'] == 'species_index'
         assert metadata['config']['min_biomass'] == 5.0
-        assert metadata['dtype'] == np.uint8
+        assert metadata['dtype'] == np.uint16
 
 
 class TestSpeciesPresence:
@@ -438,7 +438,7 @@ class TestRareSpecies:
         result = calc.calculate(data)
 
         # No rare species with these patterns - all appear in ≥75% of pixels
-        expected = np.zeros((1, 4), dtype=np.uint8)
+        expected = np.zeros((1, 4), dtype=np.uint16)
         np.testing.assert_array_equal(result, expected)
 
     def test_rare_species_with_actual_rare(self):
@@ -458,7 +458,7 @@ class TestRareSpecies:
 
         # Expected: species 3 and 4 are rare (each in 1/6 = 16.67% < 20%)
         # Pixel counts: [1, 0, 1, 0, 0, 0] (rare species present)
-        expected = np.array([[1, 0, 1, 0, 0, 0]], dtype=np.uint8)
+        expected = np.array([[1, 0, 1, 0, 0, 0]], dtype=np.uint16)
         np.testing.assert_array_equal(result, expected)
 
     def test_rare_species_with_biomass_threshold(self):
@@ -478,7 +478,7 @@ class TestRareSpecies:
         # Species 2: present in 0/4 pixels above threshold = 0% (rare)
         # Species 3: present in 0/4 pixels above threshold = 0% (rare)
         # Both species 2 and 3 are rare, but not present above threshold anywhere
-        expected = np.zeros((1, 4), dtype=np.uint8)
+        expected = np.zeros((1, 4), dtype=np.uint16)
         np.testing.assert_array_equal(result, expected)
 
     def test_rare_species_exclude_total_layer(self):
@@ -494,7 +494,7 @@ class TestRareSpecies:
 
         # Only species 1 is rare (25% occurrence)
         # Species 1 present only in first pixel
-        expected = np.array([[1, 0, 0, 0]], dtype=np.uint8)
+        expected = np.array([[1, 0, 0, 0]], dtype=np.uint16)
         np.testing.assert_array_equal(result, expected)
 
     def test_rare_species_single_species_layer(self):
@@ -507,7 +507,7 @@ class TestRareSpecies:
         result = calc.calculate(data)
 
         # Species present in 2/4 pixels = 50% < 60% threshold (rare)
-        expected = np.array([[1, 0, 1, 0]], dtype=np.uint8)
+        expected = np.array([[1, 0, 1, 0]], dtype=np.uint16)
         np.testing.assert_array_equal(result, expected)
 
     def test_rare_species_all_common(self):
@@ -522,7 +522,7 @@ class TestRareSpecies:
         result = calc.calculate(data)
 
         # No rare species
-        expected = np.zeros((1, 4), dtype=np.uint8)
+        expected = np.zeros((1, 4), dtype=np.uint16)
         np.testing.assert_array_equal(result, expected)
 
     def test_rare_species_validation(self):
@@ -553,19 +553,19 @@ class TestRareSpecies:
 
         # Override occurrence threshold to make species 1 rare
         result = calc.calculate(data, occurrence_threshold=0.6)
-        expected = np.array([[1, 0]], dtype=np.uint8)
+        expected = np.array([[1, 0]], dtype=np.uint16)
         np.testing.assert_array_equal(result, expected)
 
         # Override biomass threshold
         result = calc.calculate(data, biomass_threshold=16.0)
         # Only species 2 at pixel 2 is above threshold, but 1/2 = 50% > 30% so not rare
-        expected = np.array([[0, 0]], dtype=np.uint8)
+        expected = np.array([[0, 0]], dtype=np.uint16)
         np.testing.assert_array_equal(result, expected)
 
     def test_rare_species_output_dtype(self):
         """Test rare species output data type."""
         calc = RareSpecies()
-        assert calc.get_output_dtype() == np.uint8
+        assert calc.get_output_dtype() == np.uint16
 
     def test_rare_species_metadata(self):
         """Test rare species metadata."""
@@ -598,7 +598,7 @@ class TestCommonSpecies:
 
         # Only species 1 is common (100% > 60%)
         # Present in all pixels
-        expected = np.array([[1, 1, 1, 1]], dtype=np.uint8)
+        expected = np.array([[1, 1, 1, 1]], dtype=np.uint16)
         np.testing.assert_array_equal(result, expected)
 
     def test_common_species_multiple_common(self):
@@ -616,7 +616,7 @@ class TestCommonSpecies:
 
         # Species 1 and 3 are common (100%), species 2 is common (75%)
         # All three species at each pixel
-        expected = np.array([[3, 3, 3, 2]], dtype=np.uint8)  # Pixel 4 missing species 2
+        expected = np.array([[3, 3, 3, 2]], dtype=np.uint16)  # Pixel 4 missing species 2
         np.testing.assert_array_equal(result, expected)
 
     def test_common_species_with_biomass_threshold(self):
@@ -636,7 +636,7 @@ class TestCommonSpecies:
         # Species 2: 2/4 pixels above threshold = 50% (common)
         # Species 3: 0/4 pixels above threshold (not common)
         # Pixels with common species: [2, 2, 1, 1]
-        expected = np.array([[2, 2, 1, 1]], dtype=np.uint8)
+        expected = np.array([[2, 2, 1, 1]], dtype=np.uint16)
         np.testing.assert_array_equal(result, expected)
 
     def test_common_species_exclude_total_layer(self):
@@ -651,7 +651,7 @@ class TestCommonSpecies:
         result = calc.calculate(data)
 
         # Only species 1 is common
-        expected = np.array([[1, 1]], dtype=np.uint8)
+        expected = np.array([[1, 1]], dtype=np.uint16)
         np.testing.assert_array_equal(result, expected)
 
     def test_common_species_none_common(self):
@@ -668,7 +668,7 @@ class TestCommonSpecies:
         result = calc.calculate(data)
 
         # No species meet 60% threshold
-        expected = np.zeros((1, 4), dtype=np.uint8)
+        expected = np.zeros((1, 4), dtype=np.uint16)
         np.testing.assert_array_equal(result, expected)
 
     def test_common_species_all_common(self):
@@ -684,7 +684,7 @@ class TestCommonSpecies:
         result = calc.calculate(data)
 
         # All 3 species are common
-        expected = np.full((1, 3), 3, dtype=np.uint8)
+        expected = np.full((1, 3), 3, dtype=np.uint16)
         np.testing.assert_array_equal(result, expected)
 
     def test_common_species_single_species_layer(self):
@@ -697,7 +697,7 @@ class TestCommonSpecies:
         result = calc.calculate(data)
 
         # Species present in 3/4 = 75% > 70% threshold (common)
-        expected = np.array([[1, 1, 1, 0]], dtype=np.uint8)
+        expected = np.array([[1, 1, 1, 0]], dtype=np.uint16)
         np.testing.assert_array_equal(result, expected)
 
     def test_common_species_validation(self):
@@ -728,19 +728,19 @@ class TestCommonSpecies:
 
         # Override to lower threshold so species 1 becomes common
         result = calc.calculate(data, occurrence_threshold=0.4)
-        expected = np.array([[2, 1]], dtype=np.uint8)  # Both common at pixel 1, only species 2 at pixel 2
+        expected = np.array([[2, 1]], dtype=np.uint16)  # Both common at pixel 1, only species 2 at pixel 2
         np.testing.assert_array_equal(result, expected)
 
         # Override biomass threshold
         result = calc.calculate(data, biomass_threshold=25.0)
         # Only species 2 at pixel 2 meets threshold, but 1/2 = 50% < 80% so not common
-        expected = np.array([[0, 0]], dtype=np.uint8)
+        expected = np.array([[0, 0]], dtype=np.uint16)
         np.testing.assert_array_equal(result, expected)
 
     def test_common_species_output_dtype(self):
         """Test common species output data type."""
         calc = CommonSpecies()
-        assert calc.get_output_dtype() == np.uint8
+        assert calc.get_output_dtype() == np.uint16
 
     def test_common_species_metadata(self):
         """Test common species metadata."""
@@ -767,7 +767,7 @@ class TestSpeciesCalculationIntegration:
         dominant_result = dominant_calc.calculate(data)
 
         assert dominant_result.shape == (100, 100)
-        assert dominant_result.dtype == np.uint8
+        assert dominant_result.dtype == np.uint16
         assert np.all(dominant_result >= 0)
         assert np.all(dominant_result <= 5)  # Max species index
 
@@ -784,14 +784,14 @@ class TestSpeciesCalculationIntegration:
         rare_result = rare_calc.calculate(data)
 
         assert rare_result.shape == (100, 100)
-        assert rare_result.dtype == np.uint8
+        assert rare_result.dtype == np.uint16
 
         # Test common species
         common_calc = CommonSpecies(occurrence_threshold=0.3, biomass_threshold=1.0)
         common_result = common_calc.calculate(data)
 
         assert common_result.shape == (100, 100)
-        assert common_result.dtype == np.uint8
+        assert common_result.dtype == np.uint16
 
     def test_with_empty_zarr_array(self, empty_zarr_array):
         """Test species calculations with empty zarr data."""
@@ -802,7 +802,7 @@ class TestSpeciesCalculationIntegration:
         dominant_result = dominant_calc.calculate(data)
 
         assert dominant_result.shape == (50, 50)
-        np.testing.assert_array_equal(dominant_result, np.zeros((50, 50), dtype=np.uint8))
+        np.testing.assert_array_equal(dominant_result, np.zeros((50, 50), dtype=np.uint16))
 
         # Test species presence with zeros
         presence_calc = SpeciesPresence(species_index=1, threshold=0.0)
@@ -814,7 +814,7 @@ class TestSpeciesCalculationIntegration:
         rare_calc = RareSpecies()
         rare_result = rare_calc.calculate(data)
 
-        np.testing.assert_array_equal(rare_result, np.zeros((50, 50), dtype=np.uint8))
+        np.testing.assert_array_equal(rare_result, np.zeros((50, 50), dtype=np.uint16))
 
     def test_with_single_species_zarr(self, single_species_zarr):
         """Test species calculations with single species data."""
@@ -825,14 +825,15 @@ class TestSpeciesCalculationIntegration:
         dominant_result = dominant_calc.calculate(data)
 
         # Should be species 1 wherever there's biomass, 0 elsewhere
-        expected = (data[1] > 0).astype(np.uint8)
-        np.testing.assert_array_equal(dominant_result, expected)
+        expected_dominant = (data[1] > 0).astype(np.uint16)
+        np.testing.assert_array_equal(dominant_result, expected_dominant)
 
         # Test species presence
         presence_calc = SpeciesPresence(species_index=1)
         presence_result = presence_calc.calculate(data)
 
-        np.testing.assert_array_equal(presence_result, expected)
+        expected_presence = (data[1] > 0).astype(np.uint8)
+        np.testing.assert_array_equal(presence_result, expected_presence)
 
         # Test species dominance - should be 100% where species exists
         dominance_calc = SpeciesDominance(species_index=1)
@@ -840,7 +841,7 @@ class TestSpeciesCalculationIntegration:
 
         # Calculate expected percentage
         total_pixels = dominance_result.size
-        dominant_pixels = np.sum(expected)
+        dominant_pixels = np.sum(expected_dominant)
         expected_percentage = (dominant_pixels / total_pixels) * 100.0
 
         np.testing.assert_array_almost_equal(dominance_result,

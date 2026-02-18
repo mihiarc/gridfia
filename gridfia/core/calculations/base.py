@@ -13,7 +13,7 @@ This is intentional to distinguish between:
 1. Actual zero values (e.g., zero biomass in a pixel, zero diversity)
 2. Failed calculations (e.g., invalid data, processing errors)
 
-For integer output types (e.g., species_richness with uint8):
+For integer output types (e.g., species_presence with uint8, species_richness with uint16):
 - Signed integers: -1 is used as a sentinel value (impossible for counts)
 - Unsigned integers: max value (e.g., 255 for uint8) is used with a warning
 
