@@ -14,7 +14,6 @@ nav:
     - Quick Start: user-guide/getting-started.md
   - User Guide:
     - Configuration: user-guide/configuration.md
-    - Cloud Data Access: user-guide/cloud-data.md
     - Data Pipeline: user-guide/data-pipeline.md
   - API Reference:
     - Overview: api/index.md

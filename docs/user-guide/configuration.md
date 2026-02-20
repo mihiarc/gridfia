@@ -114,48 +114,6 @@ save_settings(settings, Path("config/backup.json"))
 restored = load_settings(Path("config/backup.json"))
 ```
 
-## Cloud Storage Configuration
-
-GridFIA supports streaming forest data from cloud storage. The cloud backend is configured via `CloudStorageConfig`:
-
-```python
-from gridfia import GridFIA, GridFIASettings
-from gridfia.config import CloudStorageConfig, CloudStorageBackend
-
-# Configure cloud storage
-cloud = CloudStorageConfig(
-    backend=CloudStorageBackend.BACKBLAZE_B2,
-    bucket="gridfia-data",
-    public_url="https://f004.backblazeb2.com/file/gridfia-data",
-)
-
-settings = GridFIASettings(cloud=cloud)
-api = GridFIA(config=settings)
-
-# Now load_state and load_from_cloud use this config
-store = api.load_state("RI")
-```
-
-Cloud settings can also be configured via environment variables:
-
-```bash
-export GRIDFIA_CLOUD_BACKEND=b2
-export GRIDFIA_CLOUD_BUCKET=gridfia-data
-export GRIDFIA_CLOUD_PUBLIC_URL=https://f004.backblazeb2.com/file/gridfia-data
-export GRIDFIA_CLOUD_ENDPOINT_URL=https://s3.us-west-004.backblazeb2.com
-export GRIDFIA_CLOUD_ACCESS_KEY=your_key       # Optional, for private buckets
-export GRIDFIA_CLOUD_SECRET_KEY=your_secret     # Optional, for private buckets
-```
-
-### Supported Backends
-
-| Backend | Enum Value | Description |
-|---------|-----------|-------------|
-| Backblaze B2 | `CloudStorageBackend.BACKBLAZE_B2` | Low-cost S3-compatible storage (default) |
-| Cloudflare R2 | `CloudStorageBackend.CLOUDFLARE_R2` | Zero egress fees |
-| AWS S3 | `CloudStorageBackend.AWS_S3` | Standard cloud storage |
-| HTTP | `CloudStorageBackend.HTTP` | Any publicly accessible HTTP URL |
-
 ## Dynamic Configuration
 
 ```python
@@ -196,5 +154,4 @@ results = api.calculate_metrics_with_stats("data/forest.zarr")
 ## See Also
 
 - [API Configuration Reference](../api/config.md) - Full auto-generated reference for all config classes
-- [Cloud Data Access](cloud-data.md) - Using cloud-hosted datasets
 - [GridFIA Class](../api/gridfia.md) - Main API interface

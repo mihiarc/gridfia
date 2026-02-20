@@ -292,6 +292,6 @@ calculations:
 ## Next Steps
 
 - [API Reference](../api/index.md) - Complete API documentation
-- [Cloud Data Access](cloud-data.md) - Stream pre-hosted datasets
+- [Data Pipeline](data-pipeline.md) - Download, convert, and process data
 - [Tutorials](../tutorials/species-diversity-analysis.md) - Step-by-step guides
 - [Configuration](configuration.md) - Advanced configuration options

@@ -261,6 +261,6 @@ for s in species[:5]:
 
 ## See Also
 
-- [Cloud Data Access](cloud-data.md) - Stream pre-hosted data without downloading
+- [Configuration](configuration.md) - Settings and options
 - [API Reference: GridFIA](../api/gridfia.md) - Full method documentation
 - [Calculations](../api/calculations.md) - Available forest metrics

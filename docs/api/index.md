@@ -57,8 +57,6 @@ from gridfia import (
 
     # Configuration
     GridFIASettings,
-    CloudStorageConfig,
-    CloudStorageBackend,
     load_settings,
     save_settings,
 
@@ -93,16 +91,6 @@ from gridfia import (
 | `calculate_metrics()` | Run forest metric calculations |
 | `calculate_metrics_with_stats()` | Run metrics with bootstrap confidence intervals |
 | `create_maps()` | Generate publication-ready visualizations |
-
-**Cloud & Sample Data**
-
-| Method | Description |
-|--------|-------------|
-| `load_from_cloud()` | Load a Zarr store from cloud URL or sample name |
-| `load_state()` | Load a pre-hosted state dataset from cloud storage |
-| `download_sample()` | Download a sample dataset to local storage |
-| `list_sample_datasets()` | List available pre-hosted sample datasets |
-| `list_state_datasets()` | List available pre-hosted state datasets |
 
 **Configuration & Utilities**
 
