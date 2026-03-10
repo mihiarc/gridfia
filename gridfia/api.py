@@ -1040,6 +1040,137 @@ class GridFIA:
         """
         return registry.list_calculations()
     
+    def calculate_zonal_stats(
+        self,
+        rasters: Union[str, Path, List[Union[str, Path]], Dict[str, Union[str, Path]]],
+        zones: Union[str, Path, "gpd.GeoDataFrame"],
+        stats: Optional[List[str]] = None,
+        include_cols: Optional[List[str]] = None,
+        output_csv: Optional[Union[str, Path]] = None,
+    ) -> "gpd.GeoDataFrame":
+        """
+        Calculate zonal statistics for raster data within polygon zones.
+
+        Uses exactextract for sub-pixel accurate statistics. Each raster cell
+        is weighted by the exact fraction covered by each polygon.
+
+        Parameters
+        ----------
+        rasters : str, Path, list, or dict
+            Raster input(s). Can be:
+            - Single GeoTIFF file path
+            - List of GeoTIFF file paths (columns named from filenames)
+            - Dict mapping names to file paths
+        zones : str, Path, or GeoDataFrame
+            Polygon zones (GeoJSON, GeoPackage, Shapefile, or GeoDataFrame).
+        stats : list of str, optional
+            Statistics to compute. Default: mean, sum, min, max, stdev, count.
+        include_cols : list of str, optional
+            Columns from zones to include in output. Default: all.
+        output_csv : str or Path, optional
+            Path to save results as CSV (geometry excluded).
+
+        Returns
+        -------
+        GeoDataFrame
+            Zones with computed statistics as additional columns.
+
+        Examples
+        --------
+        >>> api = GridFIA()
+        >>> # From calculation output rasters
+        >>> results = api.calculate_metrics("data/forest.zarr",
+        ...     calculations=["species_richness", "shannon_diversity"])
+        >>> raster_dict = {r.name: r.output_path for r in results}
+        >>> zonal = api.calculate_zonal_stats(
+        ...     raster_dict,
+        ...     "zones.geojson",
+        ...     stats=["mean", "sum", "count"],
+        ...     output_csv="zonal_results.csv"
+        ... )
+
+        >>> # Single raster
+        >>> zonal = api.calculate_zonal_stats(
+        ...     "output/species_richness.tif",
+        ...     "study_area.geojson"
+        ... )
+        """
+        from .core.zonal import calculate_zonal_stats
+
+        return calculate_zonal_stats(
+            rasters=rasters,
+            zones=zones,
+            stats=stats,
+            include_cols=include_cols,
+            output_csv=output_csv,
+        )
+
+    def calculate_zonal_stats_from_zarr(
+        self,
+        zarr_path: Union[str, Path],
+        zones: Union[str, Path, "gpd.GeoDataFrame"],
+        layers: Optional[List[str]] = None,
+        stats: Optional[List[str]] = None,
+        include_cols: Optional[List[str]] = None,
+        output_csv: Optional[Union[str, Path]] = None,
+    ) -> "gpd.GeoDataFrame":
+        """
+        Calculate zonal statistics directly from a GridFIA Zarr store.
+
+        Cloud-native path — reads species biomass layers from Zarr as
+        xarray DataArrays and computes zonal statistics via exactextract.
+        No intermediate GeoTIFFs required.
+
+        Parameters
+        ----------
+        zarr_path : str or Path
+            Path to GridFIA Zarr store (local or cloud via fsspec).
+        zones : str, Path, or GeoDataFrame
+            Polygon zones to aggregate within.
+        layers : list of str, optional
+            Species codes to include. If None, all species layers are used
+            (excluding total biomass at index 0).
+        stats : list of str, optional
+            Statistics to compute. Default: mean, sum, min, max, stdev, count.
+        include_cols : list of str, optional
+            Columns from zones to include in the output.
+        output_csv : str or Path, optional
+            Path to save results as CSV (geometry excluded).
+
+        Returns
+        -------
+        GeoDataFrame
+            Zones with statistics columns named ``{species_code}_{stat}``.
+
+        Examples
+        --------
+        >>> api = GridFIA()
+        >>> zonal = api.calculate_zonal_stats_from_zarr(
+        ...     "data/forest.zarr",
+        ...     "zones.geojson",
+        ...     layers=["0202", "0122"],
+        ...     stats=["mean", "sum"],
+        ...     output_csv="zonal_results.csv"
+        ... )
+        """
+        from .core.zonal import calculate_zonal_stats_from_zarr
+
+        zarr_path = Path(zarr_path)
+        if not zarr_path.exists():
+            raise InvalidZarrStructure(
+                f"Zarr store not found: {zarr_path}",
+                zarr_path=str(zarr_path),
+            )
+
+        return calculate_zonal_stats_from_zarr(
+            zarr_path=zarr_path,
+            zones=zones,
+            layers=layers,
+            stats=stats,
+            include_cols=include_cols,
+            output_csv=output_csv,
+        )
+
     def validate_zarr(self, zarr_path: Union[str, Path]) -> Dict[str, Any]:
         """
         Validate a Zarr store and return metadata.
