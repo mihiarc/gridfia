@@ -204,38 +204,44 @@ class ZarrStore:
     def __init__(
         self,
         root: zarr.Group,
-        store: Optional[zarr.storage.LocalStore] = None,
-        path: Optional[Path] = None
+        store: Optional[Any] = None,
+        path: Optional[Path] = None,
+        biomass_override: Optional[Any] = None,
     ):
         """
         Initialize ZarrStore from an open Zarr group.
 
-        Prefer using class methods `from_path()` or `open()` instead of
-        calling this constructor directly.
+        Prefer using class methods ``from_path()``, ``open()``, or
+        ``from_icechunk()`` instead of calling this constructor directly.
 
         Parameters
         ----------
         root : zarr.Group
             Open Zarr group containing the biomass data.
-        store : zarr.storage.LocalStore, optional
+        store : optional
             The underlying storage object (for resource management).
         path : Path, optional
             Path to the Zarr store on disk.
+        biomass_override : optional
+            Pre-constructed biomass array (e.g. a ``YearSlicedArray``).
+            When provided, skips the default ``root['biomass']`` lookup.
         """
         self._root = root
         self._store = store
         self._path = path
         self._closed = False
 
-        # Validate basic structure
-        if 'biomass' not in self._root:
-            raise InvalidZarrStructure(
-                "Zarr store missing required 'biomass' array",
-                zarr_path=str(path) if path else None,
-                missing_attrs=['biomass']
-            )
-
-        self._biomass = self._root['biomass']
+        if biomass_override is not None:
+            self._biomass = biomass_override
+        else:
+            # Validate basic structure for local stores
+            if 'biomass' not in self._root:
+                raise InvalidZarrStructure(
+                    "Zarr store missing required 'biomass' array",
+                    zarr_path=str(path) if path else None,
+                    missing_attrs=['biomass']
+                )
+            self._biomass = self._root['biomass']
 
         # Cache commonly accessed values
         self._species_codes: Optional[List[str]] = None
@@ -357,7 +363,8 @@ class ZarrStore:
         except ImportError:
             raise ImportError(
                 "The 'icechunk' package is required for Icechunk backend support. "
-                "Install it with: uv pip install gridfia[icechunk]"
+                "Requires Python 3.11+. "
+                "Install with: uv pip install 'gridfia[icechunk]'"
             )
 
         # Open a readonly session on the specified branch
@@ -386,7 +393,7 @@ class ZarrStore:
             # If no years attribute, assume index 0 for any year
             year_index = 0
             console.print(
-                f"[yellow]No 'years' attribute found, defaulting to year index 0"
+                "[yellow]No 'years' attribute found, defaulting to year index 0"
             )
         elif year in years_attr:
             year_index = years_attr.index(year)
@@ -399,23 +406,10 @@ class ZarrStore:
         # Wrap the 4D array to present a 3D view
         sliced_biomass = YearSlicedArray(biomass_array, year_index=year_index)
 
-        # Build an adapter instance — we bypass __init__ validation since
-        # we need to set _biomass to our wrapper instead of the raw array
-        instance = cls.__new__(cls)
-        instance._root = root
-        instance._store = session.store
-        instance._path = None
-        instance._closed = False
-        instance._biomass = sliced_biomass
+        # Construct via __init__ with biomass_override to share initialization
+        instance = cls(root, store=session.store, biomass_override=sliced_biomass)
 
-        # Cache placeholders
-        instance._species_codes = None
-        instance._species_names = None
-        instance._crs = None
-        instance._transform = None
-        instance._bounds = None
-
-        # Eagerly resolve attribute mappings from Icechunk conventions
+        # Eagerly resolve attribute mappings from Icechunk conventions.
         # Icechunk datacube uses singular: species_code, species_name
         # GridFIA expects plural: species_codes, species_names
         if 'species_codes' in root:
@@ -461,7 +455,6 @@ class ZarrStore:
             if len(bounds_list) >= 4:
                 instance._bounds = tuple(bounds_list[:4])
         elif instance._transform is not None:
-            # Calculate bounds from transform and shape
             height_val = sliced_biomass.shape[1]
             width_val = sliced_biomass.shape[2]
             left = instance._transform.c
@@ -470,7 +463,7 @@ class ZarrStore:
             bottom = top + height_val * instance._transform.e
             instance._bounds = (left, bottom, right, top)
 
-        # Keep references alive
+        # Keep Icechunk-specific references alive
         instance._session = session
         instance._repo = repo
         instance._year = year
@@ -546,8 +539,8 @@ class ZarrStore:
             if 'biomass' not in root:
                 return False
 
-            # Check biomass is 3D (local) or 4D (Icechunk with year dimension)
-            if root['biomass'].ndim not in (3, 4):
+            # Check biomass is 3D
+            if root['biomass'].ndim != 3:
                 return False
 
             return True
@@ -568,6 +561,11 @@ class ZarrStore:
         self._crs = None
         self._transform = None
         self._bounds = None
+        # Clean up Icechunk-specific resources if present
+        if hasattr(self, '_session'):
+            self._session = None
+        if hasattr(self, '_repo'):
+            self._repo = None
 
     def _check_not_closed(self) -> None:
         """Raise an error if the store has been closed."""
@@ -583,20 +581,18 @@ class ZarrStore:
         return self._path
 
     @property
-    def biomass(self) -> zarr.Array:
+    def biomass(self) -> Union[zarr.Array, 'YearSlicedArray']:
         """
-        The main biomass array.
+        The main biomass array with shape (species, height, width).
 
-        Shape is (species, height, width) where:
-        - species: Number of species layers (index 0 is often total biomass)
-        - height: Number of rows in the raster
-        - width: Number of columns in the raster
+        Always presents a 3D ``(species, y, x)`` interface regardless of
+        whether the backing store is a local Zarr or an Icechunk datacube.
 
         Values are typically in Mg/ha (megagrams per hectare).
 
         Returns
         -------
-        zarr.Array
+        zarr.Array or YearSlicedArray
             3D array of biomass values.
         """
         self._check_not_closed()

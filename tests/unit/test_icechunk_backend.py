@@ -4,6 +4,8 @@ Tests for ZarrStore Icechunk backend integration.
 Uses in-memory Icechunk repositories (no credentials, no network).
 """
 
+from typing import Optional
+
 import numpy as np
 import pytest
 import zarr
@@ -32,12 +34,12 @@ def create_test_repo_4d(
     n_species: int = 3,
     height: int = 100,
     width: int = 120,
-    years: list | None = None,
-    species_codes: list | None = None,
-    species_names: list | None = None,
+    years: Optional[list] = None,
+    species_codes: Optional[list] = None,
+    species_names: Optional[list] = None,
     use_singular_attrs: bool = True,
     use_component_transform: bool = True,
-) -> icechunk.Repository:
+):
     """Create an in-memory Icechunk repo matching the BIGMAP datacube schema."""
     if years is None:
         years = [2018] if n_years == 1 else list(range(2018, 2018 + n_years))
@@ -488,3 +490,17 @@ class TestZarrStoreFromIcechunk:
         assert right == -2361915.0 + 200 * 30.0
         assert top == 3177435.0
         assert bottom == 3177435.0 + 100 * (-30.0)
+
+    def test_close_cleans_up_icechunk_resources(self):
+        """close() should release Icechunk session and repo references."""
+        repo = create_test_repo_4d(n_species=2, height=10, width=10)
+        store = ZarrStore.from_icechunk(repo, year=2018)
+
+        assert store._session is not None
+        assert store._repo is not None
+
+        store.close()
+
+        assert store._closed is True
+        assert store._session is None
+        assert store._repo is None
