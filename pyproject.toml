@@ -122,6 +122,10 @@ arraylake = [
     "icechunk>=1.1.0; python_version>='3.11'",
     "arraylake>=0.12.0; python_version>='3.11'",
 ]
+zonal = [
+    "exactextract>=0.3.0",
+    "rioxarray>=0.15.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/mihiarc/gridfia"
