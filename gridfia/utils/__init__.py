@@ -7,6 +7,7 @@ into the core processing, analysis, or ETL categories.
 
 from .parallel_processing import ParallelProcessor
 from .zarr_utils import (
+    YearSlicedArray,
     ZarrStore,
     create_zarr_from_geotiffs,
     create_expandable_zarr_from_base_raster,
@@ -17,6 +18,7 @@ from .zarr_utils import (
 
 __all__ = [
     'ParallelProcessor',
+    'YearSlicedArray',
     'ZarrStore',
     'create_zarr_from_geotiffs',
     'create_expandable_zarr_from_base_raster',
