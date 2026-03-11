@@ -1113,6 +1113,7 @@ class GridFIA:
         stats: Optional[List[str]] = None,
         include_cols: Optional[List[str]] = None,
         output_csv: Optional[Union[str, Path]] = None,
+        nodata: Optional[float] = 0.0,
     ) -> "gpd.GeoDataFrame":
         """
         Calculate zonal statistics directly from a GridFIA Zarr store.
@@ -1120,6 +1121,10 @@ class GridFIA:
         Cloud-native path — reads species biomass layers from Zarr as
         xarray DataArrays and computes zonal statistics via exactextract.
         No intermediate GeoTIFFs required.
+
+        By default, pixels with value 0 are treated as nodata (non-forested)
+        and excluded from statistics. Pass ``nodata=None`` to include all
+        pixel values.
 
         Parameters
         ----------
@@ -1136,6 +1141,9 @@ class GridFIA:
             Columns from zones to include in the output.
         output_csv : str or Path, optional
             Path to save results as CSV (geometry excluded).
+        nodata : float or None, optional
+            Value to treat as nodata (excluded from stats). Default: 0.0.
+            Pass None to include all pixel values.
 
         Returns
         -------
@@ -1157,13 +1165,6 @@ class GridFIA:
         """
         from .core.zonal import calculate_zonal_stats_from_zarr
 
-        zarr_path = Path(zarr_path)
-        if not zarr_path.exists():
-            raise InvalidZarrStructure(
-                f"Zarr store not found: {zarr_path}",
-                zarr_path=str(zarr_path),
-            )
-
         return calculate_zonal_stats_from_zarr(
             zarr_path=zarr_path,
             zones=zones,
@@ -1171,6 +1172,7 @@ class GridFIA:
             stats=stats,
             include_cols=include_cols,
             output_csv=output_csv,
+            nodata=nodata,
         )
 
     def validate_zarr(self, zarr_path: Union[str, Path]) -> Dict[str, Any]:
