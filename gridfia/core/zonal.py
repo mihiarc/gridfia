@@ -12,7 +12,6 @@ import logging
 
 import geopandas as gpd
 import numpy as np
-import pandas as pd
 from rich.console import Console
 
 from ..utils.polygon_utils import load_polygon
@@ -21,6 +20,15 @@ logger = logging.getLogger(__name__)
 console = Console()
 
 DEFAULT_STATS = ["mean", "sum", "min", "max", "stdev", "count"]
+
+
+def _sanitize_name(name: str) -> str:
+    """Convert a species name to a column-safe label.
+
+    'Loblolly Pine' -> 'loblolly_pine'
+    'Douglas-fir'   -> 'douglas_fir'
+    """
+    return name.lower().replace(" ", "_").replace("-", "_")
 
 
 def calculate_zonal_stats(
@@ -83,7 +91,15 @@ def calculate_zonal_stats(
     ...     output_csv="zonal_results.csv"
     ... )
     """
-    from exactextract import exact_extract
+    import rasterio
+
+    try:
+        from exactextract import exact_extract
+    except ImportError:
+        raise ImportError(
+            "The 'exactextract' package is required for zonal statistics. "
+            "Install with: uv pip install 'gridfia[zonal]'"
+        )
 
     if stats is None:
         stats = DEFAULT_STATS.copy()
@@ -115,6 +131,17 @@ def calculate_zonal_stats(
         path = Path(raster_path)
         if not path.exists():
             raise FileNotFoundError(f"Raster file not found: {path}")
+
+    # Reproject zones to match the first raster's CRS if needed
+    first_raster = next(iter(raster_dict.values()))
+    with rasterio.open(first_raster) as src:
+        raster_crs = src.crs
+    if zones_gdf.crs is not None and not zones_gdf.crs.equals(raster_crs):
+        console.print(
+            f"[yellow]Reprojecting zones from {zones_gdf.crs} "
+            f"to raster CRS {raster_crs}[/yellow]"
+        )
+        zones_gdf = zones_gdf.to_crs(raster_crs)
 
     single_raster = len(raster_dict) == 1
 
@@ -208,7 +235,10 @@ def calculate_zonal_stats_from_zarr(
     -------
     GeoDataFrame
         Zones with computed statistics as additional columns.
-        Column names follow the pattern ``{species_code}_{stat}``.
+        Column names use human-readable species names:
+        ``{species_name}_{stat}`` (e.g., ``douglas_fir_mean``).
+        Falls back to species code if name is unavailable.
+        The ``attrs["species_code_to_name"]`` dict maps codes to names.
 
     Examples
     --------
@@ -219,12 +249,26 @@ def calculate_zonal_stats_from_zarr(
     ...     layers=["0202", "0122"],
     ...     stats=["mean", "sum"]
     ... )
+    >>> # Columns: douglas_fir_mean, douglas_fir_sum, ponderosa_pine_mean, ...
+    >>> result.attrs["species_code_to_name"]
+    {'0202': 'Douglas-fir', '0122': 'Ponderosa Pine'}
     """
-    import rioxarray  # noqa: F401 — registers the .rio accessor on xarray
     import xarray as xr
-    from exactextract import exact_extract
-    from rasterio.crs import CRS
-    from rasterio.transform import Affine
+
+    try:
+        from exactextract import exact_extract
+    except ImportError:
+        raise ImportError(
+            "The 'exactextract' package is required for zonal statistics. "
+            "Install with: uv pip install 'gridfia[zonal]'"
+        )
+    try:
+        import rioxarray  # noqa: F401 — registers the .rio accessor on xarray
+    except ImportError:
+        raise ImportError(
+            "The 'rioxarray' package is required for Zarr-based zonal statistics. "
+            "Install with: uv pip install 'gridfia[zonal]'"
+        )
 
     from ..utils.zarr_utils import ZarrStore
 
@@ -249,66 +293,91 @@ def calculate_zonal_stats_from_zarr(
 
     # Open Zarr store
     store = ZarrStore.from_path(zarr_path)
-    species_codes = store.species_codes
-    species_names = store.species_names
-    crs = store.crs
-    transform = store.transform
-    biomass = store.biomass
+    try:
+        species_codes = store.species_codes
+        species_names = store.species_names
+        crs = store.crs
+        transform = store.transform
+        biomass = store.biomass
 
-    # Determine which layers to process
-    if layers is not None:
-        layer_indices = []
-        layer_labels = []
-        for code in layers:
-            idx = store.get_species_index(code)
-            layer_indices.append(idx)
-            layer_labels.append(code)
-    else:
-        # Skip index 0 (total biomass) unless explicitly requested
-        layer_indices = list(range(1, len(species_codes)))
-        layer_labels = [species_codes[i] for i in layer_indices]
+        # Reproject zones to match raster CRS if needed
+        if zones_gdf.crs is not None and not zones_gdf.crs.equals(crs):
+            console.print(
+                f"[yellow]Reprojecting zones from {zones_gdf.crs} "
+                f"to raster CRS {crs}[/yellow]"
+            )
+            zones_gdf = zones_gdf.to_crs(crs)
 
-    console.print(
-        f"[cyan]Computing zonal stats for {len(layer_indices)} layer(s) "
-        f"from Zarr store across {len(zones_gdf)} zone(s)...[/cyan]"
-    )
-
-    # Build xarray DataArrays with spatial metadata for exactextract
-    height, width = biomass.shape[1], biomass.shape[2]
-    x_coords = np.array(
-        [transform.c + (col + 0.5) * transform.a for col in range(width)]
-    )
-    y_coords = np.array(
-        [transform.f + (row + 0.5) * transform.e for row in range(height)]
-    )
-
-    all_results = {}
-    for layer_idx, label in zip(layer_indices, layer_labels):
-        data = biomass[layer_idx, :, :]
-        if isinstance(data, np.ndarray):
-            layer_data = data
+        # Determine which layers to process
+        if layers is not None:
+            layer_indices = []
+            layer_codes = []
+            for code in layers:
+                idx = store.get_species_index(code)
+                layer_indices.append(idx)
+                layer_codes.append(code)
         else:
-            layer_data = np.array(data)
+            # Skip index 0 (total biomass) unless explicitly requested
+            layer_indices = list(range(1, len(species_codes)))
+            layer_codes = [species_codes[i] for i in layer_indices]
 
-        da = xr.DataArray(
-            layer_data,
-            dims=["y", "x"],
-            coords={"y": y_coords, "x": x_coords},
+        # Build human-readable column labels from species names, fall back to codes
+        layer_labels = []
+        code_to_name = {}
+        for idx, code in zip(layer_indices, layer_codes):
+            if idx < len(species_names) and species_names[idx]:
+                label = _sanitize_name(species_names[idx])
+                code_to_name[code] = species_names[idx]
+            else:
+                label = code
+                code_to_name[code] = code
+            layer_labels.append(label)
+
+        console.print(
+            f"[cyan]Computing zonal stats for {len(layer_indices)} layer(s) "
+            f"from Zarr store across {len(zones_gdf)} zone(s)...[/cyan]"
         )
-        da.rio.write_crs(crs, inplace=True)
-        da.rio.write_transform(transform, inplace=True)
+        for code, name in code_to_name.items():
+            console.print(f"  [dim]{code}[/dim] -> [bold]{name}[/bold]")
 
-        result_df = exact_extract(
-            da,
-            zones_gdf,
-            stats,
-            include_cols=carry_cols if carry_cols else None,
-            output="pandas",
+        # Build xarray DataArrays with spatial metadata for exactextract
+        height, width = biomass.shape[1], biomass.shape[2]
+        x_coords = np.array(
+            [transform.c + (col + 0.5) * transform.a for col in range(width)]
+        )
+        y_coords = np.array(
+            [transform.f + (row + 0.5) * transform.e for row in range(height)]
         )
 
-        for stat in stats:
-            if stat in result_df.columns:
-                all_results[f"{label}_{stat}"] = result_df[stat].values
+        all_results = {}
+        for layer_idx, label in zip(layer_indices, layer_labels):
+            data = biomass[layer_idx, :, :]
+            if isinstance(data, np.ndarray):
+                layer_data = data
+            else:
+                layer_data = np.array(data)
+
+            da = xr.DataArray(
+                layer_data,
+                dims=["y", "x"],
+                coords={"y": y_coords, "x": x_coords},
+            )
+            da.rio.write_crs(crs, inplace=True)
+            da.rio.write_transform(transform, inplace=True)
+
+            result_df = exact_extract(
+                da,
+                zones_gdf,
+                stats,
+                include_cols=carry_cols if carry_cols else None,
+                output="pandas",
+            )
+
+            for stat in stats:
+                if stat in result_df.columns:
+                    all_results[f"{label}_{stat}"] = result_df[stat].values
+    finally:
+        store.close()
 
     # Build output GeoDataFrame
     output_data = {}
@@ -323,6 +392,9 @@ def calculate_zonal_stats_from_zarr(
         geometry=zones_gdf.geometry.values,
         crs=zones_gdf.crs,
     )
+
+    # Attach species code-to-name mapping as DataFrame metadata
+    result_gdf.attrs["species_code_to_name"] = code_to_name
 
     console.print(
         f"[green]Computed {len(stats)} stats for {len(layer_indices)} layer(s) "

@@ -86,9 +86,6 @@ dependencies = [
     "contextily>=1.4.0",
     "shapely>=2.0.0",
     "certifi>=2023.0.0",
-    # Zonal statistics (sub-pixel accurate, cloud-native ready)
-    "exactextract>=0.3.0",
-    "rioxarray>=0.15.0",
     # Cloud storage access for streaming Zarr
     "fsspec>=2023.1.0",
     "aiohttp>=3.8.0",
@@ -124,6 +121,10 @@ icechunk = [
 arraylake = [
     "icechunk>=1.1.0; python_version>='3.11'",
     "arraylake>=0.12.0; python_version>='3.11'",
+]
+zonal = [
+    "exactextract>=0.3.0",
+    "rioxarray>=0.15.0",
 ]
 
 [project.urls]

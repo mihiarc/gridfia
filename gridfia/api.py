@@ -1140,7 +1140,9 @@ class GridFIA:
         Returns
         -------
         GeoDataFrame
-            Zones with statistics columns named ``{species_code}_{stat}``.
+            Zones with statistics columns using species names
+            (e.g., ``douglas_fir_mean``). Code-to-name mapping
+            available via ``result.attrs["species_code_to_name"]``.
 
         Examples
         --------
